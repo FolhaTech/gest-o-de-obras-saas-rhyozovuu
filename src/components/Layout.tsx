@@ -3,9 +3,13 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from './AppSidebar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
-import { Search, Bell } from 'lucide-react'
+import { Search, Bell, LogOut } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Layout() {
+  const { user, signOut } = useAuth()
+  const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -27,16 +31,23 @@ export default function Layout() {
             </button>
             <div className="flex items-center gap-3 border-l pl-4">
               <div className="flex flex-col items-end hidden sm:flex">
-                <span className="text-sm font-medium leading-none">Carlos Eng</span>
-                <span className="text-xs text-muted-foreground">Engenheiro Chefe</span>
+                <span className="text-sm font-medium leading-none">{userName}</span>
+                <span className="text-xs text-muted-foreground">Admin</span>
               </div>
               <Avatar className="h-8 w-8">
                 <AvatarImage
                   src="https://img.usecurling.com/ppl/thumbnail?gender=male&seed=1"
                   alt="User"
                 />
-                <AvatarFallback>CE</AvatarFallback>
+                <AvatarFallback>UN</AvatarFallback>
               </Avatar>
+              <button
+                onClick={signOut}
+                className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                title="Sair"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>

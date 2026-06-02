@@ -8,14 +8,18 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Plus, Filter } from 'lucide-react'
-import useAppStore from '@/stores/use-app-store'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useData } from '@/hooks/use-data'
+import { Despesa } from '@/types'
 
 export default function DespesasList() {
-  const { despesas, obras } = useAppStore()
+  const { data: despesas, loading } = useData<Despesa>('expenses', '*, works(name)')
 
-  const totalDespesas = despesas.reduce((acc, d) => acc + d.amount, 0)
+  if (loading) return <Skeleton className="h-64 w-full" />
+
+  const totalDespesas = despesas.reduce((acc, d) => acc + Number(d.value), 0)
 
   return (
     <div className="space-y-6">
@@ -58,22 +62,26 @@ export default function DespesasList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {despesas.map((d) => {
-              const obra = obras.find((o) => o.id === d.obraId)
-              return (
-                <TableRow key={d.id}>
-                  <TableCell className="text-muted-foreground">{formatDate(d.date)}</TableCell>
-                  <TableCell className="font-medium">{d.description}</TableCell>
-                  <TableCell className="text-sm">{obra?.name || '-'}</TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                      {d.category}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right font-bold">{formatCurrency(d.amount)}</TableCell>
-                </TableRow>
-              )
-            })}
+            {despesas.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  Nenhuma despesa registrada.
+                </TableCell>
+              </TableRow>
+            )}
+            {despesas.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="text-muted-foreground">{formatDate(d.date)}</TableCell>
+                <TableCell className="font-medium">{d.description}</TableCell>
+                <TableCell className="text-sm">{d.works?.name || '-'}</TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                    {d.category}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right font-bold">{formatCurrency(d.value)}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>

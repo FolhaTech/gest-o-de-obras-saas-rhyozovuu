@@ -7,12 +7,22 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import useAppStore from '@/stores/use-app-store'
+import { useDataFilter } from '@/hooks/use-data'
+import { Material } from '@/types'
+import { Skeleton } from '@/components/ui/skeleton'
 
-export default function MaterialsTab() {
-  const { materiais } = useAppStore()
+export default function MaterialsTab({ obraId }: { obraId: string }) {
+  const { data: materiais, loading } = useDataFilter<Material>('materials', 'work_id', obraId)
 
-  // For simulation, we show all general materials here. In a real app, these would be filtered by obra.
+  if (loading) return <Skeleton className="h-48 w-full" />
+
+  if (materiais.length === 0) {
+    return (
+      <p className="text-muted-foreground p-4">
+        Nenhum material alocado especificamente para esta obra.
+      </p>
+    )
+  }
 
   return (
     <div className="rounded-md border">
@@ -28,15 +38,15 @@ export default function MaterialsTab() {
         </TableHeader>
         <TableBody>
           {materiais.map((item) => {
-            const isLow = item.quantity <= item.minQuantity
+            const isLow = item.stock_quantity <= item.min_quantity
             return (
               <TableRow key={item.id}>
                 <TableCell className="font-medium">{item.name}</TableCell>
                 <TableCell>{item.category}</TableCell>
                 <TableCell className={`text-right font-semibold ${isLow ? 'text-red-600' : ''}`}>
-                  {item.quantity}
+                  {item.stock_quantity}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{item.unit}</TableCell>
+                <TableCell className="text-muted-foreground">{item.unit_of_measure}</TableCell>
                 <TableCell>
                   {isLow ? (
                     <Badge variant="destructive" className="bg-red-500">

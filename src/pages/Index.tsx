@@ -1,22 +1,47 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { AlertCircle, Building2, Clock, CheckCircle2 } from 'lucide-react'
-import useAppStore from '@/stores/use-app-store'
-import { formatCurrency, getStatusColor } from '@/lib/formatters'
+import { formatCurrency, getStatusColor, translateStatus, formatDate } from '@/lib/formatters'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import DashboardCharts from './dashboard/DashboardCharts'
+import { useData } from '@/hooks/use-data'
+import { Obra, Despesa } from '@/types'
 
 export default function Index() {
-  const { obras, despesas } = useAppStore()
+  const { data: obras, loading: loadObras } = useData<Obra>('works')
+  const { data: despesas, loading: loadDespesas } = useData<Despesa>('expenses')
 
+  if (loadObras || loadDespesas) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid gap-4 md:grid-cols-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </div>
+    )
+  }
+
+  const today = new Date().toISOString().split('T')[0]
   const totalObras = obras.length
-  const emAndamento = obras.filter((o) => o.status === 'Em Andamento').length
-  const atrasadas = obras.filter((o) => o.status === 'Atrasada')
-  const avgProgress = obras.reduce((acc, o) => acc + o.progress, 0) / (totalObras || 1)
+  const emAndamento = obras.filter((o) => o.status === 'in_progress').length
+  const atrasadas = obras.filter(
+    (o) => o.end_date_planned < today && o.status !== 'finished' && o.status !== 'completed',
+  )
+  const avgProgress =
+    obras.reduce((acc, o) => acc + (Number(o.progress_percentage) || 0), 0) / (totalObras || 1)
 
-  const totalBudget = obras.reduce((acc, o) => acc + o.budget, 0)
-  const totalSpent = despesas.reduce((acc, d) => acc + d.amount, 0)
-  const budgetConsumedPercent = (totalSpent / totalBudget) * 100
+  const totalBudget = obras.reduce((acc, o) => acc + (Number(o.budget_planned) || 0), 0)
+  const totalSpent = despesas.reduce((acc, d) => acc + (Number(d.value) || 0), 0)
+  const budgetConsumedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
 
   return (
     <div className="space-y-6">
@@ -47,7 +72,9 @@ export default function Index() {
         </Card>
         <Card className="hover:shadow-md transition-shadow border-red-100 bg-red-50/30">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-red-600">Obras Atrasadas</CardTitle>
+            <CardTitle className="text-sm font-medium text-red-600">
+              Obras em Risco/Atraso
+            </CardTitle>
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -101,7 +128,7 @@ export default function Index() {
           <CardContent>
             <div className="space-y-4">
               {atrasadas.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma obra atrasada.</p>
+                <p className="text-sm text-muted-foreground">Nenhuma obra em risco detectada.</p>
               ) : (
                 atrasadas.slice(0, 3).map((obra) => (
                   <div
@@ -111,11 +138,11 @@ export default function Index() {
                     <div>
                       <p className="font-medium text-sm">{obra.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Fim planejado: {obra.plannedEndDate}
+                        Fim planejado: {formatDate(obra.end_date_planned)}
                       </p>
                     </div>
                     <Badge variant="outline" className={getStatusColor(obra.status)}>
-                      {obra.status}
+                      {translateStatus(obra.status)}
                     </Badge>
                   </div>
                 ))
@@ -125,7 +152,7 @@ export default function Index() {
         </Card>
       </div>
 
-      <DashboardCharts />
+      <DashboardCharts despesas={despesas} />
     </div>
   )
 }

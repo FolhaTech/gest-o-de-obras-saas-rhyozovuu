@@ -19,7 +19,6 @@ export default function RelatoriosList() {
         <h1 className="text-3xl font-bold tracking-tight">Relatórios Gerenciais</h1>
         <p className="text-muted-foreground">Extraia e analise os dados da sua operação.</p>
       </div>
-
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -37,7 +36,6 @@ export default function RelatoriosList() {
             </Button>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2 text-primary mb-2">

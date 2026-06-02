@@ -1,21 +1,31 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Building } from 'lucide-react'
-import useAppStore from '@/stores/use-app-store'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { getStatusColor } from '@/lib/formatters'
+import { Skeleton } from '@/components/ui/skeleton'
+import { getStatusColor, translateStatus } from '@/lib/formatters'
+import { useDataFilter } from '@/hooks/use-data'
+import { Obra } from '@/types'
 import OverviewTab from './tabs/OverviewTab'
 import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
 
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
-  const { obras } = useAppStore()
+  const { data: works, loading } = useDataFilter<Obra>('works', 'id', id)
+  const obra = works?.[0]
 
-  const obra = obras.find((o) => o.id === id)
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  }
 
   if (!obra) {
-    return <div className="p-8 text-center">Obra não encontrada.</div>
+    return <div className="p-8 text-center text-muted-foreground">Obra não encontrada.</div>
   }
 
   return (
@@ -28,7 +38,7 @@ export default function ObraDetail() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight">{obra.name}</h1>
             <Badge variant="outline" className={getStatusColor(obra.status)}>
-              {obra.status}
+              {translateStatus(obra.status)}
             </Badge>
           </div>
           <p className="text-muted-foreground flex items-center gap-2 mt-1">
@@ -62,13 +72,11 @@ export default function ObraDetail() {
         <TabsContent value="visao-geral" className="mt-0">
           <OverviewTab obra={obra} />
         </TabsContent>
-
         <TabsContent value="etapas" className="mt-0">
           <StagesTab obraId={obra.id} />
         </TabsContent>
-
         <TabsContent value="materiais" className="mt-0">
-          <MaterialsTab />
+          <MaterialsTab obraId={obra.id} />
         </TabsContent>
       </Tabs>
     </div>

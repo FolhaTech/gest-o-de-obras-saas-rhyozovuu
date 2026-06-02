@@ -1,69 +1,78 @@
-export type StatusObra = 'Planejada' | 'Em Andamento' | 'Pausada' | 'Atrasada' | 'Finalizada'
-
 export interface Obra {
   id: string
   name: string
   client: string
-  address: string
-  startDate: string
-  plannedEndDate: string
-  budget: number
-  status: StatusObra
-  progress: number
   manager: string
+  address: string
+  start_date: string
+  end_date_planned: string
+  contracted_value: number
+  budget_planned: number
+  status: 'planned' | 'in_progress' | 'paused' | 'delayed' | 'finished'
+  progress_percentage: number
+  notes: string
 }
 
 export interface Stage {
   id: string
-  obraId: string
+  work_id: string
   name: string
-  progress: number
-  status: 'Pendente' | 'Em Andamento' | 'Concluída'
-  responsible: string
+  manager: string
+  start_date: string
+  end_date_planned: string
+  end_date_real: string
+  progress_percentage: number
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed'
+  notes: string
 }
 
 export interface Diario {
   id: string
-  obraId: string
+  work_id: string
   date: string
-  weather: 'Ensolarado' | 'Chuvoso' | 'Nublado'
-  workers: number
+  author_id: string
+  description: string
   occurrences: string
+  weather: string
+  workers_count: number
+  notes: string
   photos: string[]
+  works?: { name: string }
 }
 
 export interface Material {
   id: string
   name: string
-  unit: string
-  quantity: number
-  minQuantity: number
+  unit_of_measure: string
+  supplier: string
+  stock_quantity: number
+  min_quantity: number
   category: string
-}
-
-export interface MaterialMovement {
-  id: string
-  materialId: string
-  obraId: string
-  type: 'Entrada' | 'Saída' | 'Transferência'
-  quantity: number
-  date: string
+  unit_price: number
+  work_id: string
+  status: string
 }
 
 export interface Despesa {
   id: string
-  obraId: string
+  work_id: string
+  category: string
   description: string
-  amount: number
-  category: 'Materiais' | 'Mão de Obra' | 'Equipamentos' | 'Outros'
+  value: number
   date: string
+  payment_method: string
+  manager_id: string
+  works?: { name: string }
 }
 
 export interface Equipe {
   id: string
   name: string
   role: string
-  type: 'Própria' | 'Terceirizada'
-  dailyCost: number
-  active: boolean
+  phone: string
+  type: string
+  daily_cost: number
+  work_id: string
+  status: string
+  works?: { name: string }
 }

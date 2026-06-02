@@ -6,23 +6,10 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from '@/components/ui/chart'
-import {
-  Area,
-  AreaChart,
-  Pie,
-  PieChart,
-  Cell,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts'
-import useAppStore from '@/stores/use-app-store'
+import { Area, AreaChart, Pie, PieChart, Cell, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { Despesa } from '@/types'
 
-export default function DashboardCharts() {
-  const { despesas } = useAppStore()
-
-  // Mock data for Evolution Chart
+export default function DashboardCharts({ despesas }: { despesas: Despesa[] }) {
   const evolutionData = [
     { month: 'Jan', planned: 10, realized: 12 },
     { month: 'Fev', planned: 25, realized: 22 },
@@ -37,10 +24,10 @@ export default function DashboardCharts() {
     realized: { label: 'Realizado (%)', color: 'hsl(var(--primary))' },
   }
 
-  // Aggregate expenses by category
   const expensesByCategory = despesas.reduce(
     (acc, curr) => {
-      acc[curr.category] = (acc[curr.category] || 0) + curr.amount
+      const cat = curr.category || 'Outros'
+      acc[cat] = (acc[cat] || 0) + Number(curr.value)
       return acc
     },
     {} as Record<string, number>,
@@ -53,10 +40,7 @@ export default function DashboardCharts() {
   }))
 
   const pieConfig = pieData.reduce(
-    (acc, item) => ({
-      ...acc,
-      [item.name]: { label: item.name, color: item.color },
-    }),
+    (acc, item) => ({ ...acc, [item.name]: { label: item.name, color: item.color } }),
     {},
   )
 
@@ -102,32 +86,38 @@ export default function DashboardCharts() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={pieConfig} className="h-[250px] w-full">
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={2}
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
-                  />
-                }
-              />
-              <ChartLegend content={<ChartLegendContent />} />
-            </PieChart>
-          </ChartContainer>
+          {pieData.length === 0 ? (
+            <div className="flex h-[250px] items-center justify-center text-muted-foreground">
+              Nenhuma despesa registrada.
+            </div>
+          ) : (
+            <ChartContainer config={pieConfig} className="h-[250px] w-full">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={2}
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
+                    />
+                  }
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+              </PieChart>
+            </ChartContainer>
+          )}
         </CardContent>
       </Card>
     </div>

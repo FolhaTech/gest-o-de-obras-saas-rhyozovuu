@@ -8,12 +8,16 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/formatters'
-import useAppStore from '@/stores/use-app-store'
+import { useData } from '@/hooks/use-data'
+import { Equipe } from '@/types'
 import { Plus, UserCheck, UserMinus } from 'lucide-react'
 
 export default function EquipesList() {
-  const { equipes } = useAppStore()
+  const { data: equipes, loading } = useData<Equipe>('team_members')
+
+  if (loading) return <Skeleton className="h-64 w-full" />
 
   return (
     <div className="space-y-6">
@@ -39,6 +43,13 @@ export default function EquipesList() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {equipes.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  Nenhuma equipe cadastrada.
+                </TableCell>
+              </TableRow>
+            )}
             {equipes.map((equipe) => (
               <TableRow key={equipe.id}>
                 <TableCell className="font-medium">{equipe.name}</TableCell>
@@ -47,19 +58,19 @@ export default function EquipesList() {
                   <Badge
                     variant="outline"
                     className={
-                      equipe.type === 'Própria'
+                      equipe.type === 'internal'
                         ? 'bg-blue-50 text-blue-700'
                         : 'bg-orange-50 text-orange-700'
                     }
                   >
-                    {equipe.type}
+                    {equipe.type === 'internal' ? 'Própria' : 'Terceirizada'}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(equipe.dailyCost)}
+                  {formatCurrency(equipe.daily_cost)}
                 </TableCell>
                 <TableCell className="text-center">
-                  {equipe.active ? (
+                  {equipe.status === 'active' ? (
                     <div className="flex items-center justify-center gap-1 text-emerald-600 text-sm font-medium">
                       <UserCheck className="h-4 w-4" /> Ativo
                     </div>

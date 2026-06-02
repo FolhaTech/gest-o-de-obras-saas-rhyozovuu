@@ -9,21 +9,36 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, ArrowRightLeft, Search } from 'lucide-react'
-import useAppStore from '@/stores/use-app-store'
+import { useData } from '@/hooks/use-data'
+import { Material } from '@/types'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase/client'
 
 export default function MateriaisList() {
-  const { materiais, updateMaterialQuantity } = useAppStore()
+  const { data: materiais, loading, refetch } = useData<Material>('materials')
   const { toast } = useToast()
 
-  const handleSimulateMovement = (id: string, name: string) => {
-    updateMaterialQuantity(id, -10)
-    toast({
-      title: 'Saída de estoque registrada',
-      description: `10 unidades de ${name} foram removidas do estoque.`,
+  const handleSimulateMovement = async (id: string, name: string) => {
+    const { error } = await supabase.from('material_movements').insert({
+      material_id: id,
+      type: 'output',
+      quantity: 10,
+      date: new Date().toISOString().split('T')[0],
     })
+    if (!error) {
+      toast({
+        title: 'Saída de estoque registrada',
+        description: `10 unidades de ${name} removidas.`,
+      })
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
   }
+
+  if (loading) return <Skeleton className="h-64 w-full" />
 
   return (
     <div className="space-y-6">
@@ -62,22 +77,31 @@ export default function MateriaisList() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {materiais.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  Nenhum material cadastrado.
+                </TableCell>
+              </TableRow>
+            )}
             {materiais.map((item) => {
-              const isLow = item.quantity <= item.minQuantity
+              const isLow = item.stock_quantity <= item.min_quantity
               return (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">
                     {item.name}
-                    <span className="block text-xs text-muted-foreground">{item.unit}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {item.unit_of_measure}
+                    </span>
                   </TableCell>
                   <TableCell>{item.category}</TableCell>
                   <TableCell
                     className={`text-right font-bold text-lg ${isLow ? 'text-red-600' : ''}`}
                   >
-                    {item.quantity}
+                    {item.stock_quantity}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {item.minQuantity}
+                    {item.min_quantity}
                   </TableCell>
                   <TableCell className="text-center">
                     {isLow ? (
@@ -95,6 +119,7 @@ export default function MateriaisList() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSimulateMovement(item.id, item.name)}
+                      disabled={item.stock_quantity < 10}
                     >
                       Simular Saída
                     </Button>

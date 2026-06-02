@@ -1,16 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/formatters'
-import { Obra } from '@/types'
-import useAppStore from '@/stores/use-app-store'
-import { Calendar, Wallet, User, MapPin } from 'lucide-react'
+import { Obra, Despesa } from '@/types'
+import { Calendar, User, MapPin } from 'lucide-react'
+import { useDataFilter } from '@/hooks/use-data'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function OverviewTab({ obra }: { obra: Obra }) {
-  const { despesas } = useAppStore()
+  const { data: despesas, loading } = useDataFilter<Despesa>('expenses', 'work_id', obra.id)
 
-  const obraDespesas = despesas.filter((d) => d.obraId === obra.id)
-  const totalSpent = obraDespesas.reduce((acc, d) => acc + d.amount, 0)
-  const budgetPercent = Math.min((totalSpent / obra.budget) * 100, 100)
+  if (loading) return <Skeleton className="h-64 w-full" />
+
+  const totalSpent = despesas.reduce((acc, d) => acc + Number(d.value), 0)
+  const budgetPercent = Math.min((totalSpent / (Number(obra.budget_planned) || 1)) * 100, 100)
 
   return (
     <div className="grid gap-6 md:grid-cols-3">
@@ -24,28 +26,28 @@ export default function OverviewTab({ obra }: { obra: Obra }) {
               <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Endereço</p>
-                <p className="text-sm">{obra.address}</p>
+                <p className="text-sm">{obra.address || '-'}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <User className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Engenheiro Responsável</p>
-                <p className="text-sm">{obra.manager}</p>
+                <p className="text-sm">{obra.manager || '-'}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Início</p>
-                <p className="text-sm">{formatDate(obra.startDate)}</p>
+                <p className="text-sm">{formatDate(obra.start_date)}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Previsão Fim</p>
-                <p className="text-sm">{formatDate(obra.plannedEndDate)}</p>
+                <p className="text-sm">{formatDate(obra.end_date_planned)}</p>
               </div>
             </div>
           </CardContent>
@@ -63,7 +65,7 @@ export default function OverviewTab({ obra }: { obra: Obra }) {
               </div>
               <div className="text-right">
                 <p className="text-sm font-medium text-muted-foreground">
-                  de {formatCurrency(obra.budget)}
+                  de {formatCurrency(obra.budget_planned)}
                 </p>
               </div>
             </div>
@@ -98,11 +100,11 @@ export default function OverviewTab({ obra }: { obra: Obra }) {
                   fill="transparent"
                   stroke="hsl(var(--primary))"
                   strokeWidth="8"
-                  strokeDasharray={`${(obra.progress / 100) * 289} 289`}
+                  strokeDasharray={`${(obra.progress_percentage / 100) * 289} 289`}
                   className="transition-all duration-1000 ease-out"
                 />
               </svg>
-              <span className="text-3xl font-bold">{obra.progress}%</span>
+              <span className="text-3xl font-bold">{Math.round(obra.progress_percentage)}%</span>
             </div>
             <p className="mt-4 text-sm text-muted-foreground text-center">
               Conclusão baseada nas medições das etapas.
