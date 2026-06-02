@@ -8,6 +8,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '@/hooks/use-auth'
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +33,14 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation()
+  const { profile } = useAuth()
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.url === '/configuracoes' && profile?.role !== 'admin') {
+      return false
+    }
+    return true
+  })
 
   return (
     <Sidebar variant="sidebar">
@@ -45,7 +54,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const isActive =
                   location.pathname === item.url ||
                   (item.url !== '/' && location.pathname.startsWith(item.url))
