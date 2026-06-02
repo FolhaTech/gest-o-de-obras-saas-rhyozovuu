@@ -155,7 +155,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS on_stage_progress_change ON public.work_stages;
 CREATE TRIGGER on_stage_progress_change
@@ -174,7 +174,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS on_material_movement ON public.material_movements;
 CREATE TRIGGER on_material_movement
