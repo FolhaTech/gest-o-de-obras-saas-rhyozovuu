@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { X } from 'lucide-react'
+import { X, AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 interface ScannerProps {
   onScan: (text: string) => void
@@ -13,8 +14,23 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState('')
   const [manualUrl, setManualUrl] = useState('')
+  const [isSupported, setIsSupported] = useState(true)
 
   useEffect(() => {
+    if (window.isSecureContext === false) {
+      setError('A câmera só pode ser acessada em um ambiente seguro (HTTPS).')
+      setIsSupported(false)
+      return
+    }
+
+    if (!('BarcodeDetector' in window)) {
+      setIsSupported(false)
+      setError(
+        'Leitor de QR Code não suportado nativamente. Por favor, digite a URL manualmente abaixo.',
+      )
+      return
+    }
+
     let stream: MediaStream | null = null
     let interval: NodeJS.Timeout
 
@@ -26,29 +42,35 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           videoRef.current.play()
         }
 
-        if ('BarcodeDetector' in window) {
-          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
-          interval = setInterval(async () => {
-            if (
-              videoRef.current &&
-              videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
-            ) {
-              try {
-                const barcodes = await detector.detect(videoRef.current)
-                if (barcodes.length > 0) {
-                  onScan(barcodes[0].rawValue)
-                  if (interval) clearInterval(interval)
-                }
-              } catch (err) {
-                console.error('Barcode detection error:', err)
+        const BarcodeDetectorAPI = (window as any).BarcodeDetector
+        const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
+
+        interval = setInterval(async () => {
+          if (
+            videoRef.current &&
+            videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
+          ) {
+            try {
+              const barcodes = await detector.detect(videoRef.current)
+              if (barcodes.length > 0) {
+                onScan(barcodes[0].rawValue)
+                if (interval) clearInterval(interval)
               }
+            } catch (err) {
+              console.error('Barcode detection error:', err)
             }
-          }, 500)
+          }
+        }, 500)
+      } catch (err: any) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError(
+            'Acesso à câmera negado. Por favor, habilite a permissão nas configurações do seu navegador.',
+          )
+        } else if (err.name === 'NotFoundError') {
+          setError('Nenhuma câmera encontrada no dispositivo.')
         } else {
-          setError('Leitor de QR Code não suportado nativamente no seu navegador.')
+          setError('Erro ao acessar a câmera: ' + err.message)
         }
-      } catch (err) {
-        setError('Erro ao acessar a câmera. Verifique as permissões.')
       }
     }
 
@@ -62,7 +84,7 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
 
   return (
     <div className="flex flex-col items-center justify-center space-y-4 p-4 border rounded-md bg-card">
-      {!error && (
+      {!error && isSupported && (
         <div className="relative w-full max-w-sm aspect-square overflow-hidden rounded-md bg-black">
           <video
             ref={videoRef}
@@ -76,7 +98,14 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           </div>
         </div>
       )}
-      {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+      {error && (
+        <Alert variant="destructive" className="w-full">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Aviso</AlertTitle>
+          <AlertDescription className="text-xs mt-1">{error}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="w-full space-y-2 pt-2 border-t">
         <Label className="text-xs text-muted-foreground">Ou cole a URL da NFC-e</Label>
@@ -85,12 +114,19 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
             value={manualUrl}
             onChange={(e) => setManualUrl(e.target.value)}
             placeholder="https://..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && manualUrl) {
+                e.preventDefault()
+                onScan(manualUrl)
+              }
+            }}
           />
           <Button
             variant="secondary"
             onClick={() => {
               if (manualUrl) onScan(manualUrl)
             }}
+            disabled={!manualUrl}
           >
             Ler
           </Button>

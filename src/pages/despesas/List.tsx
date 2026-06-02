@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Scanner } from '@/components/Scanner'
 import { parseReceiptUrl } from '@/services/receipt'
+import { parseNFCeUrl } from '@/lib/nfce-parser'
 
 const initialFormState = {
   work_id: '',
@@ -81,15 +82,43 @@ export default function DespesasList() {
     setScanning(false)
     setParsing(true)
     try {
-      const data = await parseReceiptUrl(url)
+      const localData = parseNFCeUrl(url)
+
+      let finalValue = localData?.totalValue?.toString()
+      let finalCnpj = localData?.merchantCnpj
+      let finalName = ''
+
+      try {
+        const apiData = await parseReceiptUrl(url)
+        finalValue = finalValue || apiData.totalValue?.toString()
+        finalCnpj = finalCnpj || apiData.merchantCnpj
+        finalName = apiData.merchantName || ''
+      } catch (err) {
+        console.warn('Fallback: API falhou, usando dados extraídos localmente.', err)
+      }
+
+      if (!finalValue && !finalCnpj && !finalName) {
+        throw new Error(
+          'Não foi possível extrair dados deste QR Code. Verifique se é uma NFC-e válida.',
+        )
+      }
+
       setFormData((prev) => ({
         ...prev,
-        value: data.totalValue.toString(),
-        merchant_cnpj: data.merchantCnpj,
-        merchant_name: data.merchantName,
-        description: prev.description ? prev.description : `Compra em ${data.merchantName}`,
+        value: finalValue || prev.value,
+        merchant_cnpj: finalCnpj || prev.merchant_cnpj,
+        merchant_name: finalName || prev.merchant_name,
+        description: prev.description
+          ? prev.description
+          : finalName
+            ? `Compra em ${finalName}`
+            : 'Despesa (NFC-e)',
       }))
-      toast({ title: 'Cupom lido com sucesso!', description: 'Dados preenchidos automaticamente.' })
+
+      toast({
+        title: 'Cupom lido com sucesso!',
+        description: 'Os dados foram preenchidos no formulário.',
+      })
     } catch (error: any) {
       toast({
         title: 'Erro ao processar cupom',
