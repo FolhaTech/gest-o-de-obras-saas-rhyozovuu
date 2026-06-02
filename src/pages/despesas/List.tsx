@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Scanner } from '@/components/Scanner'
 import { parseReceiptUrl } from '@/services/receipt'
 import { parseNFCeUrl } from '@/lib/nfce-parser'
+import { useAuth } from '@/hooks/use-auth'
 
 const initialFormState = {
   work_id: '',
@@ -50,6 +51,7 @@ export default function DespesasList() {
   const { data: despesas, loading, refetch } = useData<Despesa>('expenses', '*, works(name)')
   const { data: works } = useData<Obra>('works', 'id, name')
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const [open, setOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
@@ -60,6 +62,7 @@ export default function DespesasList() {
     e.preventDefault()
     const { error } = await supabase.from('expenses').insert({
       work_id: formData.work_id === 'none' ? null : formData.work_id,
+      manager_id: user?.id,
       description: formData.description,
       category: formData.category,
       value: Number(formData.value),
@@ -78,29 +81,33 @@ export default function DespesasList() {
     }
   }
 
-  const handleScan = async (url: string) => {
+  const handleScan = async (scanData: { url?: string; image?: string }) => {
     setScanning(false)
     setParsing(true)
     try {
-      const localData = parseNFCeUrl(url)
-
-      let finalValue = localData?.totalValue?.toString()
-      let finalCnpj = localData?.merchantCnpj
+      let finalValue: string | undefined
+      let finalCnpj: string | undefined
       let finalName = ''
+      let finalDate: string | undefined
+
+      if (scanData.url) {
+        const localData = parseNFCeUrl(scanData.url)
+        finalValue = localData?.totalValue?.toString()
+        finalCnpj = localData?.merchantCnpj
+      }
 
       try {
-        const apiData = await parseReceiptUrl(url)
+        const apiData = await parseReceiptUrl(scanData)
         finalValue = finalValue || apiData.totalValue?.toString()
         finalCnpj = finalCnpj || apiData.merchantCnpj
         finalName = apiData.merchantName || ''
+        finalDate = apiData.date
       } catch (err) {
         console.warn('Fallback: API falhou, usando dados extraídos localmente.', err)
       }
 
       if (!finalValue && !finalCnpj && !finalName) {
-        throw new Error(
-          'Não foi possível extrair dados deste QR Code. Verifique se é uma NFC-e válida.',
-        )
+        throw new Error('Não foi possível extrair dados deste comprovante. Verifique se é válido.')
       }
 
       setFormData((prev) => ({
@@ -108,6 +115,7 @@ export default function DespesasList() {
         value: finalValue || prev.value,
         merchant_cnpj: finalCnpj || prev.merchant_cnpj,
         merchant_name: finalName || prev.merchant_name,
+        date: finalDate || prev.date,
         description: prev.description
           ? prev.description
           : finalName
@@ -116,12 +124,12 @@ export default function DespesasList() {
       }))
 
       toast({
-        title: 'Cupom lido com sucesso!',
-        description: 'Os dados foram preenchidos no formulário.',
+        title: 'Dados lidos com sucesso!',
+        description: 'Os campos foram preenchidos no formulário.',
       })
     } catch (error: any) {
       toast({
-        title: 'Erro ao processar cupom',
+        title: 'Erro ao processar',
         description: error.message,
         variant: 'destructive',
       })
@@ -179,7 +187,7 @@ export default function DespesasList() {
                     </>
                   ) : (
                     <>
-                      <QrCode className="h-4 w-4 mr-2" /> Ler QR Code (NFC-e)
+                      <QrCode className="h-4 w-4 mr-2" /> Ler QR Code ou Imagem
                     </>
                   )}
                 </Button>

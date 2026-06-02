@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, Camera, Image as ImageIcon, Keyboard, Upload } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface ScannerProps {
-  onScan: (text: string) => void
+  onScan: (data: { url?: string; image?: string }) => void
   onCancel: () => void
 }
 
@@ -15,34 +16,50 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
   const [error, setError] = useState('')
   const [manualUrl, setManualUrl] = useState('')
   const [isSupported, setIsSupported] = useState(true)
+  const [activeTab, setActiveTab] = useState('camera')
 
   useEffect(() => {
-    if (window.isSecureContext === false) {
-      setError('A câmera só pode ser acessada em um ambiente seguro (HTTPS).')
-      setIsSupported(false)
-      return
-    }
-
-    if (!('BarcodeDetector' in window)) {
-      setIsSupported(false)
-      setError(
-        'Leitor de QR Code não suportado nativamente. Por favor, digite a URL manualmente abaixo.',
-      )
-      return
-    }
-
-    let stream: MediaStream | null = null
+    let currentStream: MediaStream | null = null
     let interval: NodeJS.Timeout
 
-    const start = async () => {
+    const startCamera = async () => {
+      if (activeTab !== 'camera') return
+
+      if (window.isSecureContext === false) {
+        setError('A câmera só pode ser acessada em um ambiente seguro (HTTPS).')
+        setIsSupported(false)
+        setActiveTab('manual')
+        return
+      }
+
+      if (!('mediaDevices' in navigator) || !('getUserMedia' in navigator.mediaDevices)) {
+        setIsSupported(false)
+        setError(
+          'Acesso à câmera não suportado neste navegador. Por favor, digite a URL manualmente abaixo ou faça upload da imagem.',
+        )
+        setActiveTab('manual')
+        return
+      }
+
+      const BarcodeDetectorAPI = (window as any).BarcodeDetector
+      if (!BarcodeDetectorAPI) {
+        setIsSupported(false)
+        setError(
+          'Leitor de QR Code não suportado nativamente. Por favor, digite a URL manualmente abaixo ou faça upload da imagem.',
+        )
+        setActiveTab('manual')
+        return
+      }
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        })
         if (videoRef.current) {
-          videoRef.current.srcObject = stream
+          videoRef.current.srcObject = currentStream
           videoRef.current.play()
         }
 
-        const BarcodeDetectorAPI = (window as any).BarcodeDetector
         const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
 
         interval = setInterval(async () => {
@@ -53,7 +70,7 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
             try {
               const barcodes = await detector.detect(videoRef.current)
               if (barcodes.length > 0) {
-                onScan(barcodes[0].rawValue)
+                onScan({ url: barcodes[0].rawValue })
                 if (interval) clearInterval(interval)
               }
             } catch (err) {
@@ -62,78 +79,169 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           }
         }, 500)
       } catch (err: any) {
+        setIsSupported(false)
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError(
-            'Acesso à câmera negado. Por favor, habilite a permissão nas configurações do seu navegador.',
+            'Acesso à câmera negado. Por favor, habilite a permissão nas configurações ou use outra opção.',
           )
         } else if (err.name === 'NotFoundError') {
           setError('Nenhuma câmera encontrada no dispositivo.')
         } else {
           setError('Erro ao acessar a câmera: ' + err.message)
         }
+        setActiveTab('manual')
       }
     }
 
-    start()
+    startCamera()
 
     return () => {
-      if (stream) stream.getTracks().forEach((t) => t.stop())
+      if (currentStream) currentStream.getTracks().forEach((t) => t.stop())
       if (interval) clearInterval(interval)
     }
-  }, [onScan])
+  }, [activeTab, onScan])
+
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string
+
+      // Try local BarcodeDetector first
+      const BarcodeDetectorAPI = (window as any).BarcodeDetector
+      if (BarcodeDetectorAPI) {
+        try {
+          const img = new Image()
+          img.src = base64
+          await new Promise((resolve) => {
+            img.onload = resolve
+          })
+          const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
+          const barcodes = await detector.detect(img)
+          if (barcodes.length > 0) {
+            onScan({ url: barcodes[0].rawValue })
+            return
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }
+
+      // Fallback: send image to backend
+      onScan({ image: base64 })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleManualSubmit = () => {
+    if (manualUrl) onScan({ url: manualUrl })
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-4 p-4 border rounded-md bg-card">
-      {!error && isSupported && (
-        <div className="relative w-full max-w-sm aspect-square overflow-hidden rounded-md bg-black">
-          <video
-            ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
-            playsInline
-            muted
-          />
-          <div className="absolute inset-0 border-2 border-primary/50 m-8 rounded-xl pointer-events-none" />
-          <div className="absolute bottom-4 left-0 right-0 text-center text-white/70 text-sm">
-            Aponte para o QR Code
+    <div className="flex flex-col space-y-4 p-4 border rounded-md bg-card w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="camera" disabled={!isSupported && activeTab !== 'camera'}>
+            <Camera className="w-4 h-4 mr-2 hidden sm:block" />
+            Câmera
+          </TabsTrigger>
+          <TabsTrigger value="image">
+            <ImageIcon className="w-4 h-4 mr-2 hidden sm:block" />
+            Imagem
+          </TabsTrigger>
+          <TabsTrigger value="manual">
+            <Keyboard className="w-4 h-4 mr-2 hidden sm:block" />
+            Manual
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="camera" className="mt-0">
+          <div className="flex flex-col items-center justify-center space-y-4">
+            {!error && isSupported && (
+              <div className="relative w-full max-w-sm aspect-square overflow-hidden rounded-md bg-black">
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  playsInline
+                  muted
+                />
+                <div className="absolute inset-0 border-2 border-primary/50 m-8 rounded-xl pointer-events-none" />
+                <div className="absolute bottom-4 left-0 right-0 text-center text-white/70 text-sm">
+                  Aponte para o QR Code
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <Alert variant="destructive" className="w-full">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Aviso</AlertTitle>
+                <AlertDescription className="text-xs mt-1">{error}</AlertDescription>
+                {activeTab === 'camera' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 w-full"
+                    onClick={() => setActiveTab('image')}
+                  >
+                    Tentar Upload de Foto
+                  </Button>
+                )}
+              </Alert>
+            )}
           </div>
-        </div>
-      )}
+        </TabsContent>
 
-      {error && (
-        <Alert variant="destructive" className="w-full">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Aviso</AlertTitle>
-          <AlertDescription className="text-xs mt-1">{error}</AlertDescription>
-        </Alert>
-      )}
+        <TabsContent value="image" className="mt-0">
+          <div className="flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed rounded-md bg-secondary/20 hover:bg-secondary/30 transition-colors">
+            <ImageIcon className="h-10 w-10 text-muted-foreground mb-4" />
+            <p className="text-sm text-center mb-4 text-muted-foreground">
+              Faça upload de uma foto da nota fiscal ou QR Code
+            </p>
+            <div className="relative">
+              <Input
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handleFileUpload}
+              />
+              <Button variant="secondary">
+                <Upload className="w-4 h-4 mr-2" />
+                Selecionar Imagem
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
 
-      <div className="w-full space-y-2 pt-2 border-t">
-        <Label className="text-xs text-muted-foreground">Ou cole a URL da NFC-e</Label>
-        <div className="flex gap-2">
-          <Input
-            value={manualUrl}
-            onChange={(e) => setManualUrl(e.target.value)}
-            placeholder="https://..."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && manualUrl) {
-                e.preventDefault()
-                onScan(manualUrl)
-              }
-            }}
-          />
-          <Button
-            variant="secondary"
-            onClick={() => {
-              if (manualUrl) onScan(manualUrl)
-            }}
-            disabled={!manualUrl}
-          >
-            Ler
-          </Button>
-        </div>
-      </div>
+        <TabsContent value="manual" className="mt-0">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>URL da NFC-e ou Chave de Acesso</Label>
+              <Input
+                value={manualUrl}
+                onChange={(e) => setManualUrl(e.target.value)}
+                placeholder="https://... ou chave de 44 dígitos"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && manualUrl) {
+                    e.preventDefault()
+                    handleManualSubmit()
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Cole a URL completa do QR Code ou a chave de 44 dígitos impressa no cupom.
+              </p>
+            </div>
+            <Button className="w-full" onClick={handleManualSubmit} disabled={!manualUrl}>
+              Consultar Dados
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
 
-      <Button variant="outline" onClick={onCancel} className="w-full">
+      <Button variant="ghost" onClick={onCancel} className="w-full">
         <X className="mr-2 h-4 w-4" /> Cancelar
       </Button>
     </div>
