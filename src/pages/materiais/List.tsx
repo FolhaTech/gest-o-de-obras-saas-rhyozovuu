@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -15,10 +16,27 @@ import { useData } from '@/hooks/use-data'
 import { Material } from '@/types'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 
 export default function MateriaisList() {
   const { data: materiais, loading, refetch } = useData<Material>('materials')
   const { toast } = useToast()
+
+  const [open, setOpen] = useState(false)
+  const [formData, setFormData] = useState({
+    name: '',
+    category: '',
+    unit_of_measure: '',
+    stock_quantity: '',
+    min_quantity: '',
+  })
 
   const handleSimulateMovement = async (id: string, name: string) => {
     const { error } = await supabase.from('material_movements').insert({
@@ -31,6 +49,31 @@ export default function MateriaisList() {
       toast({
         title: 'Saída de estoque registrada',
         description: `10 unidades de ${name} removidas.`,
+      })
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const { error } = await supabase.from('materials').insert({
+      name: formData.name,
+      category: formData.category,
+      unit_of_measure: formData.unit_of_measure,
+      stock_quantity: Number(formData.stock_quantity),
+      min_quantity: Number(formData.min_quantity),
+    })
+    if (!error) {
+      toast({ title: 'Material cadastrado com sucesso!' })
+      setOpen(false)
+      setFormData({
+        name: '',
+        category: '',
+        unit_of_measure: '',
+        stock_quantity: '',
+        min_quantity: '',
       })
       refetch()
     } else {
@@ -51,9 +94,72 @@ export default function MateriaisList() {
           <Button variant="outline" className="gap-2">
             <ArrowRightLeft className="h-4 w-4" /> Movimentação
           </Button>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" /> Novo Material
-          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" /> Novo Material
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Cadastrar Material</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Nome do Material</Label>
+                  <Input
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Input
+                      required
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unidade de Medida</Label>
+                    <Input
+                      required
+                      placeholder="Ex: Saco, m³, Unidade"
+                      value={formData.unit_of_measure}
+                      onChange={(e) =>
+                        setFormData({ ...formData, unit_of_measure: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Estoque Inicial</Label>
+                    <Input
+                      type="number"
+                      required
+                      value={formData.stock_quantity}
+                      onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Estoque Mínimo</Label>
+                    <Input
+                      type="number"
+                      required
+                      value={formData.min_quantity}
+                      onChange={(e) => setFormData({ ...formData, min_quantity: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full">
+                  Salvar Material
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
