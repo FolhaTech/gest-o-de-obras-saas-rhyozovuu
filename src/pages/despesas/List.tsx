@@ -8,7 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Plus, Filter } from 'lucide-react'
+import { Plus, QrCode, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,6 +32,18 @@ import {
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { Scanner } from '@/components/Scanner'
+import { parseReceiptUrl } from '@/services/receipt'
+
+const initialFormState = {
+  work_id: '',
+  description: '',
+  category: 'Materiais',
+  value: '',
+  date: new Date().toISOString().split('T')[0],
+  merchant_name: '',
+  merchant_cnpj: '',
+}
 
 export default function DespesasList() {
   const { data: despesas, loading, refetch } = useData<Despesa>('expenses', '*, works(name)')
@@ -39,13 +51,9 @@ export default function DespesasList() {
   const { toast } = useToast()
 
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    work_id: '',
-    description: '',
-    category: 'Materiais',
-    value: '',
-    date: new Date().toISOString().split('T')[0],
-  })
+  const [scanning, setScanning] = useState(false)
+  const [parsing, setParsing] = useState(false)
+  const [formData, setFormData] = useState(initialFormState)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,21 +63,41 @@ export default function DespesasList() {
       category: formData.category,
       value: Number(formData.value),
       date: formData.date,
+      merchant_name: formData.merchant_name || null,
+      merchant_cnpj: formData.merchant_cnpj || null,
     })
 
     if (!error) {
       toast({ title: 'Despesa registrada!' })
       setOpen(false)
-      setFormData({
-        work_id: '',
-        description: '',
-        category: 'Materiais',
-        value: '',
-        date: new Date().toISOString().split('T')[0],
-      })
+      setFormData(initialFormState)
       refetch()
     } else {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const handleScan = async (url: string) => {
+    setScanning(false)
+    setParsing(true)
+    try {
+      const data = await parseReceiptUrl(url)
+      setFormData((prev) => ({
+        ...prev,
+        value: data.totalValue.toString(),
+        merchant_cnpj: data.merchantCnpj,
+        merchant_name: data.merchantName,
+        description: prev.description ? prev.description : `Compra em ${data.merchantName}`,
+      }))
+      toast({ title: 'Cupom lido com sucesso!', description: 'Dados preenchidos automaticamente.' })
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao processar cupom',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setParsing(false)
     }
   }
 
@@ -84,87 +112,140 @@ export default function DespesasList() {
           <h1 className="text-3xl font-bold tracking-tight">Despesas Financeiras</h1>
           <p className="text-muted-foreground">Controle de custos por obra e categoria.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(val) => {
+            setOpen(val)
+            if (!val) {
+              setScanning(false)
+              setParsing(false)
+              setFormData(initialFormState)
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" /> Nova Despesa
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Registrar Despesa</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>Obra (Opcional)</Label>
-                <Select
-                  value={formData.work_id}
-                  onValueChange={(val) => setFormData({ ...formData, work_id: val })}
+
+            {scanning ? (
+              <Scanner onScan={handleScan} onCancel={() => setScanning(false)} />
+            ) : (
+              <form onSubmit={handleCreate} className="space-y-4 mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full bg-secondary/50 border-dashed"
+                  onClick={() => setScanning(true)}
+                  disabled={parsing}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Geral / Nenhuma" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Geral / Nenhuma</SelectItem>
-                    {works?.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição</Label>
-                <Input
-                  required
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(val) => setFormData({ ...formData, category: val })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Materiais">Materiais</SelectItem>
-                    <SelectItem value="Mão de Obra">Mão de Obra</SelectItem>
-                    <SelectItem value="Equipamentos">Equipamentos</SelectItem>
-                    <SelectItem value="Administrativo">Administrativo</SelectItem>
-                    <SelectItem value="Outros">Outros</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+                  {parsing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Lendo cupom...
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="h-4 w-4 mr-2" /> Ler QR Code (NFC-e)
+                    </>
+                  )}
+                </Button>
+
                 <div className="space-y-2">
-                  <Label>Data</Label>
-                  <Input
-                    type="date"
-                    required
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  />
+                  <Label>Obra (Opcional)</Label>
+                  <Select
+                    value={formData.work_id}
+                    onValueChange={(val) => setFormData({ ...formData, work_id: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Geral / Nenhuma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Geral / Nenhuma</SelectItem>
+                      {works?.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>
+                          {w.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Valor (R$)</Label>
+                  <Label>Descrição</Label>
                   <Input
-                    type="number"
-                    step="0.01"
                     required
-                    value={formData.value}
-                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
-              </div>
-              <Button type="submit" className="w-full">
-                Salvar Despesa
-              </Button>
-            </form>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Fornecedor (Razão Social)</Label>
+                    <Input
+                      value={formData.merchant_name}
+                      onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CNPJ</Label>
+                    <Input
+                      value={formData.merchant_cnpj}
+                      onChange={(e) => setFormData({ ...formData, merchant_cnpj: e.target.value })}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Categoria</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(val) => setFormData({ ...formData, category: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Materiais">Materiais</SelectItem>
+                      <SelectItem value="Mão de Obra">Mão de Obra</SelectItem>
+                      <SelectItem value="Equipamentos">Equipamentos</SelectItem>
+                      <SelectItem value="Administrativo">Administrativo</SelectItem>
+                      <SelectItem value="Outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Data</Label>
+                    <Input
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.value}
+                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full">
+                  Salvar Despesa
+                </Button>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -187,6 +268,7 @@ export default function DespesasList() {
               <TableHead>Data</TableHead>
               <TableHead>Descrição</TableHead>
               <TableHead>Obra</TableHead>
+              <TableHead>Fornecedor</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead className="text-right">Valor (R$)</TableHead>
             </TableRow>
@@ -194,7 +276,7 @@ export default function DespesasList() {
           <TableBody>
             {despesas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                   Nenhuma despesa registrada.
                 </TableCell>
               </TableRow>
@@ -204,6 +286,9 @@ export default function DespesasList() {
                 <TableCell className="text-muted-foreground">{formatDate(d.date)}</TableCell>
                 <TableCell className="font-medium">{d.description}</TableCell>
                 <TableCell className="text-sm">{d.works?.name || '-'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {d.merchant_name || '-'}
+                </TableCell>
                 <TableCell>
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
                     {d.category}

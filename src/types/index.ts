@@ -62,6 +62,8 @@ export interface Despesa {
   date: string
   payment_method: string
   manager_id: string
+  merchant_name?: string
+  merchant_cnpj?: string
   works?: { name: string }
 }
 
