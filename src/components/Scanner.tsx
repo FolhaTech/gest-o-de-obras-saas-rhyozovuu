@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { X, AlertCircle, Camera, Image as ImageIcon, Keyboard, Upload } from 'lucide-react'
+import { X, AlertCircle, Camera, Image as ImageIcon, Keyboard, Upload, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
@@ -17,6 +17,7 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
   const [manualUrl, setManualUrl] = useState('')
   const [isSupported, setIsSupported] = useState(true)
   const [activeTab, setActiveTab] = useState('camera')
+  const [isProcessingFile, setIsProcessingFile] = useState(false)
 
   useEffect(() => {
     let currentStream: MediaStream | null = null
@@ -28,26 +29,14 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
       if (window.isSecureContext === false) {
         setError('A câmera só pode ser acessada em um ambiente seguro (HTTPS).')
         setIsSupported(false)
-        setActiveTab('manual')
+        setActiveTab('image')
         return
       }
 
       if (!('mediaDevices' in navigator) || !('getUserMedia' in navigator.mediaDevices)) {
         setIsSupported(false)
-        setError(
-          'Acesso à câmera não suportado neste navegador. Por favor, digite a URL manualmente abaixo ou faça upload da imagem.',
-        )
-        setActiveTab('manual')
-        return
-      }
-
-      const BarcodeDetectorAPI = (window as any).BarcodeDetector
-      if (!BarcodeDetectorAPI) {
-        setIsSupported(false)
-        setError(
-          'Leitor de QR Code não suportado nativamente. Por favor, digite a URL manualmente abaixo ou faça upload da imagem.',
-        )
-        setActiveTab('manual')
+        setError('Acesso à câmera não suportado neste navegador.')
+        setActiveTab('image')
         return
       }
 
@@ -60,36 +49,46 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           videoRef.current.play()
         }
 
-        const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
-
-        interval = setInterval(async () => {
-          if (
-            videoRef.current &&
-            videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
-          ) {
-            try {
-              const barcodes = await detector.detect(videoRef.current)
-              if (barcodes.length > 0) {
-                onScan({ url: barcodes[0].rawValue })
-                if (interval) clearInterval(interval)
+        const BarcodeDetectorAPI = (window as any).BarcodeDetector
+        if (BarcodeDetectorAPI) {
+          const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
+          interval = setInterval(async () => {
+            if (
+              videoRef.current &&
+              videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
+            ) {
+              try {
+                const barcodes = await detector.detect(videoRef.current)
+                if (barcodes.length > 0) {
+                  onScan({ url: barcodes[0].rawValue })
+                  if (interval) clearInterval(interval)
+                  if (currentStream) currentStream.getTracks().forEach((t) => t.stop())
+                }
+              } catch (err) {
+                console.error('Barcode detection error:', err)
               }
-            } catch (err) {
-              console.error('Barcode detection error:', err)
             }
-          }
-        }, 500)
+          }, 500)
+        } else {
+          setIsSupported(false)
+          setError(
+            'Leitor de QR Code não suportado nativamente pelo navegador. Use o upload da imagem.',
+          )
+          setActiveTab('image')
+          if (currentStream) currentStream.getTracks().forEach((t) => t.stop())
+        }
       } catch (err: any) {
         setIsSupported(false)
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError(
-            'Acesso à câmera negado. Por favor, habilite a permissão nas configurações ou use outra opção.',
+            'Acesso à câmera negado. Por favor, habilite a permissão nas configurações ou faça o upload da imagem.',
           )
         } else if (err.name === 'NotFoundError') {
           setError('Nenhuma câmera encontrada no dispositivo.')
         } else {
           setError('Erro ao acessar a câmera: ' + err.message)
         }
-        setActiveTab('manual')
+        setActiveTab('image')
       }
     }
 
@@ -105,11 +104,11 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setIsProcessingFile(true)
     const reader = new FileReader()
     reader.onload = async (event) => {
       const base64 = event.target?.result as string
 
-      // Try local BarcodeDetector first
       const BarcodeDetectorAPI = (window as any).BarcodeDetector
       if (BarcodeDetectorAPI) {
         try {
@@ -122,16 +121,18 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           const barcodes = await detector.detect(img)
           if (barcodes.length > 0) {
             onScan({ url: barcodes[0].rawValue })
+            setIsProcessingFile(false)
             return
           }
         } catch (e) {
-          console.error(e)
+          console.error('Local barcode detection failed, falling back to edge function', e)
         }
       }
 
-      // Fallback: send image to backend
       onScan({ image: base64 })
+      setIsProcessingFile(false)
     }
+    reader.onerror = () => setIsProcessingFile(false)
     reader.readAsDataURL(file)
   }
 
@@ -186,7 +187,7 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
                     className="mt-4 w-full"
                     onClick={() => setActiveTab('image')}
                   >
-                    Tentar Upload de Foto
+                    Fazer Upload de Imagem
                   </Button>
                 )}
               </Alert>
@@ -198,18 +199,23 @@ export function Scanner({ onScan, onCancel }: ScannerProps) {
           <div className="flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed rounded-md bg-secondary/20 hover:bg-secondary/30 transition-colors">
             <ImageIcon className="h-10 w-10 text-muted-foreground mb-4" />
             <p className="text-sm text-center mb-4 text-muted-foreground">
-              Faça upload de uma foto da nota fiscal ou QR Code
+              Faça upload de uma foto da nota fiscal ou QR Code (JPEG/PNG)
             </p>
             <div className="relative">
               <Input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleFileUpload}
+                disabled={isProcessingFile}
               />
-              <Button variant="secondary">
-                <Upload className="w-4 h-4 mr-2" />
-                Selecionar Imagem
+              <Button variant="secondary" disabled={isProcessingFile}>
+                {isProcessingFile ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                {isProcessingFile ? 'Lendo...' : 'Selecionar Imagem'}
               </Button>
             </div>
           </div>

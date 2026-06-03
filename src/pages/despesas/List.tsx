@@ -84,27 +84,24 @@ export default function DespesasList() {
   const handleScan = async (scanData: { url?: string; image?: string }) => {
     setScanning(false)
     setParsing(true)
+
+    // Clear previous scan result "memory"
+    setFormData((prev) => ({
+      ...prev,
+      value: '',
+      merchant_cnpj: '',
+      merchant_name: '',
+      description: '',
+    }))
+
     try {
-      let finalValue: string | undefined
-      let finalCnpj: string | undefined
-      let finalName = ''
-      let finalDate: string | undefined
+      // Send directly to the Edge Function to ensure fresh processing
+      const apiData = await parseReceiptUrl(scanData)
 
-      if (scanData.url) {
-        const localData = parseNFCeUrl(scanData.url)
-        finalValue = localData?.totalValue?.toString()
-        finalCnpj = localData?.merchantCnpj
-      }
-
-      try {
-        const apiData = await parseReceiptUrl(scanData)
-        finalValue = finalValue || apiData.totalValue?.toString()
-        finalCnpj = finalCnpj || apiData.merchantCnpj
-        finalName = apiData.merchantName || ''
-        finalDate = apiData.date
-      } catch (err) {
-        console.warn('Fallback: API falhou, usando dados extraídos localmente.', err)
-      }
+      const finalValue = apiData.totalValue?.toString() || ''
+      const finalCnpj = apiData.merchantCnpj || ''
+      const finalName = apiData.merchantName || ''
+      const finalDate = apiData.date || new Date().toISOString().split('T')[0]
 
       if (!finalValue && !finalCnpj && !finalName) {
         throw new Error('Não foi possível extrair dados deste comprovante. Verifique se é válido.')
@@ -112,25 +109,21 @@ export default function DespesasList() {
 
       setFormData((prev) => ({
         ...prev,
-        value: finalValue || prev.value,
-        merchant_cnpj: finalCnpj || prev.merchant_cnpj,
-        merchant_name: finalName || prev.merchant_name,
-        date: finalDate || prev.date,
-        description: prev.description
-          ? prev.description
-          : finalName
-            ? `Compra em ${finalName}`
-            : 'Despesa (NFC-e)',
+        value: finalValue,
+        merchant_cnpj: finalCnpj,
+        merchant_name: finalName,
+        date: finalDate,
+        description: finalName ? `Compra em ${finalName}` : 'Despesa (NFC-e)',
       }))
 
       toast({
-        title: 'Dados lidos com sucesso!',
-        description: 'Os campos foram preenchidos no formulário.',
+        title: 'Dados extraídos com sucesso!',
+        description: 'Verifique os campos preenchidos e salve a despesa.',
       })
     } catch (error: any) {
       toast({
-        title: 'Erro ao processar',
-        description: error.message,
+        title: 'Erro ao processar cupom',
+        description: error.message || 'Falha ao conectar com o serviço de leitura.',
         variant: 'destructive',
       })
     } finally {
@@ -183,7 +176,7 @@ export default function DespesasList() {
                 >
                   {parsing ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Lendo cupom...
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando comprovante...
                     </>
                   ) : (
                     <>
@@ -278,8 +271,14 @@ export default function DespesasList() {
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full">
-                  Salvar Despesa
+                <Button type="submit" className="w-full" disabled={parsing}>
+                  {parsing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...
+                    </>
+                  ) : (
+                    'Salvar Despesa'
+                  )}
                 </Button>
               </form>
             )}
