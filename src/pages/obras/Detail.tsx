@@ -14,6 +14,7 @@ import OverviewTab from './tabs/OverviewTab'
 import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
 import RevenuesTab from './tabs/RevenuesTab'
+import ScheduleTab from './tabs/ScheduleTab'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -199,6 +200,12 @@ export default function ObraDetail() {
           >
             Receitas
           </TabsTrigger>
+          <TabsTrigger
+            value="cronograma"
+            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+          >
+            Cronograma
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="visao-geral" className="mt-0">
@@ -212,6 +219,9 @@ export default function ObraDetail() {
         </TabsContent>
         <TabsContent value="receitas" className="mt-0">
           <RevenuesTab obraId={obra.id} />
+        </TabsContent>
+        <TabsContent value="cronograma" className="mt-0">
+          <ScheduleTab obraId={obra.id} />
         </TabsContent>
       </Tabs>
     </div>

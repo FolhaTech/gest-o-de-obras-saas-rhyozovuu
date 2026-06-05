@@ -61,14 +61,12 @@ export default function MateriaisList() {
   })
 
   const handleSimulateMovement = async (id: string, name: string) => {
-    const { error } = await supabase
-      .from('material_movements')
-      .insert({
-        material_id: id,
-        type: 'output',
-        quantity: 10,
-        date: new Date().toISOString().split('T')[0],
-      })
+    const { error } = await supabase.from('material_movements').insert({
+      material_id: id,
+      type: 'output',
+      quantity: 10,
+      date: new Date().toISOString().split('T')[0],
+    })
     if (!error) {
       toast({ title: 'Saída registrada', description: `10 unidades de ${name} removidas.` })
       refetch()
