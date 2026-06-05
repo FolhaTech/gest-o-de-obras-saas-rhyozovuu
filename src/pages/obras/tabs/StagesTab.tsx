@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, CircleDashed, Clock, Plus, Trash } from 'lucide-react'
+import { CheckCircle2, CircleDashed, Clock, Plus, Trash, Edit } from 'lucide-react'
 import { useDataFilter } from '@/hooks/use-data'
 import { Stage } from '@/types'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +19,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export default function StagesTab({ obraId }: { obraId: string }) {
   const {
@@ -27,8 +34,22 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     refetch,
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
   const { toast } = useToast()
+
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({ name: '', manager: '', progress: 0 })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    manager: '',
+    progress: 0,
+    status: 'pending',
+    notes: '',
+    start_date: '',
+    end_date_planned: '',
+    end_date_real: '',
+  })
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -57,6 +78,47 @@ export default function StagesTab({ obraId }: { obraId: string }) {
       toast({ title: 'Etapa adicionada!' })
       setOpen(false)
       setFormData({ name: '', manager: '', progress: 0 })
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const openEdit = (stage: Stage) => {
+    setEditId(stage.id)
+    setEditFormData({
+      name: stage.name,
+      manager: stage.manager || '',
+      progress: stage.progress_percentage || 0,
+      status: stage.status || 'pending',
+      notes: stage.notes || '',
+      start_date: stage.start_date || '',
+      end_date_planned: stage.end_date_planned || '',
+      end_date_real: stage.end_date_real || '',
+    })
+    setEditOpen(true)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editId) return
+    const { error } = await supabase
+      .from('work_stages')
+      .update({
+        name: editFormData.name,
+        manager: editFormData.manager,
+        progress_percentage: editFormData.progress,
+        status: editFormData.status,
+        notes: editFormData.notes,
+        start_date: editFormData.start_date || null,
+        end_date_planned: editFormData.end_date_planned || null,
+        end_date_real: editFormData.end_date_real || null,
+      })
+      .eq('id', editId)
+
+    if (!error) {
+      toast({ title: 'Etapa atualizada!' })
+      setEditOpen(false)
       refetch()
     } else {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' })
@@ -152,18 +214,124 @@ export default function StagesTab({ obraId }: { obraId: string }) {
                 </div>
                 <Progress value={stage.progress_percentage} className="h-2" />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDelete(stage.id)}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(stage)}
+                  className="text-muted-foreground hover:text-primary"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDelete(stage.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </Card>
         ))
       )}
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Etapa</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 mt-4 px-1">
+            <div className="space-y-2">
+              <Label>Nome da Etapa</Label>
+              <Input
+                required
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Responsável</Label>
+              <Input
+                value={editFormData.manager}
+                onChange={(e) => setEditFormData({ ...editFormData, manager: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Início</Label>
+                <Input
+                  type="date"
+                  value={editFormData.start_date}
+                  onChange={(e) => setEditFormData({ ...editFormData, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Progresso Atual (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={editFormData.progress}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, progress: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fim (Planejado)</Label>
+                <Input
+                  type="date"
+                  value={editFormData.end_date_planned}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, end_date_planned: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fim (Real)</Label>
+                <Input
+                  type="date"
+                  value={editFormData.end_date_real}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, end_date_real: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editFormData.status}
+                onValueChange={(val) => setEditFormData({ ...editFormData, status: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="in_progress">Em Andamento</SelectItem>
+                  <SelectItem value="delayed">Atrasado</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <Input
+                value={editFormData.notes}
+                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Atualizar Etapa
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

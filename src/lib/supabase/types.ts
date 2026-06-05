@@ -225,6 +225,47 @@ export type Database = {
         }
         Relationships: []
       }
+      revenues: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string | null
+          id: string
+          source: string | null
+          status: string | null
+          value: number
+          work_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description?: string | null
+          id?: string
+          source?: string | null
+          status?: string | null
+          value: number
+          work_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+          source?: string | null
+          status?: string | null
+          value?: number
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'revenues_work_id_fkey'
+            columns: ['work_id']
+            isOneToOne: false
+            referencedRelation: 'works'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       team_members: {
         Row: {
           created_at: string | null
@@ -618,6 +659,15 @@ export const Constants = {
 //   role: text (nullable, default: 'engineer'::text)
 //   avatar_url: text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+// Table: revenues
+//   id: uuid (not null, default: gen_random_uuid())
+//   work_id: uuid (nullable)
+//   source: text (nullable)
+//   value: numeric (not null)
+//   date: date (not null)
+//   description: text (nullable)
+//   status: text (nullable, default: 'received'::text)
+//   created_at: timestamp with time zone (nullable, default: now())
 // Table: team_members
 //   id: uuid (not null, default: gen_random_uuid())
 //   name: text (not null)
@@ -685,6 +735,9 @@ export const Constants = {
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
+// Table: revenues
+//   PRIMARY KEY revenues_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY revenues_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 // Table: team_members
 //   PRIMARY KEY team_members_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY team_members_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE SET NULL
@@ -716,6 +769,10 @@ export const Constants = {
 //     USING: true
 //     WITH CHECK: true
 // Table: profiles
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: revenues
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true

@@ -17,6 +17,7 @@ import EquipesList from './pages/equipes/List'
 import MateriaisList from './pages/materiais/List'
 import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
+import ConfiguracoesList from './pages/configuracoes/List'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/materiais" element={<MateriaisList />} />
               <Route path="/despesas" element={<DespesasList />} />
               <Route path="/relatorios" element={<RelatoriosList />} />
+              <Route path="/configuracoes" element={<ConfiguracoesList />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFound />} />

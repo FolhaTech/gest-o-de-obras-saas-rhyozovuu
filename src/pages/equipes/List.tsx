@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/formatters'
 import { useData } from '@/hooks/use-data'
 import { Equipe } from '@/types'
-import { Plus, UserCheck, UserMinus } from 'lucide-react'
+import { Plus, UserCheck, UserMinus, Edit, Trash } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -41,8 +41,20 @@ export default function EquipesList() {
   const [formData, setFormData] = useState({
     name: '',
     role: '',
+    phone: '',
     type: 'internal',
     daily_cost: '',
+  })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editData, setEditData] = useState({
+    name: '',
+    role: '',
+    phone: '',
+    type: 'internal',
+    daily_cost: '',
+    status: 'active',
   })
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -50,6 +62,7 @@ export default function EquipesList() {
     const { error } = await supabase.from('team_members').insert({
       name: formData.name,
       role: formData.role,
+      phone: formData.phone || null,
       type: formData.type,
       daily_cost: Number(formData.daily_cost),
       status: 'active',
@@ -58,7 +71,55 @@ export default function EquipesList() {
     if (!error) {
       toast({ title: 'Equipe registrada com sucesso!' })
       setOpen(false)
-      setFormData({ name: '', role: '', type: 'internal', daily_cost: '' })
+      setFormData({ name: '', role: '', phone: '', type: 'internal', daily_cost: '' })
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const openEdit = (eq: Equipe) => {
+    setEditId(eq.id)
+    setEditData({
+      name: eq.name,
+      role: eq.role || '',
+      phone: eq.phone || '',
+      type: eq.type || 'internal',
+      daily_cost: String(eq.daily_cost || 0),
+      status: eq.status || 'active',
+    })
+    setEditOpen(true)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editId) return
+    const { error } = await supabase
+      .from('team_members')
+      .update({
+        name: editData.name,
+        role: editData.role,
+        phone: editData.phone || null,
+        type: editData.type,
+        daily_cost: Number(editData.daily_cost),
+        status: editData.status,
+      })
+      .eq('id', editId)
+
+    if (!error) {
+      toast({ title: 'Registro atualizado!' })
+      setEditOpen(false)
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Deseja excluir este registro?')) return
+    const { error } = await supabase.from('team_members').delete().eq('id', id)
+    if (!error) {
+      toast({ title: 'Registro excluído' })
       refetch()
     } else {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' })
@@ -93,38 +154,49 @@ export default function EquipesList() {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Função / Especialidade</Label>
-                <Input
-                  required
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Função / Especialidade</Label>
+                  <Input
+                    required
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(val) => setFormData({ ...formData, type: val })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="internal">Própria</SelectItem>
-                    <SelectItem value="outsourced">Terceirizada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Custo Diário (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={formData.daily_cost}
-                  onChange={(e) => setFormData({ ...formData, daily_cost: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(val) => setFormData({ ...formData, type: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Própria</SelectItem>
+                      <SelectItem value="outsourced">Terceirizada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Custo Diário (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.daily_cost}
+                    onChange={(e) => setFormData({ ...formData, daily_cost: e.target.value })}
+                  />
+                </div>
               </div>
               <Button type="submit" className="w-full">
                 Salvar
@@ -143,19 +215,25 @@ export default function EquipesList() {
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Custo Diário</TableHead>
               <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {equipes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                   Nenhuma equipe cadastrada.
                 </TableCell>
               </TableRow>
             )}
             {equipes.map((equipe) => (
               <TableRow key={equipe.id}>
-                <TableCell className="font-medium">{equipe.name}</TableCell>
+                <TableCell className="font-medium">
+                  {equipe.name}
+                  {equipe.phone && (
+                    <span className="block text-xs text-muted-foreground">{equipe.phone}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{equipe.role}</TableCell>
                 <TableCell>
                   <Badge
@@ -183,11 +261,104 @@ export default function EquipesList() {
                     </div>
                   )}
                 </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(equipe)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(equipe.id)}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Equipe</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Nome / Empresa</Label>
+              <Input
+                required
+                value={editData.name}
+                onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Função / Especialidade</Label>
+                <Input
+                  required
+                  value={editData.role}
+                  onChange={(e) => setEditData({ ...editData, role: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={editData.phone}
+                  onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select
+                  value={editData.type}
+                  onValueChange={(val) => setEditData({ ...editData, type: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Própria</SelectItem>
+                    <SelectItem value="outsourced">Terceirizada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Custo (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={editData.daily_cost}
+                  onChange={(e) => setEditData({ ...editData, daily_cost: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editData.status}
+                  onValueChange={(val) => setEditData({ ...editData, status: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="inactive">Inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button type="submit" className="w-full">
+              Atualizar
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

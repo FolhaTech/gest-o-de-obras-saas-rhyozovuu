@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, CloudSun, Users, AlertCircle, Trash } from 'lucide-react'
+import { Plus, CloudSun, Users, AlertCircle, Trash, Edit, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,14 +32,41 @@ export default function DiarioObraList() {
   const { toast } = useToast()
 
   const [open, setOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+
   const [formData, setFormData] = useState({
     work_id: '',
     date: new Date().toISOString().split('T')[0],
     weather: 'Ensolarado',
     workers_count: 0,
     occurrences: '',
-    photos: '',
   })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editData, setEditData] = useState({
+    work_id: '',
+    date: '',
+    weather: 'Ensolarado',
+    workers_count: 0,
+    occurrences: '',
+  })
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([])
+
+  const uploadPhotos = async (photoFiles: File[]) => {
+    const urls = []
+    for (const file of photoFiles) {
+      const ext = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`
+      const { data } = await supabase.storage.from('work-diary-photos').upload(fileName, file)
+      if (data) {
+        const { data: urlData } = supabase.storage.from('work-diary-photos').getPublicUrl(fileName)
+        urls.push(urlData.publicUrl)
+      }
+    }
+    return urls
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,37 +74,85 @@ export default function DiarioObraList() {
       toast({ title: 'Erro', description: 'Selecione uma obra.', variant: 'destructive' })
       return
     }
-
-    const photoList = formData.photos
-      ? formData.photos
-          .split(',')
-          .map((u) => u.trim())
-          .filter(Boolean)
-      : []
-
-    const { error } = await supabase.from('work_diaries').insert({
-      work_id: formData.work_id,
-      date: formData.date,
-      weather: formData.weather,
-      workers_count: formData.workers_count,
-      occurrences: formData.occurrences,
-      photos: photoList.length > 0 ? photoList : null,
-    })
-
-    if (!error) {
-      toast({ title: 'Registro salvo com sucesso!' })
-      setOpen(false)
-      setFormData({
-        work_id: '',
-        date: new Date().toISOString().split('T')[0],
-        weather: 'Ensolarado',
-        workers_count: 0,
-        occurrences: '',
-        photos: '',
+    setUploading(true)
+    try {
+      const photoUrls = await uploadPhotos(files)
+      const { error } = await supabase.from('work_diaries').insert({
+        work_id: formData.work_id,
+        date: formData.date,
+        weather: formData.weather,
+        workers_count: formData.workers_count,
+        occurrences: formData.occurrences,
+        photos: photoUrls.length > 0 ? photoUrls : null,
       })
-      refetch()
-    } else {
+
+      if (!error) {
+        toast({ title: 'Registro salvo com sucesso!' })
+        setOpen(false)
+        setFormData({
+          work_id: '',
+          date: new Date().toISOString().split('T')[0],
+          weather: 'Ensolarado',
+          workers_count: 0,
+          occurrences: '',
+        })
+        setFiles([])
+        refetch()
+      } else {
+        throw error
+      }
+    } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const openEdit = (d: Diario) => {
+    setEditId(d.id)
+    setEditData({
+      work_id: d.work_id,
+      date: d.date,
+      weather: d.weather || 'Ensolarado',
+      workers_count: d.workers_count || 0,
+      occurrences: d.occurrences || '',
+    })
+    setExistingPhotos(d.photos || [])
+    setFiles([])
+    setEditOpen(true)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editId || !editData.work_id) return
+    setUploading(true)
+    try {
+      const newUrls = await uploadPhotos(files)
+      const finalPhotos = [...existingPhotos, ...newUrls]
+
+      const { error } = await supabase
+        .from('work_diaries')
+        .update({
+          work_id: editData.work_id,
+          date: editData.date,
+          weather: editData.weather,
+          workers_count: editData.workers_count,
+          occurrences: editData.occurrences,
+          photos: finalPhotos.length > 0 ? finalPhotos : null,
+        })
+        .eq('id', editId)
+
+      if (!error) {
+        toast({ title: 'Registro atualizado!' })
+        setEditOpen(false)
+        refetch()
+      } else {
+        throw error
+      }
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -110,11 +185,11 @@ export default function DiarioObraList() {
               <Plus className="h-4 w-4" /> Novo Registro
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Novo Diário de Obra</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 mt-4">
+            <form onSubmit={handleCreate} className="space-y-4 mt-4 px-1">
               <div className="space-y-2">
                 <Label>Obra</Label>
                 <Select
@@ -182,15 +257,22 @@ export default function DiarioObraList() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Fotos (URLs separadas por vírgula)</Label>
+                <Label>Fotos</Label>
                 <Input
-                  value={formData.photos}
-                  onChange={(e) => setFormData({ ...formData, photos: e.target.value })}
-                  placeholder="https://..."
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Salvar Diário
+              <Button type="submit" className="w-full" disabled={uploading}>
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...
+                  </>
+                ) : (
+                  'Salvar Diário'
+                )}
               </Button>
             </form>
           </DialogContent>
@@ -209,14 +291,24 @@ export default function DiarioObraList() {
                     ({diario.works?.name || 'Geral'})
                   </span>
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(diario.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openEdit(diario)}
+                    className="text-muted-foreground hover:text-primary"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(diario.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-6">
@@ -231,7 +323,6 @@ export default function DiarioObraList() {
                   trabalhadores
                 </div>
               </div>
-
               <div className="mb-6">
                 <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
                   <AlertCircle className="h-4 w-4 text-primary" /> Ocorrências e Atividades
@@ -240,7 +331,6 @@ export default function DiarioObraList() {
                   {diario.occurrences || 'Nenhuma ocorrência relatada.'}
                 </p>
               </div>
-
               {diario.photos && diario.photos.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold mb-3">Galeria de Fotos</h4>
@@ -264,6 +354,105 @@ export default function DiarioObraList() {
           </Card>
         ))}
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Diário de Obra</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 mt-4 px-1">
+            <div className="space-y-2">
+              <Label>Obra</Label>
+              <Select
+                value={editData.work_id}
+                onValueChange={(val) => setEditData({ ...editData, work_id: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {works?.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Data</Label>
+                <Input
+                  type="date"
+                  required
+                  value={editData.date}
+                  onChange={(e) => setEditData({ ...editData, date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Trabalhadores</Label>
+                <Input
+                  type="number"
+                  required
+                  min="0"
+                  value={editData.workers_count}
+                  onChange={(e) =>
+                    setEditData({ ...editData, workers_count: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Clima</Label>
+              <Select
+                value={editData.weather}
+                onValueChange={(val) => setEditData({ ...editData, weather: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Ensolarado">Ensolarado</SelectItem>
+                  <SelectItem value="Nublado">Nublado</SelectItem>
+                  <SelectItem value="Chuvoso">Chuvoso</SelectItem>
+                  <SelectItem value="Tempestade">Tempestade</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Atividades e Ocorrências</Label>
+              <Textarea
+                rows={3}
+                value={editData.occurrences}
+                onChange={(e) => setEditData({ ...editData, occurrences: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Adicionar Fotos (opcional)</Label>
+              <Input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
+              />
+              {existingPhotos.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {existingPhotos.length} foto(s) já existente(s) serão mantidas.
+                </p>
+              )}
+            </div>
+            <Button type="submit" className="w-full" disabled={uploading}>
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Atualizando...
+                </>
+              ) : (
+                'Atualizar Diário'
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
