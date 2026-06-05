@@ -78,3 +78,14 @@ export interface Equipe {
   status: string
   works?: { name: string }
 }
+
+export interface Receita {
+  id: string
+  work_id: string
+  source: string
+  value: number
+  date: string
+  description?: string
+  status: string
+  created_at: string
+}

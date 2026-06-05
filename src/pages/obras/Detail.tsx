@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 import OverviewTab from './tabs/OverviewTab'
 import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
+import RevenuesTab from './tabs/RevenuesTab'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -192,6 +193,12 @@ export default function ObraDetail() {
           >
             Materiais Alocados
           </TabsTrigger>
+          <TabsTrigger
+            value="receitas"
+            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+          >
+            Receitas
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="visao-geral" className="mt-0">
@@ -202,6 +209,9 @@ export default function ObraDetail() {
         </TabsContent>
         <TabsContent value="materiais" className="mt-0">
           <MaterialsTab obraId={obra.id} />
+        </TabsContent>
+        <TabsContent value="receitas" className="mt-0">
+          <RevenuesTab obraId={obra.id} />
         </TabsContent>
       </Tabs>
     </div>
