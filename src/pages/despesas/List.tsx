@@ -8,7 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Plus, QrCode, Loader2, Edit, Trash } from 'lucide-react'
+import { Plus, Edit, Trash } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,8 +32,6 @@ import {
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Scanner } from '@/components/Scanner'
-import { parseReceiptUrl } from '@/services/receipt'
 import { useAuth } from '@/hooks/use-auth'
 
 const initialFormState = {
@@ -54,8 +52,6 @@ export default function DespesasList() {
   const { user } = useAuth()
 
   const [open, setOpen] = useState(false)
-  const [scanning, setScanning] = useState(false)
-  const [parsing, setParsing] = useState(false)
   const [formData, setFormData] = useState(initialFormState)
 
   const [editOpen, setEditOpen] = useState(false)
@@ -135,27 +131,6 @@ export default function DespesasList() {
     }
   }
 
-  const handleScan = async (scanData: { url?: string; image?: string }) => {
-    setScanning(false)
-    setParsing(true)
-    try {
-      const apiData = await parseReceiptUrl(scanData)
-      setFormData((prev) => ({
-        ...prev,
-        value: apiData.totalValue?.toString() || '',
-        merchant_cnpj: apiData.merchantCnpj || '',
-        merchant_name: apiData.merchantName || '',
-        date: apiData.date || new Date().toISOString().split('T')[0],
-        description: apiData.merchantName ? `Compra em ${apiData.merchantName}` : 'Despesa (NFC-e)',
-      }))
-      toast({ title: 'Dados extraídos com sucesso!' })
-    } catch (error: any) {
-      toast({ title: 'Erro ao processar', description: error.message, variant: 'destructive' })
-    } finally {
-      setParsing(false)
-    }
-  }
-
   if (loading) return <Skeleton className="h-64 w-full" />
   const totalDespesas = despesas.reduce((acc, d) => acc + Number(d.value), 0)
 
@@ -171,8 +146,6 @@ export default function DespesasList() {
           onOpenChange={(val) => {
             setOpen(val)
             if (!val) {
-              setScanning(false)
-              setParsing(false)
               setFormData(initialFormState)
             }
           }}
@@ -186,139 +159,112 @@ export default function DespesasList() {
             <DialogHeader>
               <DialogTitle>Registrar Despesa</DialogTitle>
             </DialogHeader>
-            {scanning ? (
-              <Scanner onScan={handleScan} onCancel={() => setScanning(false)} />
-            ) : (
-              <form onSubmit={handleCreate} className="space-y-4 mt-4 px-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full bg-secondary/50 border-dashed"
-                  onClick={() => setScanning(true)}
-                  disabled={parsing}
+            <form onSubmit={handleCreate} className="space-y-4 mt-4 px-1">
+              <div className="space-y-2">
+                <Label>Obra (Opcional)</Label>
+                <Select
+                  value={formData.work_id}
+                  onValueChange={(val) => setFormData({ ...formData, work_id: val })}
                 >
-                  {parsing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando comprovante...
-                    </>
-                  ) : (
-                    <>
-                      <QrCode className="h-4 w-4 mr-2" /> Ler QR Code ou Imagem
-                    </>
-                  )}
-                </Button>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Geral / Nenhuma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Geral / Nenhuma</SelectItem>
+                    {works?.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Input
+                  required
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Obra (Opcional)</Label>
+                  <Label>Fornecedor</Label>
+                  <Input
+                    value={formData.merchant_name}
+                    onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CNPJ</Label>
+                  <Input
+                    value={formData.merchant_cnpj}
+                    onChange={(e) => setFormData({ ...formData, merchant_cnpj: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Categoria</Label>
                   <Select
-                    value={formData.work_id}
-                    onValueChange={(val) => setFormData({ ...formData, work_id: val })}
+                    value={formData.category}
+                    onValueChange={(val) => setFormData({ ...formData, category: val })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Geral / Nenhuma" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Geral / Nenhuma</SelectItem>
-                      {works?.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Materiais">Materiais</SelectItem>
+                      <SelectItem value="Mão de Obra">Mão de Obra</SelectItem>
+                      <SelectItem value="Equipamentos">Equipamentos</SelectItem>
+                      <SelectItem value="Administrativo">Administrativo</SelectItem>
+                      <SelectItem value="Outros">Outros</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Descrição</Label>
+                  <Label>Pagamento</Label>
+                  <Select
+                    value={formData.payment_method}
+                    onValueChange={(val) => setFormData({ ...formData, payment_method: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pix">Pix</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Data</Label>
                   <Input
+                    type="date"
                     required
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Fornecedor</Label>
-                    <Input
-                      value={formData.merchant_name}
-                      onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>CNPJ</Label>
-                    <Input
-                      value={formData.merchant_cnpj}
-                      onChange={(e) => setFormData({ ...formData, merchant_cnpj: e.target.value })}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label>Valor (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.value}
+                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(val) => setFormData({ ...formData, category: val })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Materiais">Materiais</SelectItem>
-                        <SelectItem value="Mão de Obra">Mão de Obra</SelectItem>
-                        <SelectItem value="Equipamentos">Equipamentos</SelectItem>
-                        <SelectItem value="Administrativo">Administrativo</SelectItem>
-                        <SelectItem value="Outros">Outros</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Pagamento</Label>
-                    <Select
-                      value={formData.payment_method}
-                      onValueChange={(val) => setFormData({ ...formData, payment_method: val })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pix">Pix</SelectItem>
-                        <SelectItem value="Boleto">Boleto</SelectItem>
-                        <SelectItem value="Cartão">Cartão</SelectItem>
-                        <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Data</Label>
-                    <Input
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor (R$)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={formData.value}
-                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={parsing}>
-                  {parsing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...
-                    </>
-                  ) : (
-                    'Salvar Despesa'
-                  )}
-                </Button>
-              </form>
-            )}
+              </div>
+              <Button type="submit" className="w-full">
+                Salvar Despesa
+              </Button>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
