@@ -145,7 +145,7 @@ export default function DespesasList() {
     setIsScanning(true)
     try {
       const reader = new FileReader()
-      reader.readAsDataURL(file)
+
       reader.onload = async () => {
         try {
           const base64Image = reader.result as string
@@ -155,8 +155,11 @@ export default function DespesasList() {
             { body: { image: base64Image } },
           )
 
-          if (parseError) throw new Error(parseError.message || 'Erro ao ler a imagem da nota.')
-          if (parsedData?.error) throw new Error(parsedData.error)
+          if (parseError || parsedData?.error) {
+            throw new Error(
+              'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
+            )
+          }
 
           const fileExt = file.name.split('.').pop()
           const fileName = `${crypto.randomUUID()}.${fileExt}`
@@ -184,8 +187,11 @@ export default function DespesasList() {
           setOpen(true)
         } catch (error: any) {
           toast({
-            title: 'Erro ao extrair dados',
-            description: error.message,
+            title: 'Erro',
+            description:
+              error.message === 'Erro ao fazer upload da imagem do recibo.'
+                ? error.message
+                : 'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
             variant: 'destructive',
           })
         } finally {
@@ -193,8 +199,26 @@ export default function DespesasList() {
           if (fileInputRef.current) fileInputRef.current.value = ''
         }
       }
+
+      reader.onerror = () => {
+        toast({
+          title: 'Erro',
+          description:
+            'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
+          variant: 'destructive',
+        })
+        setIsScanning(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+
+      reader.readAsDataURL(file)
     } catch (error: any) {
-      toast({ title: 'Erro de leitura', description: error.message, variant: 'destructive' })
+      toast({
+        title: 'Erro',
+        description:
+          'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
+        variant: 'destructive',
+      })
       setIsScanning(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
