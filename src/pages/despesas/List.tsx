@@ -44,6 +44,7 @@ const initialFormState = {
   merchant_cnpj: '',
   payment_method: 'Pix',
   receipt_url: '',
+  items: [] as string[],
 }
 
 export default function DespesasList() {
@@ -64,7 +65,8 @@ export default function DespesasList() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    const { error } = await supabase.from('expenses').insert({
+
+    const payload: any = {
       work_id: formData.work_id === 'none' ? null : formData.work_id,
       manager_id: user?.id,
       description: formData.description,
@@ -75,7 +77,11 @@ export default function DespesasList() {
       merchant_cnpj: formData.merchant_cnpj || null,
       payment_method: formData.payment_method,
       receipt_url: formData.receipt_url || null,
-    })
+      metadata: formData.items?.length > 0 ? { items: formData.items } : null,
+    }
+
+    const { error } = await supabase.from('expenses').insert(payload)
+
     if (!error) {
       toast({ title: 'Despesa registrada!' })
       setOpen(false)
@@ -98,6 +104,7 @@ export default function DespesasList() {
       merchant_cnpj: d.merchant_cnpj || '',
       payment_method: d.payment_method || 'Pix',
       receipt_url: d.receipt_url || '',
+      items: [],
     })
     setEditOpen(true)
   }
@@ -105,20 +112,20 @@ export default function DespesasList() {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editId) return
-    const { error } = await supabase
-      .from('expenses')
-      .update({
-        work_id: editData.work_id === 'none' ? null : editData.work_id,
-        description: editData.description,
-        category: editData.category,
-        value: Number(editData.value),
-        date: editData.date,
-        merchant_name: editData.merchant_name || null,
-        merchant_cnpj: editData.merchant_cnpj || null,
-        payment_method: editData.payment_method,
-        receipt_url: editData.receipt_url || null,
-      })
-      .eq('id', editId)
+
+    const payload: any = {
+      work_id: editData.work_id === 'none' ? null : editData.work_id,
+      description: editData.description,
+      category: editData.category,
+      value: Number(editData.value),
+      date: editData.date,
+      merchant_name: editData.merchant_name || null,
+      merchant_cnpj: editData.merchant_cnpj || null,
+      payment_method: editData.payment_method,
+      receipt_url: editData.receipt_url || null,
+    }
+
+    const { error } = await supabase.from('expenses').update(payload).eq('id', editId)
 
     if (!error) {
       toast({ title: 'Despesa atualizada!' })
@@ -144,8 +151,18 @@ export default function DespesasList() {
 
     setIsScanning(true)
     try {
-      const reader = new FileReader()
+      // 1. Fazer upload da imagem primeiro
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${crypto.randomUUID()}.${fileExt}`
+      const { error: uploadError } = await supabase.storage.from('receipts').upload(fileName, file)
 
+      if (uploadError) throw new Error('Erro ao fazer upload da imagem do recibo.')
+
+      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(fileName)
+      const publicUrl = urlData.publicUrl
+
+      // 2. Processar a imagem via OCR (Edge Function)
+      const reader = new FileReader()
       reader.onload = async () => {
         try {
           const base64Image = reader.result as string
@@ -156,44 +173,42 @@ export default function DespesasList() {
           )
 
           if (parseError || parsedData?.error) {
-            throw new Error(
-              'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
-            )
+            throw new Error('Erro na leitura automática da nota.')
           }
 
-          const fileExt = file.name.split('.').pop()
-          const fileName = `${crypto.randomUUID()}.${fileExt}`
-          const { error: uploadError } = await supabase.storage
-            .from('receipts')
-            .upload(fileName, file)
-
-          if (uploadError) throw new Error('Erro ao fazer upload da imagem do recibo.')
-
-          const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(fileName)
+          // Montar a descrição com os itens extraídos
+          const descriptionText =
+            parsedData.items && parsedData.items.length > 0
+              ? parsedData.items.join(', ')
+              : parsedData.merchantName
+                ? `Compra em ${parsedData.merchantName}`
+                : 'Despesa extraída de nota fiscal'
 
           setFormData({
             ...initialFormState,
-            description: parsedData.merchantName
-              ? `Compra em ${parsedData.merchantName}`
-              : 'Despesa extraída de nota fiscal',
+            description: descriptionText,
             value: parsedData.totalValue ? String(parsedData.totalValue) : '',
             date: parsedData.date || new Date().toISOString().split('T')[0],
             merchant_name: parsedData.merchantName || '',
             merchant_cnpj: parsedData.merchantCnpj || '',
-            receipt_url: urlData.publicUrl,
+            receipt_url: publicUrl,
+            items: parsedData.items || [],
           })
 
           toast({ title: 'Nota escaneada com sucesso! Verifique os dados e salve.' })
           setOpen(true)
         } catch (error: any) {
+          // Fallback em caso de erro no OCR: abrir o modal apenas com a URL da imagem
           toast({
-            title: 'Erro',
-            description:
-              error.message === 'Erro ao fazer upload da imagem do recibo.'
-                ? error.message
-                : 'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
+            title: 'Erro na extração',
+            description: 'Não foi possível ler os dados automaticamente. Preencha manualmente.',
             variant: 'destructive',
           })
+          setFormData({
+            ...initialFormState,
+            receipt_url: publicUrl,
+          })
+          setOpen(true)
         } finally {
           setIsScanning(false)
           if (fileInputRef.current) fileInputRef.current.value = ''
@@ -201,22 +216,13 @@ export default function DespesasList() {
       }
 
       reader.onerror = () => {
-        toast({
-          title: 'Erro',
-          description:
-            'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
-          variant: 'destructive',
-        })
-        setIsScanning(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
+        throw new Error('Erro ao ler o arquivo selecionado.')
       }
-
       reader.readAsDataURL(file)
     } catch (error: any) {
       toast({
         title: 'Erro',
-        description:
-          'Erro ao processar nota fiscal. Por favor, tente novamente ou insira os dados manualmente.',
+        description: error.message || 'Erro ao processar o recibo.',
         variant: 'destructive',
       })
       setIsScanning(false)
@@ -271,7 +277,7 @@ export default function DespesasList() {
                 <Plus className="h-4 w-4" /> Nova Despesa
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
               <DialogHeader>
                 <DialogTitle>Registrar Despesa</DialogTitle>
               </DialogHeader>
@@ -295,14 +301,21 @@ export default function DespesasList() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Descrição</Label>
+                  <Label>Descrição / Itens</Label>
                   <Input
                     required
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
+                  {formData.items.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {formData.items.length} item(s) identificado(s) no recibo.
+                    </p>
+                  )}
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Fornecedor</Label>
@@ -378,15 +391,15 @@ export default function DespesasList() {
                   </div>
                 </div>
                 {formData.receipt_url && (
-                  <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
+                  <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50/50 p-3 rounded-md border border-blue-100">
                     <ExternalLink className="h-4 w-4" />
                     <a
                       href={formData.receipt_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:underline"
+                      className="hover:underline font-medium"
                     >
-                      Ver anexo escaneado
+                      Ver anexo da nota fiscal
                     </a>
                   </div>
                 )}
@@ -434,23 +447,27 @@ export default function DespesasList() {
               <TableRow key={d.id}>
                 <TableCell className="text-muted-foreground">{formatDate(d.date)}</TableCell>
                 <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    {d.description}
-                    {d.receipt_url && (
-                      <a
-                        href={d.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Ver Recibo"
-                        className="text-muted-foreground hover:text-primary"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate max-w-[250px] block" title={d.description || ''}>
+                        {d.description}
+                      </span>
+                      {d.receipt_url && (
+                        <a
+                          href={d.receipt_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Ver Recibo"
+                          className="text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    {d.merchant_name && (
+                      <span className="block text-xs text-muted-foreground">{d.merchant_name}</span>
                     )}
                   </div>
-                  {d.merchant_name && (
-                    <span className="block text-xs text-muted-foreground">{d.merchant_name}</span>
-                  )}
                 </TableCell>
                 <TableCell className="text-sm">{d.works?.name || '-'}</TableCell>
                 <TableCell>
@@ -481,7 +498,7 @@ export default function DespesasList() {
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Editar Despesa</DialogTitle>
           </DialogHeader>
@@ -506,7 +523,7 @@ export default function DespesasList() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Descrição</Label>
+              <Label>Descrição / Itens</Label>
               <Input
                 required
                 value={editData.description}
@@ -588,13 +605,13 @@ export default function DespesasList() {
               </div>
             </div>
             {editData.receipt_url && (
-              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
+              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50/50 p-3 rounded-md border border-blue-100">
                 <ExternalLink className="h-4 w-4" />
                 <a
                   href={editData.receipt_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="hover:underline"
+                  className="hover:underline font-medium"
                 >
                   Ver anexo atual
                 </a>
