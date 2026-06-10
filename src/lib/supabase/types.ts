@@ -47,6 +47,7 @@ export type Database = {
           merchant_cnpj: string | null
           merchant_name: string | null
           payment_method: string | null
+          receipt_url: string | null
           value: number
           work_id: string | null
         }
@@ -60,6 +61,7 @@ export type Database = {
           merchant_cnpj?: string | null
           merchant_name?: string | null
           payment_method?: string | null
+          receipt_url?: string | null
           value: number
           work_id?: string | null
         }
@@ -73,6 +75,7 @@ export type Database = {
           merchant_cnpj?: string | null
           merchant_name?: string | null
           payment_method?: string | null
+          receipt_url?: string | null
           value?: number
           work_id?: string | null
         }
@@ -631,6 +634,7 @@ export const Constants = {
 //   created_at: timestamp with time zone (nullable, default: now())
 //   merchant_name: text (nullable)
 //   merchant_cnpj: text (nullable)
+//   receipt_url: text (nullable)
 // Table: material_movements
 //   id: uuid (not null, default: gen_random_uuid())
 //   material_id: uuid (nullable)

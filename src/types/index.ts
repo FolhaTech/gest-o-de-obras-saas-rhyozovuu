@@ -64,6 +64,7 @@ export interface Despesa {
   manager_id: string
   merchant_name?: string
   merchant_cnpj?: string
+  receipt_url?: string
   works?: { name: string }
 }
 
