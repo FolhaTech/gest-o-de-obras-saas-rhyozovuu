@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Plus, AlertCircle } from 'lucide-react'
+import { Plus, AlertCircle, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useToast } from '@/hooks/use-toast'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
@@ -154,8 +155,24 @@ export function CatalogSelectionDialog({
                       {isSelected && !isLinked && (
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
-                            <Label htmlFor={`cons-${m.id}`} className="text-xs whitespace-nowrap">
+                            <Label
+                              htmlFor={`cons-${m.id}`}
+                              className="text-xs whitespace-nowrap flex items-center gap-1"
+                            >
                               Consumo por m²
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild type="button">
+                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="w-[200px] text-xs font-normal">
+                                      Os coeficientes de consumo devem seguir as Normas Brasileiras
+                                      (ex: NBR 12721) para maior precisão no orçamento.
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </Label>
                             <Input
                               id={`cons-${m.id}`}

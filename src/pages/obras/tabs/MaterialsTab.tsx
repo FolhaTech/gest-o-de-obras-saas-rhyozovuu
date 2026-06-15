@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Plus, Trash, Check, ChevronsUpDown, Pencil, Save, X } from 'lucide-react'
+import { Plus, Trash, Check, ChevronsUpDown, Pencil, Save, X, Info } from 'lucide-react'
 import { CatalogSelectionDialog } from './CatalogSelectionDialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -189,10 +190,14 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
     e.preventDefault()
     if (!selectedMaterial || !quantity) return
 
+    const consumption = Number(quantity) || 0
+    const calculatedQty = totalArea > 0 && consumption > 0 ? consumption * totalArea : 1
+
     const { error } = await supabase.from('work_extra_materials').insert({
       work_id: obraId,
       material_id: selectedMaterial,
-      quantity: Number(quantity),
+      quantity: calculatedQty,
+      consumption_per_m2: consumption > 0 ? consumption : null,
       notes,
     })
 
@@ -222,24 +227,26 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   }
 
   const handleSaveEditQty = async (materialId: string, currentIds: string[]) => {
-    const qty = Number(editQty)
-    if (isNaN(qty) || qty < 0) return
+    const consumption = Number(editQty)
+    if (isNaN(consumption) || consumption < 0) return
 
     if (currentIds.length > 0) {
       await supabase.from('work_extra_materials').delete().in('id', currentIds)
     }
 
-    if (qty > 0) {
+    if (consumption > 0) {
+      const calculatedQty = totalArea > 0 ? consumption * totalArea : 1
       await supabase.from('work_extra_materials').insert({
         work_id: obraId,
         material_id: materialId,
-        quantity: qty,
+        quantity: calculatedQty,
+        consumption_per_m2: consumption,
         notes: 'Atualizado manualmente',
       })
     }
 
     setEditingId(null)
-    toast({ title: 'Quantidade atualizada com sucesso!' })
+    toast({ title: 'Consumo atualizado com sucesso!' })
     fetchData()
   }
 
@@ -317,15 +324,35 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                   </Popover>
                 </div>
                 <div className="space-y-2">
-                  <Label>Quantidade</Label>
+                  <Label className="flex items-center gap-2">
+                    Consumo por m²
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild type="button">
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="w-[200px] text-xs font-normal">
+                            Coeficiente referenciado por normas técnicas (ex: NBR 12721).
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </Label>
                   <Input
                     type="number"
-                    step="0.01"
-                    min="0.01"
+                    step="0.0001"
+                    min="0"
                     required
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="0.00"
                   />
+                  {totalArea > 0 && quantity && (
+                    <p className="text-xs text-muted-foreground">
+                      Quantidade total calculada: {(Number(quantity) * totalArea).toFixed(2)}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Notas (Opcional)</Label>
@@ -353,7 +380,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 <TableHead>Material</TableHead>
                 <TableHead>Unidade</TableHead>
                 <TableHead className="text-right">Qtd Calculada</TableHead>
-                <TableHead className="text-right">Qtd Manual</TableHead>
+                <TableHead className="text-right">Consumo/m²</TableHead>
                 <TableHead className="text-right">Qtd Total Necessária</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
@@ -371,29 +398,33 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     {editingId === item.materialId ? (
                       <Input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         className="w-24 h-8 ml-auto text-right"
                         value={editQty}
                         onChange={(e) => setEditQty(e.target.value)}
                         autoFocus
+                        placeholder="0.00"
                       />
-                    ) : item.manualQty > 0 ? (
+                    ) : item.consumptionPerM2 !== undefined ? (
                       <div className="flex flex-col items-end">
-                        <span>{item.manualQty.toFixed(2)}</span>
-                        {item.consumptionPerM2 !== undefined && totalArea > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            ({item.consumptionPerM2} /m² × {totalArea} m²)
-                          </span>
+                        <span>{item.consumptionPerM2}</span>
+                        {totalArea > 0 && (
+                          <span className="text-xs text-muted-foreground">(× {totalArea} m²)</span>
                         )}
                       </div>
+                    ) : item.manualQty > 0 ? (
+                      <span className="text-muted-foreground text-xs">Fixo</span>
                     ) : (
                       '-'
                     )}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     {editingId === item.materialId
-                      ? (item.calculatedQty + (Number(editQty) || 0)).toFixed(2)
+                      ? (
+                          item.calculatedQty +
+                          (totalArea > 0 && Number(editQty) > 0 ? Number(editQty) * totalArea : 1)
+                        ).toFixed(2)
                       : item.totalQty.toFixed(2)}
                   </TableCell>
                   <TableCell>
@@ -432,9 +463,13 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                               className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
                               onClick={() => {
                                 setEditingId(item.materialId)
-                                setEditQty(item.manualQty.toString())
+                                setEditQty(
+                                  item.consumptionPerM2 !== undefined
+                                    ? item.consumptionPerM2.toString()
+                                    : '0',
+                                )
                               }}
-                              title="Editar quantidade vinculada"
+                              title="Editar consumo por m²"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>

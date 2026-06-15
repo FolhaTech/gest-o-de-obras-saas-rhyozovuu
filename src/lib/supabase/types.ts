@@ -522,6 +522,7 @@ export type Database = {
       }
       work_extra_materials: {
         Row: {
+          consumption_per_m2: number | null
           created_at: string | null
           id: string
           material_id: string | null
@@ -530,6 +531,7 @@ export type Database = {
           work_id: string | null
         }
         Insert: {
+          consumption_per_m2?: number | null
           created_at?: string | null
           id?: string
           material_id?: string | null
@@ -538,6 +540,7 @@ export type Database = {
           work_id?: string | null
         }
         Update: {
+          consumption_per_m2?: number | null
           created_at?: string | null
           id?: string
           material_id?: string | null
@@ -965,6 +968,7 @@ export const Constants = {
 //   quantity: numeric (not null)
 //   notes: text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+//   consumption_per_m2: numeric (nullable)
 // Table: work_services
 //   id: uuid (not null, default: gen_random_uuid())
 //   work_id: uuid (not null)
