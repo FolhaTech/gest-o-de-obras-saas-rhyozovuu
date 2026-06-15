@@ -41,7 +41,7 @@ type ConsolidateItem = {
   unit: string
   category: string
   calculatedQty: number
-  manualQty: number
+  extraQty: number
   totalQty: number
   manualIds: string[]
   consumptionPerM2?: number
@@ -59,7 +59,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const [editQty, setEditQty] = useState('')
   const [openCombo, setOpenCombo] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState('')
-  const [quantity, setQuantity] = useState('')
+  const [consumptionIndex, setConsumptionIndex] = useState('')
   const [notes, setNotes] = useState('')
 
   const { toast } = useToast()
@@ -133,7 +133,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
               unit: mat.unit_of_measure || '',
               category: mat.category || '',
               calculatedQty: 0,
-              manualQty: 0,
+              extraQty: 0,
               totalQty: 0,
               manualIds: [],
             })
@@ -157,7 +157,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             unit: mat.unit_of_measure || '',
             category: mat.category || '',
             calculatedQty: 0,
-            manualQty: 0,
+            extraQty: 0,
             totalQty: 0,
             manualIds: [],
             consumptionPerM2: extra.consumption_per_m2
@@ -166,7 +166,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
           })
         }
         const item = consolidated.get(matId)!
-        item.manualQty += qty
+        item.extraQty += qty
         item.totalQty += qty
         item.manualIds.push(extra.id)
         if (extra.consumption_per_m2 && item.consumptionPerM2 === undefined) {
@@ -184,14 +184,44 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
 
   useEffect(() => {
     fetchData()
+
+    const channel = supabase
+      .channel(`materials_tab_${obraId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'works', filter: `id=eq.${obraId}` },
+        (payload) => {
+          if (payload.new.total_area !== payload.old.total_area) {
+            setTotalArea(Number(payload.new.total_area) || 0)
+            fetchData()
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'work_extra_materials',
+          filter: `work_id=eq.${obraId}`,
+        },
+        () => {
+          fetchData()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [obraId])
 
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedMaterial || !quantity) return
+    if (!selectedMaterial || !consumptionIndex) return
 
-    const consumption = Number(quantity) || 0
-    const calculatedQty = totalArea > 0 && consumption > 0 ? consumption * totalArea : 1
+    const consumption = Number(consumptionIndex) || 0
+    const calculatedQty = totalArea > 0 && consumption > 0 ? consumption * totalArea : 0
 
     const { error } = await supabase.from('work_extra_materials').insert({
       work_id: obraId,
@@ -205,7 +235,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
       toast({ title: 'Material vinculado com sucesso!' })
       setOpenAdd(false)
       setSelectedMaterial('')
-      setQuantity('')
+      setConsumptionIndex('')
       setNotes('')
       fetchData()
     } else {
@@ -234,8 +264,8 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
       await supabase.from('work_extra_materials').delete().in('id', currentIds)
     }
 
-    if (consumption > 0) {
-      const calculatedQty = totalArea > 0 ? consumption * totalArea : 1
+    if (consumption >= 0) {
+      const calculatedQty = totalArea > 0 ? consumption * totalArea : 0
       await supabase.from('work_extra_materials').insert({
         work_id: obraId,
         material_id: materialId,
@@ -344,13 +374,14 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     step="0.0001"
                     min="0"
                     required
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    value={consumptionIndex}
+                    onChange={(e) => setConsumptionIndex(e.target.value)}
                     placeholder="0.00"
                   />
-                  {totalArea > 0 && quantity && (
+                  {totalArea > 0 && consumptionIndex && (
                     <p className="text-xs text-muted-foreground">
-                      Quantidade total calculada: {(Number(quantity) * totalArea).toFixed(2)}
+                      Quantidade total calculada:{' '}
+                      {(Number(consumptionIndex) * totalArea).toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -413,7 +444,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                           <span className="text-xs text-muted-foreground">(× {totalArea} m²)</span>
                         )}
                       </div>
-                    ) : item.manualQty > 0 ? (
+                    ) : item.extraQty > 0 ? (
                       <span className="text-muted-foreground text-xs">Fixo</span>
                     ) : (
                       '-'
@@ -423,14 +454,14 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     {editingId === item.materialId
                       ? (
                           item.calculatedQty +
-                          (totalArea > 0 && Number(editQty) > 0 ? Number(editQty) * totalArea : 1)
+                          (totalArea > 0 && Number(editQty) > 0 ? Number(editQty) * totalArea : 0)
                         ).toFixed(2)
                       : item.totalQty.toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       {item.calculatedQty > 0 && <Badge variant="outline">Calculado</Badge>}
-                      {item.manualQty > 0 && <Badge variant="secondary">Vinculado</Badge>}
+                      {item.extraQty > 0 && <Badge variant="secondary">Vinculado</Badge>}
                     </div>
                   </TableCell>
                   <TableCell>

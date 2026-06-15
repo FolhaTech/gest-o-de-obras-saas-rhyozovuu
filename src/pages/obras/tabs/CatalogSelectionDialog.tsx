@@ -52,7 +52,7 @@ export function CatalogSelectionDialog({
 
     const inserts = Array.from(selectedIds).map((id) => {
       const consumption = Number(consumptions[id]) || 0
-      const quantity = totalArea > 0 && consumption > 0 ? consumption * totalArea : 1
+      const quantity = totalArea > 0 && consumption > 0 ? consumption * totalArea : 0
 
       return {
         work_id: obraId,
@@ -193,7 +193,7 @@ export function CatalogSelectionDialog({
                             <span className="text-sm font-medium">
                               {consValue > 0 && totalArea > 0
                                 ? (consValue * totalArea).toFixed(2)
-                                : '1.00'}
+                                : '0.00'}
                             </span>
                           </div>
                         </div>
