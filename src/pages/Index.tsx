@@ -14,14 +14,16 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import DashboardCharts from './dashboard/DashboardCharts'
 import { useData } from '@/hooks/use-data'
-import { Obra, Despesa, Receita } from '@/types'
+import { Obra, Despesa, Receita, Material } from '@/types'
+import { Package } from 'lucide-react'
 
 export default function Index() {
   const { data: obras, loading: loadObras } = useData<Obra>('works')
   const { data: despesas, loading: loadDespesas } = useData<Despesa>('expenses')
   const { data: receitas, loading: loadReceitas } = useData<Receita>('revenues')
+  const { data: materiais, loading: loadMateriais } = useData<Material>('materials')
 
-  if (loadObras || loadDespesas || loadReceitas) {
+  if (loadObras || loadDespesas || loadReceitas || loadMateriais) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -57,6 +59,8 @@ export default function Index() {
   const totalSpent = despesas.reduce((acc, d) => acc + (Number(d.value) || 0), 0)
   const totalRevenue = receitas.reduce((acc, r) => acc + (Number(r.value) || 0), 0)
 
+  const allocatedMaterialsCount = materiais.filter((m) => m.work_id !== null).length
+
   const budgetConsumedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
   const balance = totalRevenue - totalSpent
 
@@ -64,7 +68,7 @@ export default function Index() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -108,6 +112,15 @@ export default function Index() {
           <CardContent>
             <div className="text-2xl font-bold">{avgProgress.toFixed(1)}%</div>
             <Progress value={avgProgress} className="h-2 mt-3" />
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow bg-blue-50/50 border-blue-100">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-700">Materiais Alocados</CardTitle>
+            <Package className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-700">{allocatedMaterialsCount}</div>
           </CardContent>
         </Card>
       </div>

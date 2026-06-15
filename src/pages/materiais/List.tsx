@@ -11,9 +11,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, ArrowRightLeft, Search, Edit, Trash } from 'lucide-react'
+import { Plus, ArrowRightLeft, Search, Edit, Trash, Package } from 'lucide-react'
 import { useData } from '@/hooks/use-data'
-import { Material } from '@/types'
+import { Material, Obra } from '@/types'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -34,7 +35,12 @@ import {
 
 export default function MateriaisList() {
   const { data: materiais, loading, refetch } = useData<Material>('materials')
+  const { data: obras } = useData<Obra>('works')
   const { toast } = useToast()
+
+  const [tab, setTab] = useState('all')
+  const [search, setSearch] = useState('')
+  const [selectedWork, setSelectedWork] = useState('all')
 
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
@@ -154,6 +160,14 @@ export default function MateriaisList() {
 
   if (loading) return <Skeleton className="h-64 w-full" />
 
+  const filteredMaterials = materiais.filter((m) => {
+    if (search && !m.name.toLowerCase().includes(search.toLowerCase())) return false
+    if (tab === 'general' && m.work_id) return false
+    if (tab === 'allocated' && !m.work_id) return false
+    if (tab === 'allocated' && selectedWork !== 'all' && m.work_id !== selectedWork) return false
+    return true
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -252,86 +266,141 @@ export default function MateriaisList() {
         </div>
       </div>
 
-      <div className="flex items-center py-4">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Buscar material..." className="pl-9" />
-        </div>
-      </div>
+      <Tabs value={tab} onValueChange={setTab} className="w-full space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="all">Todos</TabsTrigger>
+            <TabsTrigger value="general">Estoque Geral</TabsTrigger>
+            <TabsTrigger value="allocated">Materiais Alocados</TabsTrigger>
+          </TabsList>
 
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Material</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead className="text-right">Qtd Atual</TableHead>
-              <TableHead className="text-right">Estoque Min.</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {materiais.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                  Nenhum material cadastrado.
-                </TableCell>
-              </TableRow>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {tab === 'allocated' && (
+              <Select value={selectedWork} onValueChange={setSelectedWork}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filtrar por obra..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as obras</SelectItem>
+                  {obras?.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-            {materiais.map((item) => {
-              const isLow = item.stock_quantity <= item.min_quantity
-              return (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {item.name}
-                    <span className="block text-xs text-muted-foreground">
-                      {item.unit_of_measure}
-                    </span>
-                  </TableCell>
-                  <TableCell>{item.category}</TableCell>
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Buscar material..."
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-md border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Material</TableHead>
+                <TableHead>Categoria</TableHead>
+                {tab !== 'general' && <TableHead>Obra</TableHead>}
+                <TableHead className="text-right">Qtd Atual</TableHead>
+                <TableHead className="text-right">Estoque Min.</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMaterials.length === 0 && (
+                <TableRow>
                   <TableCell
-                    className={`text-right font-bold text-lg ${isLow ? 'text-red-600' : ''}`}
+                    colSpan={tab !== 'general' ? 7 : 6}
+                    className="text-center py-6 text-muted-foreground"
                   >
-                    {item.stock_quantity}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {item.min_quantity}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {item.status === 'inactive' ? (
-                      <Badge variant="outline">Inativo</Badge>
-                    ) : isLow ? (
-                      <Badge variant="destructive" className="bg-red-500">
-                        Atenção
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">
-                        Normal
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {tab === 'allocated'
+                      ? 'Nenhum material alocado no momento.'
+                      : 'Nenhum material encontrado.'}
                   </TableCell>
                 </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+              {filteredMaterials.map((item) => {
+                const isLow = item.stock_quantity <= item.min_quantity
+                const workName = item.work_id
+                  ? obras?.find((o) => o.id === item.work_id)?.name
+                  : null
+
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {item.name}
+                      <span className="block text-xs text-muted-foreground">
+                        {item.unit_of_measure}
+                      </span>
+                    </TableCell>
+                    <TableCell>{item.category}</TableCell>
+                    {tab !== 'general' && (
+                      <TableCell>
+                        {workName ? (
+                          <Badge
+                            variant="outline"
+                            className="font-normal bg-blue-50 text-blue-700 hover:bg-blue-50"
+                          >
+                            {workName}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell
+                      className={`text-right font-bold text-lg ${isLow ? 'text-red-600' : ''}`}
+                    >
+                      {item.stock_quantity}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {item.min_quantity}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {item.status === 'inactive' ? (
+                        <Badge variant="outline">Inativo</Badge>
+                      ) : isLow ? (
+                        <Badge variant="destructive" className="bg-red-500">
+                          Atenção
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">
+                          Normal
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </Tabs>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
