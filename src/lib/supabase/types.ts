@@ -36,6 +36,132 @@ export type Database = {
         }
         Relationships: []
       }
+      compositions: {
+        Row: {
+          coefficient: number
+          created_at: string | null
+          id: string
+          material_id: string
+          service_id: string
+          waste_percentage: number
+        }
+        Insert: {
+          coefficient: number
+          created_at?: string | null
+          id?: string
+          material_id: string
+          service_id: string
+          waste_percentage?: number
+        }
+        Update: {
+          coefficient?: number
+          created_at?: string | null
+          id?: string
+          material_id?: string
+          service_id?: string
+          waste_percentage?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'compositions_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'compositions_service_id_fkey'
+            columns: ['service_id']
+            isOneToOne: false
+            referencedRelation: 'services'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      compositions_history: {
+        Row: {
+          coefficient: number
+          created_at: string | null
+          id: string
+          material_id: string
+          waste_percentage: number
+          work_service_id: string
+        }
+        Insert: {
+          coefficient: number
+          created_at?: string | null
+          id?: string
+          material_id: string
+          waste_percentage?: number
+          work_service_id: string
+        }
+        Update: {
+          coefficient?: number
+          created_at?: string | null
+          id?: string
+          material_id?: string
+          waste_percentage?: number
+          work_service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'compositions_history_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'compositions_history_work_service_id_fkey'
+            columns: ['work_service_id']
+            isOneToOne: false
+            referencedRelation: 'work_services'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      consumption_tracking: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          material_id: string
+          quantity_actual: number
+          work_service_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          material_id: string
+          quantity_actual: number
+          work_service_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          material_id?: string
+          quantity_actual?: number
+          work_service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'consumption_tracking_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'consumption_tracking_work_service_id_fkey'
+            columns: ['work_service_id']
+            isOneToOne: false
+            referencedRelation: 'work_services'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       expenses: {
         Row: {
           category: string | null
@@ -272,6 +398,27 @@ export type Database = {
           },
         ]
       }
+      services: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          unit: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          unit: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          unit?: string
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
           created_at: string | null
@@ -366,6 +513,48 @@ export type Database = {
           },
           {
             foreignKeyName: 'work_diaries_work_id_fkey'
+            columns: ['work_id']
+            isOneToOne: false
+            referencedRelation: 'works'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      work_services: {
+        Row: {
+          created_at: string | null
+          id: string
+          service_id: string
+          status: string | null
+          target_quantity: number
+          work_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          service_id: string
+          status?: string | null
+          target_quantity: number
+          work_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          service_id?: string
+          status?: string | null
+          target_quantity?: number
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'work_services_service_id_fkey'
+            columns: ['service_id']
+            isOneToOne: false
+            referencedRelation: 'services'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'work_services_work_id_fkey'
             columns: ['work_id']
             isOneToOne: false
             referencedRelation: 'works'
@@ -625,6 +814,27 @@ export const Constants = {
 //   address: text (nullable)
 //   contact_email: text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+// Table: compositions
+//   id: uuid (not null, default: gen_random_uuid())
+//   service_id: uuid (not null)
+//   material_id: uuid (not null)
+//   coefficient: numeric (not null)
+//   waste_percentage: numeric (not null, default: 0)
+//   created_at: timestamp with time zone (nullable, default: now())
+// Table: compositions_history
+//   id: uuid (not null, default: gen_random_uuid())
+//   work_service_id: uuid (not null)
+//   material_id: uuid (not null)
+//   coefficient: numeric (not null)
+//   waste_percentage: numeric (not null, default: 0)
+//   created_at: timestamp with time zone (nullable, default: now())
+// Table: consumption_tracking
+//   id: uuid (not null, default: gen_random_uuid())
+//   work_service_id: uuid (not null)
+//   material_id: uuid (not null)
+//   quantity_actual: numeric (not null)
+//   date: date (not null)
+//   created_at: timestamp with time zone (nullable, default: now())
 // Table: expenses
 //   id: uuid (not null, default: gen_random_uuid())
 //   work_id: uuid (nullable)
@@ -676,6 +886,11 @@ export const Constants = {
 //   description: text (nullable)
 //   status: text (nullable, default: 'received'::text)
 //   created_at: timestamp with time zone (nullable, default: now())
+// Table: services
+//   id: uuid (not null, default: gen_random_uuid())
+//   name: text (not null)
+//   unit: text (not null)
+//   created_at: timestamp with time zone (nullable, default: now())
 // Table: team_members
 //   id: uuid (not null, default: gen_random_uuid())
 //   name: text (not null)
@@ -697,6 +912,13 @@ export const Constants = {
 //   workers_count: integer (nullable)
 //   notes: text (nullable)
 //   photos: _text (nullable)
+//   created_at: timestamp with time zone (nullable, default: now())
+// Table: work_services
+//   id: uuid (not null, default: gen_random_uuid())
+//   work_id: uuid (not null)
+//   service_id: uuid (not null)
+//   target_quantity: numeric (not null)
+//   status: text (nullable, default: 'planned'::text)
 //   created_at: timestamp with time zone (nullable, default: now())
 // Table: work_stages
 //   id: uuid (not null, default: gen_random_uuid())
@@ -728,6 +950,18 @@ export const Constants = {
 // --- CONSTRAINTS ---
 // Table: company_settings
 //   PRIMARY KEY company_settings_pkey: PRIMARY KEY (id)
+// Table: compositions
+//   FOREIGN KEY compositions_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+//   PRIMARY KEY compositions_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY compositions_service_id_fkey: FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+// Table: compositions_history
+//   FOREIGN KEY compositions_history_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+//   PRIMARY KEY compositions_history_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY compositions_history_work_service_id_fkey: FOREIGN KEY (work_service_id) REFERENCES work_services(id) ON DELETE CASCADE
+// Table: consumption_tracking
+//   FOREIGN KEY consumption_tracking_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+//   PRIMARY KEY consumption_tracking_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY consumption_tracking_work_service_id_fkey: FOREIGN KEY (work_service_id) REFERENCES work_services(id) ON DELETE CASCADE
 // Table: expenses
 //   FOREIGN KEY expenses_manager_id_fkey: FOREIGN KEY (manager_id) REFERENCES profiles(id) ON DELETE SET NULL
 //   PRIMARY KEY expenses_pkey: PRIMARY KEY (id)
@@ -746,6 +980,9 @@ export const Constants = {
 // Table: revenues
 //   PRIMARY KEY revenues_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY revenues_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+// Table: services
+//   UNIQUE services_name_key: UNIQUE (name)
+//   PRIMARY KEY services_pkey: PRIMARY KEY (id)
 // Table: team_members
 //   PRIMARY KEY team_members_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY team_members_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE SET NULL
@@ -753,6 +990,10 @@ export const Constants = {
 //   FOREIGN KEY work_diaries_author_id_fkey: FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL
 //   PRIMARY KEY work_diaries_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY work_diaries_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+// Table: work_services
+//   PRIMARY KEY work_services_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY work_services_service_id_fkey: FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+//   FOREIGN KEY work_services_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 // Table: work_stages
 //   PRIMARY KEY work_stages_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY work_stages_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
@@ -761,6 +1002,18 @@ export const Constants = {
 
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: company_settings
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: compositions
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: compositions_history
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: consumption_tracking
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
@@ -784,11 +1037,19 @@ export const Constants = {
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
+// Table: services
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
 // Table: team_members
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
 // Table: work_diaries
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: work_services
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
@@ -875,9 +1136,29 @@ export const Constants = {
 //   END;
 //   $function$
 //
+// FUNCTION snapshot_work_service_composition()
+//   CREATE OR REPLACE FUNCTION public.snapshot_work_service_composition()
+//    RETURNS trigger
+//    LANGUAGE plpgsql
+//   AS $function$
+//   BEGIN
+//       INSERT INTO public.compositions_history (work_service_id, material_id, coefficient, waste_percentage)
+//       SELECT NEW.id, c.material_id, c.coefficient, c.waste_percentage
+//       FROM public.compositions c
+//       WHERE c.service_id = NEW.service_id;
+//       RETURN NEW;
+//   END;
+//   $function$
+//
 
 // --- TRIGGERS ---
 // Table: material_movements
 //   on_material_movement: CREATE TRIGGER on_material_movement AFTER INSERT ON public.material_movements FOR EACH ROW EXECUTE FUNCTION handle_material_movement()
+// Table: work_services
+//   on_work_service_created: CREATE TRIGGER on_work_service_created AFTER INSERT ON public.work_services FOR EACH ROW EXECUTE FUNCTION snapshot_work_service_composition()
 // Table: work_stages
 //   on_stage_progress_change: CREATE TRIGGER on_stage_progress_change AFTER INSERT OR DELETE OR UPDATE ON public.work_stages FOR EACH ROW EXECUTE FUNCTION calculate_work_progress()
+
+// --- INDEXES ---
+// Table: services
+//   CREATE UNIQUE INDEX services_name_key ON public.services USING btree (name)
