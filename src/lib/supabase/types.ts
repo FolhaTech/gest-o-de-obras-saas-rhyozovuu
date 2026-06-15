@@ -1186,7 +1186,7 @@ export const Constants = {
 //       UPDATE public.work_extra_materials
 //       SET quantity = CASE
 //         WHEN COALESCE(NEW.total_area, 0) > 0 AND consumption_per_m2 > 0 THEN consumption_per_m2 * NEW.total_area
-//         ELSE 1
+//         ELSE 0
 //       END
 //       WHERE work_id = NEW.id AND consumption_per_m2 IS NOT NULL;
 //     END IF;

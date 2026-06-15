@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import NotesTab from './tabs/NotesTab'
-import MaterialPlanningTab from './tabs/MaterialPlanningTab'
 
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
@@ -220,12 +219,6 @@ export default function ObraDetail() {
             Receitas
           </TabsTrigger>
           <TabsTrigger
-            value="planejamento-materiais"
-            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
-          >
-            Plan. Materiais
-          </TabsTrigger>
-          <TabsTrigger
             value="cronograma"
             className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
           >
@@ -247,9 +240,6 @@ export default function ObraDetail() {
         </TabsContent>
         <TabsContent value="receitas" className="mt-0">
           <RevenuesTab obraId={obra.id} />
-        </TabsContent>
-        <TabsContent value="planejamento-materiais" className="mt-0">
-          <MaterialPlanningTab obraId={obra.id} obraArea={obra.total_area || 0} />
         </TabsContent>
         <TabsContent value="cronograma" className="mt-0">
           <ScheduleTab obraId={obra.id} />
