@@ -15,6 +15,7 @@ import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
 import RevenuesTab from './tabs/RevenuesTab'
 import ScheduleTab from './tabs/ScheduleTab'
+import WorkServicesTab from './tabs/WorkServicesTab'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -207,6 +208,12 @@ export default function ObraDetail() {
             Etapas do Projeto
           </TabsTrigger>
           <TabsTrigger
+            value="servicos"
+            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+          >
+            Serviços
+          </TabsTrigger>
+          <TabsTrigger
             value="materiais"
             className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
           >
@@ -234,6 +241,9 @@ export default function ObraDetail() {
         </TabsContent>
         <TabsContent value="etapas" className="mt-0">
           <StagesTab obraId={obra.id} />
+        </TabsContent>
+        <TabsContent value="servicos" className="mt-0">
+          <WorkServicesTab obraId={obra.id} />
         </TabsContent>
         <TabsContent value="materiais" className="mt-0">
           <MaterialsTab obraId={obra.id} />

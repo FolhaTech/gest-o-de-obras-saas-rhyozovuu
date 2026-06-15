@@ -47,7 +47,7 @@ export default function CompositionsDialog({
   const fetchComps = async () => {
     const { data } = await supabase
       .from('compositions')
-      .select('*, materials(name, unit_of_measure)')
+      .select('*, materials(name, unidade_nativa, unit_of_measure)')
       .eq('service_id', service.id)
     if (data) setCompositions(data)
   }
@@ -93,7 +93,7 @@ export default function CompositionsDialog({
               <SelectContent>
                 {materials.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
-                    {m.name} ({m.unit_of_measure})
+                    {m.name} ({m.unidade_nativa || m.unit_of_measure})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -133,7 +133,8 @@ export default function CompositionsDialog({
               {compositions.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>
-                    {c.materials?.name} ({c.materials?.unit_of_measure})
+                    {c.materials?.name} (
+                    {c.materials?.unidade_nativa || c.materials?.unit_of_measure})
                   </TableCell>
                   <TableCell>{c.coefficient}</TableCell>
                   <TableCell>{c.waste_percentage}%</TableCell>
