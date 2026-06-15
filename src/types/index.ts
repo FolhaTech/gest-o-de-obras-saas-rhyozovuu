@@ -90,3 +90,44 @@ export interface Receita {
   status: string
   created_at: string
 }
+
+export interface Service {
+  id: string
+  name: string
+  unit: string
+}
+
+export interface Composition {
+  id: string
+  service_id: string
+  material_id: string
+  coefficient: number
+  waste_percentage: number
+  materials?: { name: string; unit_of_measure: string }
+}
+
+export interface WorkService {
+  id: string
+  work_id: string
+  service_id: string
+  target_quantity: number
+  status: string
+  services?: { name: string; unit: string }
+}
+
+export interface CompositionHistory {
+  id: string
+  work_service_id: string
+  material_id: string
+  coefficient: number
+  waste_percentage: number
+  materials?: { id: string; name: string; unit_of_measure: string }
+}
+
+export interface ConsumptionTracking {
+  id: string
+  work_service_id: string
+  material_id: string
+  quantity_actual: number
+  date: string
+}
