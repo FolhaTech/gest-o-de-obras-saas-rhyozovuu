@@ -36,65 +36,107 @@ DECLARE
   v_mat_selador uuid := gen_random_uuid();
 BEGIN
   -- Insert Materials (idempotent check by name)
-  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Cimento SINAPI') THEN
-    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES
-    (v_mat_tijolo, 'Tijolo SINAPI', 'kg', 'kg', null, 'Alvenaria'),
-    (v_mat_cimento, 'Cimento SINAPI', 'kg', 'kg', 50, 'Aglomerante'),
-    (v_mat_areia, 'Areia SINAPI', 'kg', 'kg', null, 'Agregado'),
-    (v_mat_cal, 'Cal SINAPI', 'kg', 'kg', 20, 'Aglomerante'),
-    (v_mat_tinta, 'Tinta SINAPI', 'kg', 'kg', null, 'Acabamento'),
-    (v_mat_selador, 'Selador SINAPI', 'kg', 'kg', null, 'Acabamento');
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Tijolo SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_tijolo, 'Tijolo SINAPI', 'kg', 'kg', null, 'Alvenaria');
   ELSE
     SELECT id INTO v_mat_tijolo FROM public.materials WHERE name = 'Tijolo SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Cimento SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_cimento, 'Cimento SINAPI', 'kg', 'kg', 50, 'Aglomerante');
+  ELSE
     SELECT id INTO v_mat_cimento FROM public.materials WHERE name = 'Cimento SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Areia SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_areia, 'Areia SINAPI', 'kg', 'kg', null, 'Agregado');
+  ELSE
     SELECT id INTO v_mat_areia FROM public.materials WHERE name = 'Areia SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Cal SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_cal, 'Cal SINAPI', 'kg', 'kg', 20, 'Aglomerante');
+  ELSE
     SELECT id INTO v_mat_cal FROM public.materials WHERE name = 'Cal SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Tinta SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_tinta, 'Tinta SINAPI', 'kg', 'kg', null, 'Acabamento');
+  ELSE
     SELECT id INTO v_mat_tinta FROM public.materials WHERE name = 'Tinta SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Selador SINAPI') THEN
+    INSERT INTO public.materials (id, name, unidade_nativa, unit_of_measure, peso_saco_kg, category) VALUES (v_mat_selador, 'Selador SINAPI', 'kg', 'kg', null, 'Acabamento');
+  ELSE
     SELECT id INTO v_mat_selador FROM public.materials WHERE name = 'Selador SINAPI' LIMIT 1;
   END IF;
 
   -- Insert Services (idempotent check by name)
   IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Alvenaria SINAPI') THEN
-    INSERT INTO public.services (id, name, unit) VALUES
-    (v_serv_alv, 'Alvenaria SINAPI', 'm2'),
-    (v_serv_chap, 'Chapisco SINAPI', 'm2'),
-    (v_serv_reb, 'Reboco SINAPI', 'm2'),
-    (v_serv_cont, 'Contrapiso SINAPI', 'm2'),
-    (v_serv_pint, 'Pintura SINAPI', 'm2');
+    INSERT INTO public.services (id, name, unit) VALUES (v_serv_alv, 'Alvenaria SINAPI', 'm2');
   ELSE
     SELECT id INTO v_serv_alv FROM public.services WHERE name = 'Alvenaria SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Chapisco SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (v_serv_chap, 'Chapisco SINAPI', 'm2');
+  ELSE
     SELECT id INTO v_serv_chap FROM public.services WHERE name = 'Chapisco SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Reboco SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (v_serv_reb, 'Reboco SINAPI', 'm2');
+  ELSE
     SELECT id INTO v_serv_reb FROM public.services WHERE name = 'Reboco SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Contrapiso SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (v_serv_cont, 'Contrapiso SINAPI', 'm2');
+  ELSE
     SELECT id INTO v_serv_cont FROM public.services WHERE name = 'Contrapiso SINAPI' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Pintura SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (v_serv_pint, 'Pintura SINAPI', 'm2');
+  ELSE
     SELECT id INTO v_serv_pint FROM public.services WHERE name = 'Pintura SINAPI' LIMIT 1;
   END IF;
 
   -- Insert Compositions (Check existence)
+  -- Alvenaria
   IF NOT EXISTS (SELECT 1 FROM public.compositions WHERE service_id = v_serv_alv AND material_id = v_mat_tijolo) THEN
-    -- Alvenaria
     INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage) VALUES
     (v_serv_alv, v_mat_tijolo, 55, 5),
     (v_serv_alv, v_mat_cimento, 5, 5),
     (v_serv_alv, v_mat_areia, 37.5, 5),
     (v_serv_alv, v_mat_cal, 1.5, 5);
-    
-    -- Chapisco
+  END IF;
+  
+  -- Chapisco
+  IF NOT EXISTS (SELECT 1 FROM public.compositions WHERE service_id = v_serv_chap AND material_id = v_mat_cimento) THEN
     INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage) VALUES
     (v_serv_chap, v_mat_cimento, 3.5, 5),
     (v_serv_chap, v_mat_areia, 7.5, 5);
+  END IF;
 
-    -- Reboco
+  -- Reboco
+  IF NOT EXISTS (SELECT 1 FROM public.compositions WHERE service_id = v_serv_reb AND material_id = v_mat_cimento) THEN
     INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage) VALUES
     (v_serv_reb, v_mat_cimento, 7.5, 5),
     (v_serv_reb, v_mat_cal, 3, 5),
     (v_serv_reb, v_mat_areia, 52.5, 5);
+  END IF;
 
-    -- Contrapiso
+  -- Contrapiso
+  IF NOT EXISTS (SELECT 1 FROM public.compositions WHERE service_id = v_serv_cont AND material_id = v_mat_cimento) THEN
     INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage) VALUES
     (v_serv_cont, v_mat_cimento, 9, 5),
     (v_serv_cont, v_mat_areia, 60, 5);
+  END IF;
 
-    -- Pintura
+  -- Pintura
+  IF NOT EXISTS (SELECT 1 FROM public.compositions WHERE service_id = v_serv_pint AND material_id = v_mat_tinta) THEN
     INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage) VALUES
     (v_serv_pint, v_mat_tinta, 0.234, 5),
     (v_serv_pint, v_mat_selador, 0.13, 5);
