@@ -43,6 +43,7 @@ type ConsolidateItem = {
   manualQty: number
   totalQty: number
   manualIds: string[]
+  consumptionPerM2?: number
 }
 
 export default function MaterialsTab({ obraId }: { obraId: string }) {
@@ -50,6 +51,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const [items, setItems] = useState<ConsolidateItem[]>([])
   const [allMaterials, setAllMaterials] = useState<any[]>([])
   const [catalogMaterials, setCatalogMaterials] = useState<any[]>([])
+  const [totalArea, setTotalArea] = useState<number>(0)
 
   const [openAdd, setOpenAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -65,11 +67,13 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
     setLoading(true)
     try {
       const [
+        { data: workData },
         { data: workServices },
         { data: extraMaterials },
         { data: materialsList },
         { data: catalogList },
       ] = await Promise.all([
+        supabase.from('works').select('total_area').eq('id', obraId).single(),
         supabase
           .from('work_services')
           .select(`
@@ -89,6 +93,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             id,
             material_id,
             quantity,
+            consumption_per_m2,
             materials (id, name, unit_of_measure, category)
           `)
           .eq('work_id', obraId),
@@ -103,6 +108,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
           .is('work_id', null),
       ])
 
+      setTotalArea(workData?.total_area || 0)
       setAllMaterials(materialsList || [])
       setCatalogMaterials(catalogList || [])
 
@@ -153,12 +159,18 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             manualQty: 0,
             totalQty: 0,
             manualIds: [],
+            consumptionPerM2: extra.consumption_per_m2
+              ? Number(extra.consumption_per_m2)
+              : undefined,
           })
         }
         const item = consolidated.get(matId)!
         item.manualQty += qty
         item.totalQty += qty
         item.manualIds.push(extra.id)
+        if (extra.consumption_per_m2 && item.consumptionPerM2 === undefined) {
+          item.consumptionPerM2 = Number(extra.consumption_per_m2)
+        }
       })
 
       setItems(Array.from(consolidated.values()).sort((a, b) => a.name.localeCompare(b.name)))
@@ -240,6 +252,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
         <div className="flex gap-2">
           <CatalogSelectionDialog
             obraId={obraId}
+            totalArea={totalArea}
             catalogMaterials={catalogMaterials}
             existingMaterialIds={items
               .filter((i) => i.manualIds.length > 0)
@@ -366,7 +379,14 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                         autoFocus
                       />
                     ) : item.manualQty > 0 ? (
-                      item.manualQty.toFixed(2)
+                      <div className="flex flex-col items-end">
+                        <span>{item.manualQty.toFixed(2)}</span>
+                        {item.consumptionPerM2 !== undefined && totalArea > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            ({item.consumptionPerM2} /m² × {totalArea} m²)
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       '-'
                     )}
