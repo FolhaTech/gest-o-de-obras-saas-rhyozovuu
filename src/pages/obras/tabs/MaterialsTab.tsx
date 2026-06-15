@@ -200,7 +200,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Materiais Alocados Consolidados</h3>
+        <h3 className="text-lg font-medium">Materiais Alocados</h3>
         <Dialog open={openAdd} onOpenChange={setOpenAdd}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
@@ -283,7 +283,8 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
 
       {items.length === 0 ? (
         <p className="text-muted-foreground p-4 border rounded-md text-center">
-          Nenhum material alocado para esta obra.
+          Nenhum material alocado para esta obra. Vincule materiais do catálogo ou adicione
+          serviços.
         </p>
       ) : (
         <div className="rounded-md border">
@@ -294,7 +295,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 <TableHead>Unidade</TableHead>
                 <TableHead className="text-right">Qtd Calculada</TableHead>
                 <TableHead className="text-right">Qtd Manual</TableHead>
-                <TableHead className="text-right">Qtd Total</TableHead>
+                <TableHead className="text-right">Qtd Total Necessária</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>

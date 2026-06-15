@@ -1107,7 +1107,13 @@ export const Constants = {
 //     USING: true
 //     WITH CHECK: true
 // Table: work_extra_materials
-//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//   Policy "authenticated_delete" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: true
+//   Policy "authenticated_insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: true
+//   Policy "authenticated_select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: true
+//   Policy "authenticated_update" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
 // Table: work_services
