@@ -25,7 +25,13 @@ export default function ObrasList() {
   const { data: obras, loading, refetch } = useData<Obra>('works')
   const [open, setOpen] = useState(false)
   const { toast } = useToast()
-  const [formData, setFormData] = useState({ name: '', client: '', budget: '', endDate: '' })
+  const [formData, setFormData] = useState({
+    name: '',
+    client: '',
+    budget: '',
+    endDate: '',
+    totalArea: '',
+  })
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,6 +40,7 @@ export default function ObrasList() {
       client: formData.client,
       budget_planned: Number(formData.budget),
       end_date_planned: formData.endDate,
+      total_area: Number(formData.totalArea) || 0,
       status: 'planned',
     })
     if (!error) {
@@ -95,6 +102,16 @@ export default function ObrasList() {
                   required
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Área Total (m²)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formData.totalArea}
+                  onChange={(e) => setFormData({ ...formData, totalArea: e.target.value })}
                 />
               </div>
               <div className="space-y-2">

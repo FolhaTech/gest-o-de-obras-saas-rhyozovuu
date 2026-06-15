@@ -32,7 +32,13 @@ import { Service, WorkService, CompositionHistory } from '@/types'
 import { useData } from '@/hooks/use-data'
 import ConsumptionDialog from './ConsumptionDialog'
 
-export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
+export default function MaterialPlanningTab({
+  obraId,
+  obraArea = 0,
+}: {
+  obraId: string
+  obraArea?: number
+}) {
   const { data: services } = useData<Service>('services')
   const { toast } = useToast()
 
@@ -113,8 +119,8 @@ export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
     fetchWorkServices()
   }
 
-  const calculateMaterialQuantity = (wsQty: number, comp: CompositionHistory) => {
-    const rawQty = wsQty * comp.coefficient * (1 + comp.waste_percentage / 100)
+  const calculateMaterialQuantity = (comp: CompositionHistory) => {
+    const rawQty = obraArea * comp.coefficient * (1 + comp.waste_percentage / 100)
     const unit = comp.materials?.unit_of_measure?.toLowerCase() || ''
     const isWhole = ['un', 'sc', 'cx', 'lata', 'gl'].includes(unit)
     return isWhole ? Math.round(rawQty) : Number(rawQty.toFixed(2))
@@ -126,7 +132,7 @@ export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
       const ws = workServices.find((w) => w.id === comp.work_service_id)
       if (!ws || !comp.materials) return
 
-      const finalQty = calculateMaterialQuantity(ws.target_quantity, comp)
+      const finalQty = calculateMaterialQuantity(comp)
       const matId = comp.material_id
 
       if (!list[matId]) {
@@ -139,7 +145,7 @@ export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
       list[matId].qty += finalQty
     })
     return Object.values(list).sort((a, b) => a.name.localeCompare(b.name))
-  }, [workServices, compositionsHistory])
+  }, [workServices, compositionsHistory, obraArea])
 
   const getBreakdown = (ws: WorkService) => {
     return compositionsHistory
@@ -147,7 +153,7 @@ export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
       .map((c) => ({
         name: c.materials?.name || '',
         unit: c.materials?.unit_of_measure || '',
-        qty: calculateMaterialQuantity(ws.target_quantity, c),
+        qty: calculateMaterialQuantity(c),
         coef: c.coefficient,
         waste: c.waste_percentage,
       }))
@@ -348,10 +354,8 @@ export default function MaterialPlanningTab({ obraId }: { obraId: string }) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              Quantidade Alvo:{' '}
-              <span className="font-bold text-foreground">
-                {breakdownWs?.target_quantity} {breakdownWs?.services?.unit}
-              </span>
+              Quantidade Alvo (Área da Obra):{' '}
+              <span className="font-bold text-foreground">{obraArea} m²</span>
             </div>
             <div className="rounded-md border bg-card max-h-[60vh] overflow-auto">
               <Table>

@@ -54,6 +54,7 @@ export default function ObraDetail() {
       start_date: obra.start_date,
       end_date_planned: obra.end_date_planned,
       budget_planned: obra.budget_planned,
+      total_area: obra.total_area,
     })
     setEditOpen(true)
   }
@@ -161,6 +162,15 @@ export default function ObraDetail() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Área Total (m²)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.total_area || ''}
+                onChange={(e) => setFormData({ ...formData, total_area: Number(e.target.value) })}
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Orçamento Planejado</Label>
               <Input
                 type="number"
@@ -239,7 +249,7 @@ export default function ObraDetail() {
           <RevenuesTab obraId={obra.id} />
         </TabsContent>
         <TabsContent value="planejamento-materiais" className="mt-0">
-          <MaterialPlanningTab obraId={obra.id} />
+          <MaterialPlanningTab obraId={obra.id} obraArea={obra.total_area || 0} />
         </TabsContent>
         <TabsContent value="cronograma" className="mt-0">
           <ScheduleTab obraId={obra.id} />
