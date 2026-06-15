@@ -159,7 +159,7 @@ export function CatalogSelectionDialog({
                               htmlFor={`cons-${m.id}`}
                               className="text-xs whitespace-nowrap flex items-center gap-1"
                             >
-                              Consumo por m²
+                              Índice Técnico (m²)
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild type="button">
@@ -188,7 +188,7 @@ export function CatalogSelectionDialog({
 
                           <div className="w-24 text-right">
                             <Label className="text-xs text-muted-foreground block mb-1">
-                              Qtd Total
+                              Qtd Total Necessária
                             </Label>
                             <span className="text-sm font-medium">
                               {consValue > 0 && totalArea > 0

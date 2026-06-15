@@ -246,7 +246,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
     }
 
     setEditingId(null)
-    toast({ title: 'Consumo atualizado com sucesso!' })
+    toast({ title: 'Índice Técnico atualizado com sucesso!' })
     fetchData()
   }
 
@@ -325,7 +325,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    Consumo por m²
+                    Índice Técnico (m²)
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild type="button">
@@ -380,7 +380,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 <TableHead>Material</TableHead>
                 <TableHead>Unidade</TableHead>
                 <TableHead className="text-right">Qtd Calculada</TableHead>
-                <TableHead className="text-right">Consumo/m²</TableHead>
+                <TableHead className="text-right">Índice Técnico (m²)</TableHead>
                 <TableHead className="text-right">Qtd Total Necessária</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
@@ -469,7 +469,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                                     : '0',
                                 )
                               }}
-                              title="Editar consumo por m²"
+                              title="Editar Índice Técnico (m²)"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>

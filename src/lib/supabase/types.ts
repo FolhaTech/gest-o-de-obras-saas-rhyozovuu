@@ -1176,6 +1176,24 @@ export const Constants = {
 //   END;
 //   $function$
 //
+// FUNCTION recalculate_extra_materials_on_area_update()
+//   CREATE OR REPLACE FUNCTION public.recalculate_extra_materials_on_area_update()
+//    RETURNS trigger
+//    LANGUAGE plpgsql
+//   AS $function$
+//   BEGIN
+//     IF OLD.total_area IS DISTINCT FROM NEW.total_area THEN
+//       UPDATE public.work_extra_materials
+//       SET quantity = CASE
+//         WHEN COALESCE(NEW.total_area, 0) > 0 AND consumption_per_m2 > 0 THEN consumption_per_m2 * NEW.total_area
+//         ELSE 1
+//       END
+//       WHERE work_id = NEW.id AND consumption_per_m2 IS NOT NULL;
+//     END IF;
+//     RETURN NEW;
+//   END;
+//   $function$
+//
 // FUNCTION rls_auto_enable()
 //   CREATE OR REPLACE FUNCTION public.rls_auto_enable()
 //    RETURNS event_trigger
@@ -1229,6 +1247,8 @@ export const Constants = {
 //   on_work_service_created: CREATE TRIGGER on_work_service_created AFTER INSERT ON public.work_services FOR EACH ROW EXECUTE FUNCTION snapshot_work_service_composition()
 // Table: work_stages
 //   on_stage_progress_change: CREATE TRIGGER on_stage_progress_change AFTER INSERT OR DELETE OR UPDATE ON public.work_stages FOR EACH ROW EXECUTE FUNCTION calculate_work_progress()
+// Table: works
+//   on_works_area_update: CREATE TRIGGER on_works_area_update AFTER UPDATE OF total_area ON public.works FOR EACH ROW EXECUTE FUNCTION recalculate_extra_materials_on_area_update()
 
 // --- INDEXES ---
 // Table: services
