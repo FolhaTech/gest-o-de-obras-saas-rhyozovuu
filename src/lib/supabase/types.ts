@@ -520,6 +520,48 @@ export type Database = {
           },
         ]
       }
+      work_extra_materials: {
+        Row: {
+          created_at: string | null
+          id: string
+          material_id: string | null
+          notes: string | null
+          quantity: number
+          work_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          material_id?: string | null
+          notes?: string | null
+          quantity: number
+          work_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          material_id?: string | null
+          notes?: string | null
+          quantity?: number
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'work_extra_materials_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'work_extra_materials_work_id_fkey'
+            columns: ['work_id']
+            isOneToOne: false
+            referencedRelation: 'works'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       work_services: {
         Row: {
           created_at: string | null
@@ -916,6 +958,13 @@ export const Constants = {
 //   notes: text (nullable)
 //   photos: _text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+// Table: work_extra_materials
+//   id: uuid (not null, default: gen_random_uuid())
+//   work_id: uuid (nullable)
+//   material_id: uuid (nullable)
+//   quantity: numeric (not null)
+//   notes: text (nullable)
+//   created_at: timestamp with time zone (nullable, default: now())
 // Table: work_services
 //   id: uuid (not null, default: gen_random_uuid())
 //   work_id: uuid (not null)
@@ -994,6 +1043,10 @@ export const Constants = {
 //   FOREIGN KEY work_diaries_author_id_fkey: FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL
 //   PRIMARY KEY work_diaries_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY work_diaries_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+// Table: work_extra_materials
+//   FOREIGN KEY work_extra_materials_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+//   PRIMARY KEY work_extra_materials_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY work_extra_materials_work_id_fkey: FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
 // Table: work_services
 //   PRIMARY KEY work_services_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY work_services_service_id_fkey: FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
@@ -1050,6 +1103,10 @@ export const Constants = {
 //     USING: true
 //     WITH CHECK: true
 // Table: work_diaries
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: work_extra_materials
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
