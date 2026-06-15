@@ -18,9 +18,11 @@ import ScheduleTab from './tabs/ScheduleTab'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import NotesTab from './tabs/NotesTab'
 
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
+  const [activeTab, setActiveTab] = useState('visao-geral')
   const navigate = useNavigate()
   const { toast } = useToast()
   const { data: works, loading, refetch } = useDataFilter<Obra>('works', 'id', id)
@@ -174,13 +176,19 @@ export default function ObraDetail() {
         </DialogContent>
       </Dialog>
 
-      <Tabs defaultValue="visao-geral" className="w-full">
-        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6 overflow-x-auto">
           <TabsTrigger
             value="visao-geral"
             className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
           >
             Visão Geral
+          </TabsTrigger>
+          <TabsTrigger
+            value="notas"
+            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+          >
+            Notas
           </TabsTrigger>
           <TabsTrigger
             value="etapas"
@@ -209,7 +217,10 @@ export default function ObraDetail() {
         </TabsList>
 
         <TabsContent value="visao-geral" className="mt-0">
-          <OverviewTab obra={obra} />
+          <OverviewTab obra={obra} onAddNote={() => setActiveTab('notas')} />
+        </TabsContent>
+        <TabsContent value="notas" className="mt-0">
+          <NotesTab obraId={obra.id} />
         </TabsContent>
         <TabsContent value="etapas" className="mt-0">
           <StagesTab obraId={obra.id} />
