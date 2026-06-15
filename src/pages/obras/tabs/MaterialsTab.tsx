@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Plus, Trash, Check, ChevronsUpDown } from 'lucide-react'
+import { Plus, Trash, Check, ChevronsUpDown, Pencil, Save, X } from 'lucide-react'
+import { CatalogSelectionDialog } from './CatalogSelectionDialog'
 import {
   Dialog,
   DialogContent,
@@ -48,8 +49,11 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<ConsolidateItem[]>([])
   const [allMaterials, setAllMaterials] = useState<any[]>([])
+  const [catalogMaterials, setCatalogMaterials] = useState<any[]>([])
 
   const [openAdd, setOpenAdd] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editQty, setEditQty] = useState('')
   const [openCombo, setOpenCombo] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -60,11 +64,15 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [{ data: workServices }, { data: extraMaterials }, { data: materialsList }] =
-        await Promise.all([
-          supabase
-            .from('work_services')
-            .select(`
+      const [
+        { data: workServices },
+        { data: extraMaterials },
+        { data: materialsList },
+        { data: catalogList },
+      ] = await Promise.all([
+        supabase
+          .from('work_services')
+          .select(`
             id,
             target_quantity,
             compositions_history (
@@ -74,23 +82,29 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
               materials (id, name, unit_of_measure, category)
             )
           `)
-            .eq('work_id', obraId),
-          supabase
-            .from('work_extra_materials')
-            .select(`
+          .eq('work_id', obraId),
+        supabase
+          .from('work_extra_materials')
+          .select(`
             id,
             material_id,
             quantity,
             materials (id, name, unit_of_measure, category)
           `)
-            .eq('work_id', obraId),
-          supabase
-            .from('materials')
-            .select('id, name, unit_of_measure, category')
-            .eq('status', 'active'),
-        ])
+          .eq('work_id', obraId),
+        supabase
+          .from('materials')
+          .select('id, name, unit_of_measure, category')
+          .eq('status', 'active'),
+        supabase
+          .from('materials')
+          .select('id, name, unit_of_measure, category')
+          .eq('status', 'active')
+          .is('work_id', null),
+      ])
 
       setAllMaterials(materialsList || [])
+      setCatalogMaterials(catalogList || [])
 
       const consolidated = new Map<string, ConsolidateItem>()
 
@@ -195,90 +209,122 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
     }
   }
 
+  const handleSaveEditQty = async (materialId: string, currentIds: string[]) => {
+    const qty = Number(editQty)
+    if (isNaN(qty) || qty < 0) return
+
+    if (currentIds.length > 0) {
+      await supabase.from('work_extra_materials').delete().in('id', currentIds)
+    }
+
+    if (qty > 0) {
+      await supabase.from('work_extra_materials').insert({
+        work_id: obraId,
+        material_id: materialId,
+        quantity: qty,
+        notes: 'Atualizado manualmente',
+      })
+    }
+
+    setEditingId(null)
+    toast({ title: 'Quantidade atualizada com sucesso!' })
+    fetchData()
+  }
+
   if (loading) return <Skeleton className="h-48 w-full" />
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Materiais Alocados</h3>
-        <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" /> Vincular Material
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Vincular Material à Obra</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAddManual} className="space-y-4 mt-4">
-              <div className="space-y-2 flex flex-col">
-                <Label>Material</Label>
-                <Popover open={openCombo} onOpenChange={setOpenCombo}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openCombo}
-                      className="justify-between font-normal"
-                    >
-                      {selectedMaterial
-                        ? allMaterials.find((m) => m.id === selectedMaterial)?.name
-                        : 'Buscar e selecionar material...'}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Buscar material..." />
-                      <CommandList>
-                        <CommandEmpty>Nenhum material encontrado.</CommandEmpty>
-                        <CommandGroup>
-                          {allMaterials.map((m) => (
-                            <CommandItem
-                              key={m.id}
-                              value={m.name}
-                              onSelect={() => {
-                                setSelectedMaterial(m.id)
-                                setOpenCombo(false)
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  selectedMaterial === m.id ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                              {m.name} ({m.unit_of_measure})
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label>Quantidade</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Notas (Opcional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-              <Button type="submit" className="w-full" disabled={!selectedMaterial}>
-                Vincular
+        <div className="flex gap-2">
+          <CatalogSelectionDialog
+            obraId={obraId}
+            catalogMaterials={catalogMaterials}
+            existingMaterialIds={items
+              .filter((i) => i.manualIds.length > 0)
+              .map((i) => i.materialId)}
+            onSuccess={fetchData}
+          />
+          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" /> Vincular Material
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Vincular Material à Obra</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddManual} className="space-y-4 mt-4">
+                <div className="space-y-2 flex flex-col">
+                  <Label>Material</Label>
+                  <Popover open={openCombo} onOpenChange={setOpenCombo}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCombo}
+                        className="justify-between font-normal"
+                      >
+                        {selectedMaterial
+                          ? allMaterials.find((m) => m.id === selectedMaterial)?.name
+                          : 'Buscar e selecionar material...'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar material..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum material encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {allMaterials.map((m) => (
+                              <CommandItem
+                                key={m.id}
+                                value={m.name}
+                                onSelect={() => {
+                                  setSelectedMaterial(m.id)
+                                  setOpenCombo(false)
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    'mr-2 h-4 w-4',
+                                    selectedMaterial === m.id ? 'opacity-100' : 'opacity-0',
+                                  )}
+                                />
+                                {m.name} ({m.unit_of_measure})
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quantidade</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notas (Opcional)</Label>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </div>
+                <Button type="submit" className="w-full" disabled={!selectedMaterial}>
+                  Vincular
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -309,10 +355,26 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     {item.calculatedQty > 0 ? item.calculatedQty.toFixed(2) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {item.manualQty > 0 ? item.manualQty.toFixed(2) : '-'}
+                    {editingId === item.materialId ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-24 h-8 ml-auto text-right"
+                        value={editQty}
+                        onChange={(e) => setEditQty(e.target.value)}
+                        autoFocus
+                      />
+                    ) : item.manualQty > 0 ? (
+                      item.manualQty.toFixed(2)
+                    ) : (
+                      '-'
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {item.totalQty.toFixed(2)}
+                    {editingId === item.materialId
+                      ? (item.calculatedQty + (Number(editQty) || 0)).toFixed(2)
+                      : item.totalQty.toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
@@ -321,17 +383,54 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {item.manualIds.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteManual(item.manualIds)}
-                        title="Remover materiais vinculados"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <div className="flex gap-1 justify-end">
+                      {editingId === item.materialId ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                            onClick={() => handleSaveEditQty(item.materialId, item.manualIds)}
+                          >
+                            <Save className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                            onClick={() => setEditingId(null)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        item.manualIds.length > 0 && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                              onClick={() => {
+                                setEditingId(item.materialId)
+                                setEditQty(item.manualQty.toString())
+                              }}
+                              title="Editar quantidade vinculada"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteManual(item.manualIds)}
+                              title="Remover materiais vinculados"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
