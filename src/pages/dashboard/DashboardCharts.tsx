@@ -1,125 +1,76 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-} from '@/components/ui/chart'
-import { Area, AreaChart, Pie, PieChart, Cell, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Despesa } from '@/types'
+import { Bar, BarChart, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { formatCurrency } from '@/lib/formatters'
+import { useMemo } from 'react'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 
-export default function DashboardCharts({ despesas }: { despesas: Despesa[] }) {
-  const evolutionData = [
-    { month: 'Jan', planned: 10, realized: 12 },
-    { month: 'Fev', planned: 25, realized: 22 },
-    { month: 'Mar', planned: 40, realized: 35 },
-    { month: 'Abr', planned: 55, realized: 50 },
-    { month: 'Mai', planned: 70, realized: 65 },
-    { month: 'Jun', planned: 85, realized: 80 },
-  ]
+interface DashboardChartsProps {
+  despesas: Despesa[]
+}
+
+export default function DashboardCharts({ despesas }: DashboardChartsProps) {
+  const chartData = useMemo(() => {
+    const expensesByCategory = despesas.reduce(
+      (acc, despesa) => {
+        const category = despesa.category || 'Outros'
+        acc[category] = (acc[category] || 0) + Number(despesa.value)
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    return Object.entries(expensesByCategory)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  }, [despesas])
 
   const chartConfig = {
-    planned: { label: 'Planejado (%)', color: 'hsl(var(--chart-5))' },
-    realized: { label: 'Realizado (%)', color: 'hsl(var(--primary))' },
+    total: {
+      label: 'Total Gasto',
+      color: 'hsl(var(--primary))',
+    },
   }
 
-  const expensesByCategory = despesas.reduce(
-    (acc, curr) => {
-      const cat = curr.category || 'Outros'
-      acc[cat] = (acc[cat] || 0) + Number(curr.value)
-      return acc
-    },
-    {} as Record<string, number>,
-  )
-
-  const pieData = Object.entries(expensesByCategory).map(([name, value], index) => ({
-    name,
-    value,
-    color: `hsl(var(--chart-${(index % 5) + 1}))`,
-  }))
-
-  const pieConfig = pieData.reduce(
-    (acc, item) => ({ ...acc, [item.name]: { label: item.name, color: item.color } }),
-    {},
-  )
-
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Evolução Física (Média)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[250px] w-full">
-            <AreaChart data={evolutionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Area
-                type="monotone"
-                dataKey="planned"
-                stroke="var(--color-planned)"
-                fill="var(--color-planned)"
-                fillOpacity={0.2}
+    <Card className="col-span-4 hover:shadow-md transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-base font-medium">Despesas por Categoria</CardTitle>
+      </CardHeader>
+      <CardContent className="pl-2">
+        {chartData.length === 0 ? (
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            Nenhuma despesa registrada.
+          </div>
+        ) : (
+          <ChartContainer config={chartConfig} className="h-[300px] w-full">
+            <BarChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
+                fontSize={12}
               />
-              <Area
-                type="monotone"
-                dataKey="realized"
-                stroke="var(--color-realized)"
-                fill="var(--color-realized)"
-                fillOpacity={0.4}
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `R$ ${value}`}
+                fontSize={12}
               />
-              <ChartLegend content={<ChartLegendContent />} />
-            </AreaChart>
+              <ChartTooltip
+                cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                content={
+                  <ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />
+                }
+              />
+              <Bar dataKey="total" fill="var(--color-total)" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ChartContainer>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Despesas por Categoria
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {pieData.length === 0 ? (
-            <div className="flex h-[250px] items-center justify-center text-muted-foreground">
-              Nenhuma despesa registrada.
-            </div>
-          ) : (
-            <ChartContainer config={pieConfig} className="h-[250px] w-full">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={2}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
-                    />
-                  }
-                />
-                <ChartLegend content={<ChartLegendContent />} />
-              </PieChart>
-            </ChartContainer>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

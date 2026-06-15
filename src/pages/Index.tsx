@@ -1,23 +1,37 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { AlertCircle, Building2, Clock, CheckCircle2 } from 'lucide-react'
+import {
+  AlertCircle,
+  Building2,
+  Clock,
+  CheckCircle2,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+} from 'lucide-react'
 import { formatCurrency, getStatusColor, translateStatus, formatDate } from '@/lib/formatters'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import DashboardCharts from './dashboard/DashboardCharts'
 import { useData } from '@/hooks/use-data'
-import { Obra, Despesa } from '@/types'
+import { Obra, Despesa, Receita } from '@/types'
 
 export default function Index() {
   const { data: obras, loading: loadObras } = useData<Obra>('works')
   const { data: despesas, loading: loadDespesas } = useData<Despesa>('expenses')
+  const { data: receitas, loading: loadReceitas } = useData<Receita>('revenues')
 
-  if (loadObras || loadDespesas) {
+  if (loadObras || loadDespesas || loadReceitas) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
         <div className="grid gap-4 md:grid-cols-4">
           <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
@@ -41,7 +55,10 @@ export default function Index() {
 
   const totalBudget = obras.reduce((acc, o) => acc + (Number(o.budget_planned) || 0), 0)
   const totalSpent = despesas.reduce((acc, d) => acc + (Number(d.value) || 0), 0)
+  const totalRevenue = receitas.reduce((acc, r) => acc + (Number(r.value) || 0), 0)
+
   const budgetConsumedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
+  const balance = totalRevenue - totalSpent
 
   return (
     <div className="space-y-6">
@@ -95,11 +112,49 @@ export default function Index() {
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Receita Total
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(totalRevenue)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Despesa Total
+            </CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalSpent)}</div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Saldo Global
+            </CardTitle>
+            <Wallet className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{formatCurrency(balance)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Saúde Financeira Global
+              Progresso do Orçamento (Previsto vs Realizado)
             </CardTitle>
           </CardHeader>
           <CardContent>

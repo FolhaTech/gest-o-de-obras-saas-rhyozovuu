@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
@@ -5,10 +6,32 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Search, Bell, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Layout() {
   const { user, signOut } = useAuth()
-  const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
+  const [profile, setProfile] = useState<{
+    full_name: string
+    role: string
+    avatar_url: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setProfile(data)
+        })
+    }
+  }, [user?.id])
+
+  const userName =
+    profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
+  const userRole = profile?.role || 'Admin'
 
   return (
     <SidebarProvider>
@@ -32,14 +55,11 @@ export default function Layout() {
             <div className="flex items-center gap-3 border-l pl-4">
               <div className="flex flex-col items-end hidden sm:flex">
                 <span className="text-sm font-medium leading-none">{userName}</span>
-                <span className="text-xs text-muted-foreground">Admin</span>
+                <span className="text-xs text-muted-foreground capitalize">{userRole}</span>
               </div>
               <Avatar className="h-8 w-8">
-                <AvatarImage
-                  src="https://img.usecurling.com/ppl/thumbnail?gender=male&seed=1"
-                  alt="User"
-                />
-                <AvatarFallback>UN</AvatarFallback>
+                <AvatarImage src={profile?.avatar_url || ''} alt={userName} />
+                <AvatarFallback>{userName.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
               <button
                 onClick={signOut}

@@ -46,6 +46,7 @@ export type Database = {
           manager_id: string | null
           merchant_cnpj: string | null
           merchant_name: string | null
+          metadata: Json | null
           payment_method: string | null
           receipt_url: string | null
           value: number
@@ -60,6 +61,7 @@ export type Database = {
           manager_id?: string | null
           merchant_cnpj?: string | null
           merchant_name?: string | null
+          metadata?: Json | null
           payment_method?: string | null
           receipt_url?: string | null
           value: number
@@ -74,6 +76,7 @@ export type Database = {
           manager_id?: string | null
           merchant_cnpj?: string | null
           merchant_name?: string | null
+          metadata?: Json | null
           payment_method?: string | null
           receipt_url?: string | null
           value?: number
@@ -635,6 +638,7 @@ export const Constants = {
 //   merchant_name: text (nullable)
 //   merchant_cnpj: text (nullable)
 //   receipt_url: text (nullable)
+//   metadata: jsonb (nullable)
 // Table: material_movements
 //   id: uuid (not null, default: gen_random_uuid())
 //   material_id: uuid (nullable)
