@@ -28,7 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, Trash, ClipboardEdit, Pencil, List } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Service, WorkService, CompositionHistory } from '@/types'
+import { Service, WorkService, CompositionHistory, Material } from '@/types'
 import { useData } from '@/hooks/use-data'
 import ConsumptionDialog from './ConsumptionDialog'
 
@@ -40,6 +40,7 @@ export default function MaterialPlanningTab({
   obraArea?: number
 }) {
   const { data: services } = useData<Service>('services')
+  const { data: materials } = useData<Material>('materials')
   const { toast } = useToast()
 
   const [workServices, setWorkServices] = useState<WorkService[]>([])
@@ -48,6 +49,9 @@ export default function MaterialPlanningTab({
 
   const [serviceId, setServiceId] = useState('')
   const [targetQty, setTargetQty] = useState('')
+  const [manualItems, setManualItems] = useState<
+    { material_id: string; coefficient: string; waste_percentage: string }[]
+  >([])
 
   const [trackWs, setTrackWs] = useState<WorkService | null>(null)
 
@@ -85,17 +89,38 @@ export default function MaterialPlanningTab({
   const handleLinkService = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!serviceId || !targetQty) return
-    const { error } = await supabase.from('work_services').insert({
-      work_id: obraId,
-      service_id: serviceId,
-      target_quantity: Number(targetQty),
-    })
-    if (!error) {
+
+    const validManualItems = manualItems.filter((item) => item.material_id && item.coefficient)
+
+    const { data: newWs, error } = await supabase
+      .from('work_services')
+      .insert({
+        work_id: obraId,
+        service_id: serviceId,
+        target_quantity: Number(targetQty),
+      })
+      .select()
+      .single()
+
+    if (!error && newWs) {
+      if (validManualItems.length > 0) {
+        const manualInserts = validManualItems.map((item) => ({
+          work_service_id: newWs.id,
+          material_id: item.material_id,
+          coefficient: Number(item.coefficient),
+          waste_percentage: Number(item.waste_percentage) || 0,
+        }))
+        await supabase.from('compositions_history').insert(manualInserts)
+      }
+
       toast({ title: 'Adicionado com sucesso!' })
       setOpen(false)
       setServiceId('')
       setTargetQty('')
+      setManualItems([])
       fetchWorkServices()
+    } else {
+      toast({ title: 'Erro ao adicionar serviço', variant: 'destructive' })
     }
   }
 
@@ -119,8 +144,8 @@ export default function MaterialPlanningTab({
     fetchWorkServices()
   }
 
-  const calculateMaterialQuantity = (comp: CompositionHistory) => {
-    const rawQty = obraArea * comp.coefficient * (1 + comp.waste_percentage / 100)
+  const calculateMaterialQuantity = (comp: CompositionHistory, targetQuantity: number) => {
+    const rawQty = targetQuantity * comp.coefficient * (1 + comp.waste_percentage / 100)
     const unit = comp.materials?.unit_of_measure?.toLowerCase() || ''
     const isWhole = ['un', 'sc', 'cx', 'lata', 'gl'].includes(unit)
     return isWhole ? Math.round(rawQty) : Number(rawQty.toFixed(2))
@@ -132,7 +157,7 @@ export default function MaterialPlanningTab({
       const ws = workServices.find((w) => w.id === comp.work_service_id)
       if (!ws || !comp.materials) return
 
-      const finalQty = calculateMaterialQuantity(comp)
+      const finalQty = calculateMaterialQuantity(comp, ws.target_quantity)
       const matId = comp.material_id
 
       if (!list[matId]) {
@@ -145,7 +170,7 @@ export default function MaterialPlanningTab({
       list[matId].qty += finalQty
     })
     return Object.values(list).sort((a, b) => a.name.localeCompare(b.name))
-  }, [workServices, compositionsHistory, obraArea])
+  }, [workServices, compositionsHistory])
 
   const getBreakdown = (ws: WorkService) => {
     return compositionsHistory
@@ -153,7 +178,7 @@ export default function MaterialPlanningTab({
       .map((c) => ({
         name: c.materials?.name || '',
         unit: c.materials?.unit_of_measure || '',
-        qty: calculateMaterialQuantity(c),
+        qty: calculateMaterialQuantity(c, ws.target_quantity),
         coef: c.coefficient,
         waste: c.waste_percentage,
       }))
@@ -169,7 +194,13 @@ export default function MaterialPlanningTab({
 
         <TabsContent value="services" className="space-y-4">
           <div className="flex justify-end">
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={open}
+              onOpenChange={(v) => {
+                setOpen(v)
+                if (!v) setManualItems([])
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus className="h-4 w-4" /> Adicionar Serviço
@@ -205,6 +236,100 @@ export default function MaterialPlanningTab({
                       onChange={(e) => setTargetQty(e.target.value)}
                     />
                   </div>
+
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex items-center justify-between">
+                      <Label>Itens Manuais Adicionais (Opcional)</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setManualItems([
+                            ...manualItems,
+                            { material_id: '', coefficient: '', waste_percentage: '' },
+                          ])
+                        }
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Adicionar
+                      </Button>
+                    </div>
+                    {manualItems.length > 0 && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {manualItems.map((item, index) => (
+                          <div
+                            key={index}
+                            className="flex items-end gap-2 border p-2 rounded-md bg-muted/30"
+                          >
+                            <div className="space-y-1 flex-1">
+                              <Label className="text-xs">Material</Label>
+                              <Select
+                                value={item.material_id}
+                                onValueChange={(val) => {
+                                  const newItems = [...manualItems]
+                                  newItems[index].material_id = val
+                                  setManualItems(newItems)
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {materials.map((m) => (
+                                    <SelectItem key={m.id} value={m.id}>
+                                      {m.name} ({m.unit_of_measure})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1 w-20">
+                              <Label className="text-xs">Coef.</Label>
+                              <Input
+                                type="number"
+                                step="0.0001"
+                                className="h-8 text-xs px-2"
+                                value={item.coefficient}
+                                onChange={(e) => {
+                                  const newItems = [...manualItems]
+                                  newItems[index].coefficient = e.target.value
+                                  setManualItems(newItems)
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-1 w-16">
+                              <Label className="text-xs">Perda %</Label>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                className="h-8 text-xs px-2"
+                                value={item.waste_percentage}
+                                onChange={(e) => {
+                                  const newItems = [...manualItems]
+                                  newItems[index].waste_percentage = e.target.value
+                                  setManualItems(newItems)
+                                }}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => {
+                                const newItems = [...manualItems]
+                                newItems.splice(index, 1)
+                                setManualItems(newItems)
+                              }}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <Button type="submit" className="w-full">
                     Adicionar
                   </Button>
@@ -354,8 +479,10 @@ export default function MaterialPlanningTab({
           </DialogHeader>
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              Quantidade Alvo (Área da Obra):{' '}
-              <span className="font-bold text-foreground">{obraArea} m²</span>
+              Quantidade Alvo:{' '}
+              <span className="font-bold text-foreground">
+                {breakdownWs?.target_quantity} {breakdownWs?.services?.unit}
+              </span>
             </div>
             <div className="rounded-md border bg-card max-h-[60vh] overflow-auto">
               <Table>

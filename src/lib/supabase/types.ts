@@ -627,6 +627,7 @@ export type Database = {
           progress_percentage: number | null
           start_date: string | null
           status: string | null
+          total_area: number | null
         }
         Insert: {
           address?: string | null
@@ -642,6 +643,7 @@ export type Database = {
           progress_percentage?: number | null
           start_date?: string | null
           status?: string | null
+          total_area?: number | null
         }
         Update: {
           address?: string | null
@@ -657,6 +659,7 @@ export type Database = {
           progress_percentage?: number | null
           start_date?: string | null
           status?: string | null
+          total_area?: number | null
         }
         Relationships: []
       }
@@ -946,6 +949,7 @@ export const Constants = {
 //   progress_percentage: numeric (nullable, default: 0)
 //   notes: text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+//   total_area: numeric (nullable, default: 0)
 
 // --- CONSTRAINTS ---
 // Table: company_settings
