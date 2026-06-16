@@ -49,30 +49,35 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const [consumeMat, setConsumeMat] = useState('')
   const [consumeWs, setConsumeWs] = useState('')
   const [consumeQty, setConsumeQty] = useState('')
+  const [totalArea, setTotalArea] = useState(0)
   const { toast } = useToast()
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [{ data: workServices }, { data: extraMaterials }] = await Promise.all([
-        supabase
-          .from('work_services')
-          .select(`
+      const [{ data: workData }, { data: workServices }, { data: extraMaterials }] =
+        await Promise.all([
+          supabase.from('works').select('total_area').eq('id', obraId).single(),
+          supabase
+            .from('work_services')
+            .select(`
           id, target_quantity, services (name, unit),
           compositions_history (
             material_id, coefficient, waste_percentage,
             materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
           )
         `)
-          .eq('work_id', obraId),
-        supabase
-          .from('work_extra_materials')
-          .select(`
+            .eq('work_id', obraId),
+          supabase
+            .from('work_extra_materials')
+            .select(`
           id, material_id, quantity, consumption_per_m2,
           materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
         `)
-          .eq('work_id', obraId),
-      ])
+            .eq('work_id', obraId),
+        ])
+
+      setTotalArea(Number(workData?.total_area) || 0)
 
       const wsIds = workServices?.map((ws) => ws.id) || []
       const { data: consumptionData } = wsIds.length
@@ -321,20 +326,27 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Material</TableHead>
-                  <TableHead className="text-right">Necessidade Total (KG)</TableHead>
+                  <TableHead className="text-right">Consumo por m²</TableHead>
+                  <TableHead className="text-right">Total da Obra</TableHead>
                   <TableHead className="text-right">Sacos Comerciais</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
                   const totalKg = item.plannedKg + item.extraKg
+                  const consumoM2 = totalArea > 0 ? totalKg / totalArea : 0
                   const bags = item.pesoSaco ? Math.ceil(totalKg / item.pesoSaco) : null
                   const needsStock = totalKg > item.stockKg
                   return (
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-right">
+                        {totalArea > 0
+                          ? `${consumoM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/m²`
+                          : 'N/A'}
+                      </TableCell>
                       <TableCell
-                        className={`text-right font-bold ${needsStock ? 'text-destructive' : ''}`}
+                        className={`text-right font-bold ${needsStock ? 'text-red-500' : ''}`}
                       >
                         {totalKg.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
@@ -356,7 +368,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 })}
                 {items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-4">
+                    <TableCell colSpan={4} className="text-center py-4">
                       Nenhum material planejado.
                     </TableCell>
                   </TableRow>
