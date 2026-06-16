@@ -329,15 +329,24 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 {items.map((item) => {
                   const totalKg = item.plannedKg + item.extraKg
                   const bags = item.pesoSaco ? Math.ceil(totalKg / item.pesoSaco) : null
+                  const needsStock = totalKg > item.stockKg
                   return (
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="text-right font-bold">
+                      <TableCell
+                        className={`text-right font-bold ${needsStock ? 'text-destructive' : ''}`}
+                      >
                         {totalKg.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}{' '}
                         kg
+                        {needsStock && (
+                          <div className="text-xs font-normal mt-1">
+                            Estoque atual:{' '}
+                            {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {bags !== null ? `${bags} un (${item.pesoSaco}kg)` : '-'}
