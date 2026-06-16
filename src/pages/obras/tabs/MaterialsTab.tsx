@@ -10,7 +10,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, Edit2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,8 @@ type ConsolidateItem = {
   extraKg: number
   stockKg: number
   servicesUsing: { wsId: string; name: string }[]
+  extraMaterialId?: string
+  extraConsumptionPerM2?: number | null
 }
 
 export default function MaterialsTab({ obraId }: { obraId: string }) {
@@ -50,6 +52,9 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const [consumeWs, setConsumeWs] = useState('')
   const [consumeQty, setConsumeQty] = useState('')
   const [totalArea, setTotalArea] = useState(0)
+  const [openEdit, setOpenEdit] = useState(false)
+  const [editingItem, setEditingItem] = useState<ConsolidateItem | null>(null)
+  const [editConsumption, setEditConsumption] = useState('')
   const { toast } = useToast()
 
   const fetchData = async () => {
@@ -181,7 +186,10 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             servicesUsing: [],
           })
         }
-        map.get(mat.id)!.extraKg += qtyKg
+        const item = map.get(mat.id)!
+        item.extraKg += qtyKg
+        item.extraMaterialId = ex.id
+        item.extraConsumptionPerM2 = ex.consumption_per_m2
       })
 
       consumptionData?.forEach((c) => {
@@ -201,6 +209,46 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   useEffect(() => {
     fetchData()
   }, [obraId])
+
+  const handleEditClick = (item: ConsolidateItem) => {
+    setEditingItem(item)
+    setEditConsumption(item.extraConsumptionPerM2 ? item.extraConsumptionPerM2.toString() : '0')
+    setOpenEdit(true)
+  }
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingItem) return
+
+    const val = Number(editConsumption)
+    if (editingItem.extraMaterialId) {
+      const { error } = await supabase
+        .from('work_extra_materials')
+        .update({ consumption_per_m2: val, quantity: 0 })
+        .eq('id', editingItem.extraMaterialId)
+
+      if (error) {
+        toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+        return
+      }
+    } else {
+      const { error } = await supabase.from('work_extra_materials').insert({
+        work_id: obraId,
+        material_id: editingItem.materialId,
+        consumption_per_m2: val,
+        quantity: 0,
+      })
+
+      if (error) {
+        toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+        return
+      }
+    }
+
+    toast({ title: 'Consumo ajustado com sucesso!' })
+    setOpenEdit(false)
+    fetchData()
+  }
 
   const handleConsume = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -236,6 +284,38 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             Cálculo convertido com base em área, coeficientes e densidades.
           </p>
         </div>
+
+        <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Ajustar Consumo Adicional por m²</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSaveEdit} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>Material</Label>
+                <div className="font-medium">{editingItem?.name}</div>
+              </div>
+              <div className="space-y-2">
+                <Label>Consumo Adicional (Unidade: {editingItem?.nativeUnit}/m²)</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  required
+                  value={editConsumption}
+                  onChange={(e) => setEditConsumption(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Isto adicionará/ajustará a quantidade extra deste material para a obra com base na
+                  área total ({totalArea} m²).
+                </p>
+              </div>
+              <Button type="submit" className="w-full">
+                Salvar
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={openConsume} onOpenChange={setOpenConsume}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
@@ -341,9 +421,22 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-right">
-                        {totalArea > 0
-                          ? `${consumoM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/m²`
-                          : 'N/A'}
+                        <div className="flex items-center justify-end gap-2">
+                          <span>
+                            {totalArea > 0
+                              ? `${consumoM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/m²`
+                              : 'N/A'}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleEditClick(item)}
+                            title="Ajustar consumo extra por m²"
+                          >
+                            <Edit2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell
                         className={`text-right font-bold ${needsStock ? 'text-red-500' : ''}`}
