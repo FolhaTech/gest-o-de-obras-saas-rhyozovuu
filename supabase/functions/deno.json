@@ -1,5 +1,6 @@
 {
   "_versions": {
-    "parse-receipt": 4
+    "parse-receipt": 4,
+    "generate-composition": 1
   }
 }
