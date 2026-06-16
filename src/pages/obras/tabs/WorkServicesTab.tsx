@@ -36,7 +36,7 @@ function CompositionDetails({ wsId }: { wsId: string }) {
   const loadComps = async () => {
     const { data } = await supabase
       .from('compositions_history')
-      .select('*, materials(name, unidade_nativa)')
+      .select('*, materials(name, unidade_nativa, stock_quantity)')
       .eq('work_service_id', wsId)
     setComps(data || [])
   }
@@ -72,6 +72,7 @@ function CompositionDetails({ wsId }: { wsId: string }) {
                     <TableHead>Material</TableHead>
                     <TableHead className="text-right">Perda</TableHead>
                     <TableHead className="text-right">Coeficiente</TableHead>
+                    <TableHead className="text-right">Estoque Atual</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -81,6 +82,10 @@ function CompositionDetails({ wsId }: { wsId: string }) {
                       <TableCell className="text-right">{c.waste_percentage}%</TableCell>
                       <TableCell className="text-right font-medium text-emerald-600">
                         {Number(c.coefficient).toFixed(2)} {c.materials?.unidade_nativa || 'kg'}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {Number(c.materials?.stock_quantity || 0).toFixed(2)}{' '}
+                        {c.materials?.unidade_nativa || 'kg'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -114,6 +119,8 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   const [aiMaterials, setAiMaterials] = useState<any[]>([])
   const [generatingAI, setGeneratingAI] = useState(false)
 
+  const [selectedServiceComps, setSelectedServiceComps] = useState<any[]>([])
+
   const fetchData = async () => {
     setLoading(true)
     const [wsRes, catRes, matRes, densRes] = await Promise.all([
@@ -138,6 +145,84 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   useEffect(() => {
     fetchData()
   }, [obraId])
+
+  useEffect(() => {
+    if (selectedService) {
+      supabase
+        .from('compositions')
+        .select('*, materials(*)')
+        .eq('service_id', selectedService)
+        .then(({ data }) => setSelectedServiceComps(data || []))
+    } else {
+      setSelectedServiceComps([])
+    }
+  }, [selectedService])
+
+  const validateMaterialStock = (material: any, requiredQtyNative: number) => {
+    if (!material) return { valid: true, stockNative: 0, unit: 'kg' }
+
+    const densityData = densities[material.id]
+    const requiredKg = ConversaoUnidadesService.converterParaKg(
+      requiredQtyNative,
+      material.unidade_nativa || 'kg',
+      densityData?.densidade_kg_m3,
+      densityData?.peso_unitario_kg,
+    )
+
+    const stockNative = material.stock_quantity || 0
+    const stockKg = ConversaoUnidadesService.converterParaKg(
+      stockNative,
+      material.unidade_nativa || 'kg',
+      densityData?.densidade_kg_m3,
+      densityData?.peso_unitario_kg,
+    )
+
+    return {
+      valid: requiredKg <= stockKg + 0.001,
+      requiredKg,
+      stockKg,
+      stockNative,
+      unit: material.unidade_nativa || 'kg',
+    }
+  }
+
+  const checkCatalogValidation = () => {
+    const qty = Number(quantity) || 0
+    if (qty <= 0) return []
+    const errors: string[] = []
+    for (const comp of selectedServiceComps) {
+      const mat = comp.materials
+      if (!mat) continue
+      const reqNative = comp.coefficient * (1 + (comp.waste_percentage || 0) / 100) * qty
+      const { valid, stockNative, unit } = validateMaterialStock(mat, reqNative)
+      if (!valid) {
+        errors.push(
+          `Quantidade excede o estoque disponível para ${mat.name}. Disponível: ${Number(stockNative).toFixed(2)} [${unit}], Solicitado: ${reqNative.toFixed(2)} [${unit}]`,
+        )
+      }
+    }
+    return errors
+  }
+
+  const checkCustomValidation = () => {
+    const qty = Number(customQuantity) || 0
+    if (qty <= 0) return []
+    const errors: string[] = []
+    for (const aim of aiMaterials) {
+      const reqNative = aim.coefficient * (1 + (aim.waste_percentage || 0) / 100) * qty
+      let mat = dbMaterials.find((m) => m.id === aim.matchedMaterialId)
+      if (!mat) {
+        mat = { id: 'new', name: aim.name, unidade_nativa: aim.unit || 'kg', stock_quantity: 0 }
+      }
+      const { valid, stockNative, unit } = validateMaterialStock(mat, reqNative)
+      if (!valid) {
+        errors.push(
+          `Quantidade excede o estoque disponível para ${mat.name}. Disponível: ${Number(stockNative).toFixed(2)} [${unit}], Solicitado: ${reqNative.toFixed(2)} [${unit}]`,
+        )
+      }
+    }
+    return errors
+  }
 
   const handleGenerateAI = async () => {
     if (!customName) {
@@ -178,6 +263,12 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
     e.preventDefault()
     if (!quantity || !selectedService) return
 
+    const errors = checkCatalogValidation()
+    if (errors.length > 0) {
+      toast({ title: 'Estoque Insuficiente', description: errors[0], variant: 'destructive' })
+      return
+    }
+
     const { error } = await supabase.from('work_services').insert({
       work_id: obraId,
       service_id: selectedService,
@@ -201,6 +292,12 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
     if (!customName || !customUnit || !customQuantity) return
     if (aiMaterials.length === 0) {
       toast({ title: 'Aviso', description: 'Gere os materiais primeiro.', variant: 'destructive' })
+      return
+    }
+
+    const errors = checkCustomValidation()
+    if (errors.length > 0) {
+      toast({ title: 'Estoque Insuficiente', description: errors[0], variant: 'destructive' })
       return
     }
 
@@ -354,6 +451,50 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                     onChange={(e) => setQuantity(e.target.value)}
                   />
                 </div>
+
+                {selectedService && selectedServiceComps.length > 0 && quantity && (
+                  <div className="space-y-3 mt-4 border rounded-md p-4 bg-muted/20">
+                    <h4 className="font-medium flex items-center gap-2 text-sm">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      Validação de Estoque
+                    </h4>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {selectedServiceComps.map((comp) => {
+                        const mat = comp.materials
+                        const reqNative =
+                          comp.coefficient *
+                          (1 + (comp.waste_percentage || 0) / 100) *
+                          (Number(quantity) || 0)
+                        const { valid, stockNative, unit } = validateMaterialStock(mat, reqNative)
+
+                        return (
+                          <div
+                            key={comp.id}
+                            className="flex justify-between text-sm items-center border-b pb-2 last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <p className="font-medium">{mat?.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Solicitado: {reqNative.toFixed(2)} {unit}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p
+                                className={`font-medium ${valid ? 'text-emerald-600' : 'text-destructive'}`}
+                              >
+                                Estoque: {Number(stockNative).toFixed(2)} {unit}
+                              </p>
+                              {!valid && (
+                                <p className="text-xs text-destructive">Estoque insuficiente</p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <Button type="submit" className="w-full">
                   Adicionar Serviço
                 </Button>
@@ -419,10 +560,26 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                           densityData?.peso_unitario_kg,
                         )
 
+                        const qty = Number(customQuantity) || 0
+                        const reqNative =
+                          aim.coefficient * (1 + (aim.waste_percentage || 0) / 100) * qty
+                        let mat = dbMaterials.find((m) => m.id === aim.matchedMaterialId)
+                        if (!mat) {
+                          mat = {
+                            id: 'new',
+                            name: aim.name,
+                            unidade_nativa: aim.unit || 'kg',
+                            stock_quantity: 0,
+                          }
+                        }
+
+                        const { valid, stockNative, unit } = validateMaterialStock(mat, reqNative)
+                        const showWarning = qty > 0 && !valid
+
                         return (
                           <div
                             key={idx}
-                            className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-md text-sm items-center bg-muted/30"
+                            className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-md text-sm items-center ${showWarning ? 'bg-destructive/5 border-destructive/30' : 'bg-muted/30'}`}
                           >
                             <div>
                               <p className="font-medium text-foreground">{aim.name}</p>
@@ -430,6 +587,11 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                                 IA Sugere: {aim.coefficient} {aim.unit} (+{aim.waste_percentage}%
                                 perda)
                               </p>
+                              {qty > 0 && (
+                                <p className="text-xs mt-1 font-medium text-muted-foreground">
+                                  Solicitado total: {reqNative.toFixed(2)} {unit}
+                                </p>
+                              )}
                             </div>
                             <div className="space-y-2">
                               <Select
@@ -440,21 +602,38 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                                   setAiMaterials(newArr)
                                 }}
                               >
-                                <SelectTrigger className="h-8 bg-background">
+                                <SelectTrigger
+                                  className={`h-8 bg-background ${showWarning ? 'border-destructive/50' : ''}`}
+                                >
                                   <SelectValue placeholder="Selecionar Material..." />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="new">-- Criar Novo Material --</SelectItem>
                                   {dbMaterials.map((dbm) => (
                                     <SelectItem key={dbm.id} value={dbm.id}>
-                                      {dbm.name}
+                                      {dbm.name} (Estoque: {dbm.stock_quantity || 0}{' '}
+                                      {dbm.unidade_nativa})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <p className="text-xs text-right text-emerald-600 font-medium">
-                                Conversão por unid (kg): {convertedCoeff.toFixed(2)} kg
-                              </p>
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-muted-foreground">
+                                  Conv. por unid: {convertedCoeff.toFixed(2)} kg
+                                </p>
+                                {qty > 0 && (
+                                  <p
+                                    className={`text-xs font-medium ${valid ? 'text-emerald-600' : 'text-destructive'}`}
+                                  >
+                                    Estoque: {Number(stockNative).toFixed(2)} {unit}
+                                  </p>
+                                )}
+                              </div>
+                              {showWarning && (
+                                <p className="text-xs text-destructive text-right font-medium">
+                                  ⚠️ Estoque insuficiente
+                                </p>
+                              )}
                             </div>
                           </div>
                         )
