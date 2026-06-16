@@ -53,6 +53,21 @@ export default function MateriaisList() {
     unit_price: '',
   })
 
+  const [editOpen, setEditOpen] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    id: '',
+    name: '',
+    category: '',
+    unidade_nativa: 'kg',
+    unit_of_measure: '',
+    peso_saco_kg: '',
+    estoque_minimo_kg: '',
+    stock_quantity: '',
+    min_quantity: '',
+    supplier: '',
+    unit_price: '',
+  })
+
   const fetchData = async () => {
     setLoading(true)
     const { data } = await supabase
@@ -107,6 +122,52 @@ export default function MateriaisList() {
         supplier: '',
         unit_price: '',
       })
+      fetchData()
+    } else {
+      toast({ title: 'Erro', description: error?.message, variant: 'destructive' })
+    }
+  }
+
+  const handleEditClick = (material: any) => {
+    setEditFormData({
+      id: material.id,
+      name: material.name || '',
+      category: material.category || '',
+      unidade_nativa: material.unidade_nativa || 'kg',
+      unit_of_measure: material.unit_of_measure || '',
+      peso_saco_kg: material.peso_saco_kg?.toString() || '',
+      estoque_minimo_kg: material.estoque_minimo_kg?.toString() || '',
+      stock_quantity: material.stock_quantity?.toString() || '',
+      min_quantity: material.min_quantity?.toString() || '',
+      supplier: material.supplier || '',
+      unit_price: material.unit_price?.toString() || '',
+    })
+    setEditOpen(true)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const { error } = await supabase
+      .from('materials')
+      .update({
+        name: editFormData.name,
+        category: editFormData.category,
+        unidade_nativa: editFormData.unidade_nativa,
+        unit_of_measure: editFormData.unit_of_measure || editFormData.unidade_nativa,
+        peso_saco_kg: editFormData.peso_saco_kg ? Number(editFormData.peso_saco_kg) : null,
+        estoque_minimo_kg: editFormData.estoque_minimo_kg
+          ? Number(editFormData.estoque_minimo_kg)
+          : null,
+        stock_quantity: editFormData.stock_quantity ? Number(editFormData.stock_quantity) : null,
+        min_quantity: editFormData.min_quantity ? Number(editFormData.min_quantity) : null,
+        supplier: editFormData.supplier || null,
+        unit_price: editFormData.unit_price ? Number(editFormData.unit_price) : null,
+      })
+      .eq('id', editFormData.id)
+
+    if (!error) {
+      toast({ title: 'Material atualizado com sucesso!' })
+      setEditOpen(false)
       fetchData()
     } else {
       toast({ title: 'Erro', description: error?.message, variant: 'destructive' })
@@ -322,7 +383,15 @@ export default function MateriaisList() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-blue-600 hover:bg-blue-600/10"
+                        onClick={() => handleEditClick(item)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -346,6 +415,136 @@ export default function MateriaisList() {
           </Table>
         </div>
       </Tabs>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Material</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4 mt-4 px-1">
+            <div className="space-y-2">
+              <Label>Nome do Material</Label>
+              <Input
+                required
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Categoria</Label>
+                <Input
+                  required
+                  value={editFormData.category}
+                  onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Unidade Nativa</Label>
+                <Select
+                  value={editFormData.unidade_nativa}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, unidade_nativa: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">Quilograma (kg)</SelectItem>
+                    <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
+                    <SelectItem value="l">Litro (L)</SelectItem>
+                    <SelectItem value="un">Unidade (un)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Unidade de Medida</Label>
+                <Input
+                  value={editFormData.unit_of_measure}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, unit_of_measure: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fornecedor</Label>
+                <Input
+                  value={editFormData.supplier}
+                  onChange={(e) => setEditFormData({ ...editFormData, supplier: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Preço Unitário (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editFormData.unit_price}
+                  onChange={(e) => setEditFormData({ ...editFormData, unit_price: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Peso Saco (kg)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editFormData.peso_saco_kg}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, peso_saco_kg: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Estoque Atual</Label>
+                <Input
+                  type="number"
+                  required
+                  step="0.01"
+                  value={editFormData.stock_quantity}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, stock_quantity: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estoque Mínimo</Label>
+                <Input
+                  type="number"
+                  required
+                  step="0.01"
+                  value={editFormData.min_quantity}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, min_quantity: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Estoque Mínimo (kg)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editFormData.estoque_minimo_kg}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, estoque_minimo_kg: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Salvar</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
