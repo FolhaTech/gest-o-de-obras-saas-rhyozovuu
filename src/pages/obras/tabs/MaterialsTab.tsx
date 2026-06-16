@@ -316,7 +316,11 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-right font-bold">
-                        {totalKg.toFixed(2)} kg
+                        {totalKg.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        kg
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {bags !== null ? `${bags} un (${item.pesoSaco}kg)` : '-'}
@@ -355,9 +359,19 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                   return (
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="text-right">{planned.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        {planned.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        kg
+                      </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {item.actualKg.toFixed(2)}
+                        {item.actualKg.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        kg
                       </TableCell>
                       <TableCell
                         className={`text-right ${isOver ? 'text-destructive font-bold' : 'text-emerald-600'}`}

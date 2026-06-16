@@ -92,7 +92,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" /> Lançar Serviço
+              <Plus className="h-4 w-4" /> Adicionar Serviço
             </Button>
           </DialogTrigger>
           <DialogContent>

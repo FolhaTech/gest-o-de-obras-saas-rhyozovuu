@@ -43,6 +43,7 @@ export type Database = {
           id: string
           material_id: string
           service_id: string
+          version: number | null
           waste_percentage: number
         }
         Insert: {
@@ -51,6 +52,7 @@ export type Database = {
           id?: string
           material_id: string
           service_id: string
+          version?: number | null
           waste_percentage?: number
         }
         Update: {
@@ -59,6 +61,7 @@ export type Database = {
           id?: string
           material_id?: string
           service_id?: string
+          version?: number | null
           waste_percentage?: number
         }
         Relationships: [
@@ -158,6 +161,41 @@ export type Database = {
             columns: ['work_service_id']
             isOneToOne: false
             referencedRelation: 'work_services'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      densidades_insumo: {
+        Row: {
+          created_at: string | null
+          data_vigencia: string | null
+          densidade_kg_m3: number | null
+          id: string
+          material_id: string | null
+          peso_unitario_kg: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_vigencia?: string | null
+          densidade_kg_m3?: number | null
+          id?: string
+          material_id?: string | null
+          peso_unitario_kg?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          data_vigencia?: string | null
+          densidade_kg_m3?: number | null
+          id?: string
+          material_id?: string | null
+          peso_unitario_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'densidades_insumo_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
             referencedColumns: ['id']
           },
         ]
@@ -287,12 +325,15 @@ export type Database = {
         Row: {
           category: string | null
           created_at: string | null
+          estoque_minimo_kg: number | null
           id: string
           min_quantity: number | null
           name: string
+          peso_saco_kg: number | null
           status: string | null
           stock_quantity: number | null
           supplier: string | null
+          unidade_nativa: string | null
           unit_of_measure: string | null
           unit_price: number | null
           work_id: string | null
@@ -300,12 +341,15 @@ export type Database = {
         Insert: {
           category?: string | null
           created_at?: string | null
+          estoque_minimo_kg?: number | null
           id?: string
           min_quantity?: number | null
           name: string
+          peso_saco_kg?: number | null
           status?: string | null
           stock_quantity?: number | null
           supplier?: string | null
+          unidade_nativa?: string | null
           unit_of_measure?: string | null
           unit_price?: number | null
           work_id?: string | null
@@ -313,12 +357,15 @@ export type Database = {
         Update: {
           category?: string | null
           created_at?: string | null
+          estoque_minimo_kg?: number | null
           id?: string
           min_quantity?: number | null
           name?: string
+          peso_saco_kg?: number | null
           status?: string | null
           stock_quantity?: number | null
           supplier?: string | null
+          unidade_nativa?: string | null
           unit_of_measure?: string | null
           unit_price?: number | null
           work_id?: string | null
@@ -869,6 +916,7 @@ export const Constants = {
 //   coefficient: numeric (not null)
 //   waste_percentage: numeric (not null, default: 0)
 //   created_at: timestamp with time zone (nullable, default: now())
+//   version: integer (nullable, default: 1)
 // Table: compositions_history
 //   id: uuid (not null, default: gen_random_uuid())
 //   work_service_id: uuid (not null)
@@ -882,6 +930,13 @@ export const Constants = {
 //   material_id: uuid (not null)
 //   quantity_actual: numeric (not null)
 //   date: date (not null)
+//   created_at: timestamp with time zone (nullable, default: now())
+// Table: densidades_insumo
+//   id: uuid (not null, default: gen_random_uuid())
+//   material_id: uuid (nullable)
+//   densidade_kg_m3: numeric (nullable)
+//   peso_unitario_kg: numeric (nullable)
+//   data_vigencia: timestamp with time zone (nullable, default: now())
 //   created_at: timestamp with time zone (nullable, default: now())
 // Table: expenses
 //   id: uuid (not null, default: gen_random_uuid())
@@ -919,6 +974,9 @@ export const Constants = {
 //   work_id: uuid (nullable)
 //   status: text (nullable, default: 'active'::text)
 //   created_at: timestamp with time zone (nullable, default: now())
+//   unidade_nativa: text (nullable, default: 'kg'::text)
+//   peso_saco_kg: numeric (nullable)
+//   estoque_minimo_kg: numeric (nullable)
 // Table: profiles
 //   id: uuid (not null)
 //   full_name: text (not null)
@@ -1019,6 +1077,9 @@ export const Constants = {
 //   FOREIGN KEY consumption_tracking_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
 //   PRIMARY KEY consumption_tracking_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY consumption_tracking_work_service_id_fkey: FOREIGN KEY (work_service_id) REFERENCES work_services(id) ON DELETE CASCADE
+// Table: densidades_insumo
+//   FOREIGN KEY densidades_insumo_material_id_fkey: FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+//   PRIMARY KEY densidades_insumo_pkey: PRIMARY KEY (id)
 // Table: expenses
 //   FOREIGN KEY expenses_manager_id_fkey: FOREIGN KEY (manager_id) REFERENCES profiles(id) ON DELETE SET NULL
 //   PRIMARY KEY expenses_pkey: PRIMARY KEY (id)
@@ -1075,6 +1136,10 @@ export const Constants = {
 //     USING: true
 //     WITH CHECK: true
 // Table: consumption_tracking
+//   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: true
+// Table: densidades_insumo
 //   Policy "allow_all_authenticated" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: true
 //     WITH CHECK: true
