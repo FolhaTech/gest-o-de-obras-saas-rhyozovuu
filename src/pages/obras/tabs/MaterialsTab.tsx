@@ -38,6 +38,7 @@ type ConsolidateItem = {
   plannedKg: number
   actualKg: number
   extraKg: number
+  stockKg: number
   servicesUsing: { wsId: string; name: string }[]
 }
 
@@ -60,7 +61,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
           id, target_quantity, services (name, unit),
           compositions_history (
             material_id, coefficient, waste_percentage,
-            materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
+            materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
           )
         `)
           .eq('work_id', obraId),
@@ -68,7 +69,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
           .from('work_extra_materials')
           .select(`
           id, material_id, quantity, consumption_per_m2,
-          materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
+          materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
         `)
           .eq('work_id', obraId),
       ])
@@ -108,6 +109,13 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             densInfo?.peso_unitario_kg,
           )
 
+          const stockKg = toKg(
+            Number(mat.stock_quantity) || 0,
+            mat.unidade_nativa || mat.unit_of_measure,
+            densInfo?.densidade_kg_m3,
+            densInfo?.peso_unitario_kg,
+          )
+
           if (!map.has(mat.id)) {
             map.set(mat.id, {
               materialId: mat.id,
@@ -117,6 +125,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
               plannedKg: 0,
               actualKg: 0,
               extraKg: 0,
+              stockKg: stockKg,
               servicesUsing: [],
             })
           }
@@ -147,6 +156,13 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
           densInfo?.peso_unitario_kg,
         )
 
+        const stockKg = toKg(
+          Number(mat.stock_quantity) || 0,
+          mat.unidade_nativa || mat.unit_of_measure,
+          densInfo?.densidade_kg_m3,
+          densInfo?.peso_unitario_kg,
+        )
+
         if (!map.has(mat.id)) {
           map.set(mat.id, {
             materialId: mat.id,
@@ -156,6 +172,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
             plannedKg: 0,
             actualKg: 0,
             extraKg: 0,
+            stockKg: stockKg,
             servicesUsing: [],
           })
         }
@@ -356,15 +373,27 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                   const planned = item.plannedKg + item.extraKg
                   const dev = planned > 0 ? ((item.actualKg - planned) / planned) * 100 : 0
                   const isOver = item.actualKg > planned
+                  const needsStock = planned > item.stockKg
+
                   return (
                     <TableRow key={item.materialId}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className={`font-medium ${needsStock ? 'text-destructive' : ''}`}>
+                        {item.name}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right ${needsStock ? 'text-destructive font-semibold' : ''}`}
+                      >
                         {planned.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}{' '}
                         kg
+                        {needsStock && (
+                          <div className="text-xs font-normal">
+                            Estoque atual:{' '}
+                            {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {item.actualKg.toLocaleString('pt-BR', {
