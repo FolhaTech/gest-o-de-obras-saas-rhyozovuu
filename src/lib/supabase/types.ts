@@ -1241,6 +1241,22 @@ export const Constants = {
 //   END;
 //   $function$
 //
+// FUNCTION recalculate_extra_material_quantity()
+//   CREATE OR REPLACE FUNCTION public.recalculate_extra_material_quantity()
+//    RETURNS trigger
+//    LANGUAGE plpgsql
+//   AS $function$
+//   DECLARE
+//     v_total_area numeric;
+//   BEGIN
+//     IF NEW.consumption_per_m2 IS NOT NULL THEN
+//       SELECT COALESCE(total_area, 0) INTO v_total_area FROM public.works WHERE id = NEW.work_id;
+//       NEW.quantity := NEW.consumption_per_m2 * v_total_area;
+//     END IF;
+//     RETURN NEW;
+//   END;
+//   $function$
+//
 // FUNCTION recalculate_extra_materials_on_area_update()
 //   CREATE OR REPLACE FUNCTION public.recalculate_extra_materials_on_area_update()
 //    RETURNS trigger
@@ -1308,6 +1324,8 @@ export const Constants = {
 // --- TRIGGERS ---
 // Table: material_movements
 //   on_material_movement: CREATE TRIGGER on_material_movement AFTER INSERT ON public.material_movements FOR EACH ROW EXECUTE FUNCTION handle_material_movement()
+// Table: work_extra_materials
+//   on_extra_material_consumption_update: CREATE TRIGGER on_extra_material_consumption_update BEFORE INSERT OR UPDATE OF consumption_per_m2, work_id ON public.work_extra_materials FOR EACH ROW EXECUTE FUNCTION recalculate_extra_material_quantity()
 // Table: work_services
 //   on_work_service_created: CREATE TRIGGER on_work_service_created AFTER INSERT ON public.work_services FOR EACH ROW EXECUTE FUNCTION snapshot_work_service_composition()
 // Table: work_stages

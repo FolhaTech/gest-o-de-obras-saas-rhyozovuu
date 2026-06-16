@@ -246,7 +246,9 @@ export default function ObraDetail() {
           <WorkServicesTab obraId={obra.id} />
         </TabsContent>
         <TabsContent value="materiais" className="mt-0">
-          <MaterialsTab obraId={obra.id} />
+          {activeTab === 'materiais' && (
+            <MaterialsTab obraId={obra.id} workArea={obra.total_area || 0} />
+          )}
         </TabsContent>
         <TabsContent value="receitas" className="mt-0">
           <RevenuesTab obraId={obra.id} />

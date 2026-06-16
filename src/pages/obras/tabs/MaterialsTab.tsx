@@ -44,14 +44,14 @@ type ConsolidateItem = {
   extraConsumptionPerM2?: number | null
 }
 
-export default function MaterialsTab({ obraId }: { obraId: string }) {
+export default function MaterialsTab({ obraId, workArea }: { obraId: string; workArea?: number }) {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<ConsolidateItem[]>([])
   const [openConsume, setOpenConsume] = useState(false)
   const [consumeMat, setConsumeMat] = useState('')
   const [consumeWs, setConsumeWs] = useState('')
   const [consumeQty, setConsumeQty] = useState('')
-  const [totalArea, setTotalArea] = useState(0)
+  const [totalArea, setTotalArea] = useState(workArea || 0)
   const [openEdit, setOpenEdit] = useState(false)
   const [editingItem, setEditingItem] = useState<ConsolidateItem | null>(null)
   const [editConsumption, setEditConsumption] = useState('')
@@ -60,29 +60,27 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [{ data: workData }, { data: workServices }, { data: extraMaterials }] =
-        await Promise.all([
-          supabase.from('works').select('total_area').eq('id', obraId).single(),
-          supabase
-            .from('work_services')
-            .select(`
+      const [{ data: workServices }, { data: extraMaterials }] = await Promise.all([
+        supabase
+          .from('work_services')
+          .select(`
           id, target_quantity, services (name, unit),
           compositions_history (
             material_id, coefficient, waste_percentage,
             materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
           )
         `)
-            .eq('work_id', obraId),
-          supabase
-            .from('work_extra_materials')
-            .select(`
+          .eq('work_id', obraId),
+        supabase
+          .from('work_extra_materials')
+          .select(`
           id, material_id, quantity, consumption_per_m2,
           materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
         `)
-            .eq('work_id', obraId),
-        ])
+          .eq('work_id', obraId),
+      ])
 
-      setTotalArea(Number(workData?.total_area) || 0)
+      setTotalArea(workArea || 0)
 
       const wsIds = workServices?.map((ws) => ws.id) || []
       const { data: consumptionData } = wsIds.length
@@ -208,7 +206,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
 
   useEffect(() => {
     fetchData()
-  }, [obraId])
+  }, [obraId, workArea])
 
   const handleEditClick = (item: ConsolidateItem) => {
     setEditingItem(item)
@@ -401,41 +399,65 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
         </TabsList>
 
         <TabsContent value="shopping">
-          <div className="rounded-md border bg-card">
+          <div className="rounded-md border bg-card overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Material</TableHead>
-                  <TableHead className="text-right">Consumo por m²</TableHead>
-                  <TableHead className="text-right">Total da Obra</TableHead>
+                  <TableHead className="text-right">Necessário p/ Serviços</TableHead>
+                  <TableHead className="text-right">Necessário p/ Área (m²)</TableHead>
+                  <TableHead className="text-right">Total Geral</TableHead>
                   <TableHead className="text-right">Sacos Comerciais</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
                   const totalKg = item.plannedKg + item.extraKg
-                  const consumoM2 = totalArea > 0 ? totalKg / totalArea : 0
                   const bags = item.pesoSaco ? Math.ceil(totalKg / item.pesoSaco) : null
                   const needsStock = totalKg > item.stockKg
                   return (
                     <TableRow key={item.materialId}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="font-medium max-w-[200px] truncate" title={item.name}>
+                        {item.name}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <span>
-                            {totalArea > 0
-                              ? `${consumoM2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/m²`
-                              : 'N/A'}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleEditClick(item)}
-                            title="Ajustar consumo extra por m²"
-                          >
-                            <Edit2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
+                        {item.plannedKg.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        kg
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center justify-end gap-2">
+                            <span>
+                              {item.extraKg.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}{' '}
+                              kg
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleEditClick(item)}
+                              title="Ajustar consumo extra por m²"
+                            >
+                              <Edit2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                          {item.extraConsumptionPerM2 !== null &&
+                            item.extraConsumptionPerM2 !== undefined && (
+                              <span className="text-xs text-muted-foreground">
+                                (
+                                {item.extraConsumptionPerM2.toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 4,
+                                })}{' '}
+                                {item.nativeUnit}/m²)
+                              </span>
+                            )}
                         </div>
                       </TableCell>
                       <TableCell
@@ -447,9 +469,13 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                         })}{' '}
                         kg
                         {needsStock && (
-                          <div className="text-xs font-normal mt-1">
-                            Estoque atual:{' '}
-                            {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg
+                          <div className="text-xs font-normal mt-1 flex flex-col items-end">
+                            <span className="text-red-500 font-medium">Estoque insuficiente</span>
+                            <span className="text-muted-foreground">
+                              Atual:{' '}
+                              {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}{' '}
+                              kg
+                            </span>
                           </div>
                         )}
                       </TableCell>
@@ -461,7 +487,7 @@ export default function MaterialsTab({ obraId }: { obraId: string }) {
                 })}
                 {items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4">
+                    <TableCell colSpan={5} className="text-center py-4">
                       Nenhum material planejado.
                     </TableCell>
                   </TableRow>
