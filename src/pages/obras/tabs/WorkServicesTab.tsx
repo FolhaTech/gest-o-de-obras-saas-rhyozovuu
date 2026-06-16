@@ -24,19 +24,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Trash, Plus, Sparkles, Loader2, Info, Eye } from 'lucide-react'
 import { ConversaoUnidadesService } from '@/lib/conversao-unidades'
 
-function CompositionDetails({ wsId }: { wsId: string }) {
+function CompositionDetails({
+  wsId,
+  targetQuantity,
+  densities,
+}: {
+  wsId: string
+  targetQuantity: number
+  densities: Record<string, any>
+}) {
   const [comps, setComps] = useState<any[]>([])
   const [open, setOpen] = useState(false)
 
   const loadComps = async () => {
     const { data } = await supabase
       .from('compositions_history')
-      .select('*, materials(name, unidade_nativa, stock_quantity)')
+      .select('*, materials(id, name, unidade_nativa, stock_quantity)')
       .eq('work_service_id', wsId)
     setComps(data || [])
   }
@@ -55,7 +64,7 @@ function CompositionDetails({ wsId }: { wsId: string }) {
           Ver Composição
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Materiais Alocados (Composição)</DialogTitle>
         </DialogHeader>
@@ -72,23 +81,67 @@ function CompositionDetails({ wsId }: { wsId: string }) {
                     <TableHead>Material</TableHead>
                     <TableHead className="text-right">Perda</TableHead>
                     <TableHead className="text-right">Coeficiente</TableHead>
+                    <TableHead className="text-right">Qtd Necessária</TableHead>
                     <TableHead className="text-right">Estoque Atual</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {comps.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.materials?.name}</TableCell>
-                      <TableCell className="text-right">{c.waste_percentage}%</TableCell>
-                      <TableCell className="text-right font-medium text-emerald-600">
-                        {Number(c.coefficient).toFixed(2)} {c.materials?.unidade_nativa || 'kg'}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {Number(c.materials?.stock_quantity || 0).toFixed(2)}{' '}
-                        {c.materials?.unidade_nativa || 'kg'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {comps.map((c) => {
+                    const reqNative =
+                      c.coefficient * (1 + (c.waste_percentage || 0) / 100) * targetQuantity
+                    const mat = c.materials
+                    const densityData = densities[mat?.id || '']
+                    const reqKg = ConversaoUnidadesService.converterParaKg(
+                      reqNative,
+                      mat?.unidade_nativa || 'kg',
+                      densityData?.densidade_kg_m3,
+                      densityData?.peso_unitario_kg,
+                    )
+                    const stockNative = mat?.stock_quantity || 0
+                    const stockKg = ConversaoUnidadesService.converterParaKg(
+                      stockNative,
+                      mat?.unidade_nativa || 'kg',
+                      densityData?.densidade_kg_m3,
+                      densityData?.peso_unitario_kg,
+                    )
+                    const isShortage = reqKg > stockKg + 0.001
+                    const shortageNative = Math.max(0, reqNative - stockNative)
+
+                    return (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium">{c.materials?.name}</TableCell>
+                        <TableCell className="text-right">{c.waste_percentage}%</TableCell>
+                        <TableCell className="text-right font-medium text-emerald-600">
+                          {Number(c.coefficient).toFixed(2)} {c.materials?.unidade_nativa || 'kg'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {reqNative.toFixed(2)} {mat?.unidade_nativa || 'kg'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isShortage ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-red-600 font-bold cursor-help border-b border-dashed border-red-600">
+                                    {Number(stockNative).toFixed(2)}{' '}
+                                    {c.materials?.unidade_nativa || 'kg'}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Faltando {shortageNative.toFixed(2)}{' '}
+                                  {c.materials?.unidade_nativa || 'kg'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {Number(stockNative).toFixed(2)} {c.materials?.unidade_nativa || 'kg'}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -265,8 +318,8 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
 
     const errors = checkCatalogValidation()
     if (errors.length > 0) {
-      toast({ title: 'Estoque Insuficiente', description: errors[0], variant: 'destructive' })
-      return
+      toast({ title: 'Aviso de Estoque', description: errors[0], variant: 'default' })
+      // Not returning so user can plan works even without current stock
     }
 
     const { error } = await supabase.from('work_services').insert({
@@ -297,8 +350,8 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
 
     const errors = checkCustomValidation()
     if (errors.length > 0) {
-      toast({ title: 'Estoque Insuficiente', description: errors[0], variant: 'destructive' })
-      return
+      toast({ title: 'Aviso de Estoque', description: errors[0], variant: 'default' })
+      // Not returning so user can plan works even without current stock
     }
 
     try {
@@ -340,6 +393,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                 name: m.name,
                 unidade_nativa: m.unit || 'kg',
                 unit_of_measure: m.unit || 'kg',
+                stock_quantity: 0,
                 status: 'active',
               })
               .select()
@@ -681,7 +735,11 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                 <TableCell className="text-right">{s.target_quantity}</TableCell>
                 <TableCell className="text-center">{s.status}</TableCell>
                 <TableCell className="text-center">
-                  <CompositionDetails wsId={s.id} />
+                  <CompositionDetails
+                    wsId={s.id}
+                    targetQuantity={s.target_quantity}
+                    densities={densities}
+                  />
                 </TableCell>
                 <TableCell className="text-right">
                   <Button
