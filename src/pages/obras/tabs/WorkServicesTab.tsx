@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Trash, Plus, Sparkles, Loader2, Info, Eye } from 'lucide-react'
@@ -72,7 +71,7 @@ function CompositionDetails({ wsId }: { wsId: string }) {
                   <TableRow>
                     <TableHead>Material</TableHead>
                     <TableHead className="text-right">Perda</TableHead>
-                    <TableHead className="text-right">Quantidade (kg)</TableHead>
+                    <TableHead className="text-right">Coeficiente</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -108,9 +107,10 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   const [quantity, setQuantity] = useState('')
 
   // Custom Service with AI
-  const [isCustomMode, setIsCustomMode] = useState(false)
+  const [openCustom, setOpenCustom] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customUnit, setCustomUnit] = useState('m2')
+  const [customQuantity, setCustomQuantity] = useState('')
   const [aiMaterials, setAiMaterials] = useState<any[]>([])
   const [generatingAI, setGeneratingAI] = useState(false)
 
@@ -161,7 +161,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
         )
         return {
           ...m,
-          matchedMaterialId: match ? match.id : '',
+          matchedMaterialId: match ? match.id : 'new',
         }
       })
 
@@ -176,88 +176,11 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!quantity) return
-
-    let finalServiceId = selectedService
-
-    if (isCustomMode) {
-      if (!customName || !customUnit) return
-      if (aiMaterials.some((m) => !m.matchedMaterialId)) {
-        toast({
-          title: 'Aviso',
-          description: 'Mapeie todos os materiais gerados para o catálogo.',
-          variant: 'destructive',
-        })
-        return
-      }
-
-      // 1. Check if custom service name already exists to avoid unique constraint error
-      let { data: existingSvc } = await supabase
-        .from('services')
-        .select('id')
-        .eq('name', customName)
-        .maybeSingle()
-
-      if (!existingSvc) {
-        const { data: svcData, error: svcErr } = await supabase
-          .from('services')
-          .insert({
-            name: customName,
-            unit: customUnit,
-          })
-          .select()
-          .single()
-
-        if (svcErr) {
-          toast({
-            title: 'Erro ao criar serviço',
-            description: svcErr.message,
-            variant: 'destructive',
-          })
-          return
-        }
-        existingSvc = svcData
-      }
-
-      finalServiceId = existingSvc.id
-
-      // 2. Create compositions
-      const compsToInsert = aiMaterials.map((m) => {
-        const densityData = densities[m.matchedMaterialId]
-        const convertedCoeff = ConversaoUnidadesService.converterParaKg(
-          m.coefficient,
-          m.unit,
-          densityData?.densidade_kg_m3,
-          densityData?.peso_unitario_kg,
-        )
-
-        return {
-          service_id: finalServiceId,
-          material_id: m.matchedMaterialId,
-          coefficient: convertedCoeff,
-          waste_percentage: m.waste_percentage,
-        }
-      })
-
-      // Delete old comps first if re-using name
-      await supabase.from('compositions').delete().eq('service_id', finalServiceId)
-
-      const { error: compErr } = await supabase.from('compositions').insert(compsToInsert)
-      if (compErr) {
-        toast({
-          title: 'Erro ao salvar composições',
-          description: compErr.message,
-          variant: 'destructive',
-        })
-        return
-      }
-    } else {
-      if (!finalServiceId) return
-    }
+    if (!quantity || !selectedService) return
 
     const { error } = await supabase.from('work_services').insert({
       work_id: obraId,
-      service_id: finalServiceId,
+      service_id: selectedService,
       target_quantity: Number(quantity),
       status: 'planned',
     })
@@ -267,13 +190,96 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
       setOpen(false)
       setSelectedService('')
       setQuantity('')
-      setIsCustomMode(false)
-      setCustomName('')
-      setCustomUnit('m2')
-      setAiMaterials([])
       fetchData()
     } else {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const handleAddCustom = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customName || !customUnit || !customQuantity) return
+    if (aiMaterials.length === 0) {
+      toast({ title: 'Aviso', description: 'Gere os materiais primeiro.', variant: 'destructive' })
+      return
+    }
+
+    try {
+      let { data: existingSvc } = await supabase
+        .from('services')
+        .select('id')
+        .ilike('name', customName)
+        .maybeSingle()
+
+      if (!existingSvc) {
+        const { data: svcData, error: svcErr } = await supabase
+          .from('services')
+          .insert({ name: customName, unit: customUnit })
+          .select()
+          .single()
+        if (svcErr) throw svcErr
+        existingSvc = svcData
+      }
+
+      const finalServiceId = existingSvc.id
+      await supabase.from('compositions').delete().eq('service_id', finalServiceId)
+
+      const compsToInsert = []
+      for (const m of aiMaterials) {
+        let matId = m.matchedMaterialId
+        if (matId === 'new') {
+          let { data: existingMat } = await supabase
+            .from('materials')
+            .select('id')
+            .ilike('name', m.name)
+            .maybeSingle()
+
+          if (existingMat) {
+            matId = existingMat.id
+          } else {
+            const { data: newMat, error: matErr } = await supabase
+              .from('materials')
+              .insert({
+                name: m.name,
+                unidade_nativa: m.unit || 'kg',
+                unit_of_measure: m.unit || 'kg',
+                status: 'active',
+              })
+              .select()
+              .single()
+            if (matErr) throw matErr
+            matId = newMat.id
+          }
+        }
+
+        compsToInsert.push({
+          service_id: finalServiceId,
+          material_id: matId,
+          coefficient: m.coefficient,
+          waste_percentage: m.waste_percentage,
+        })
+      }
+
+      const { error: compErr } = await supabase.from('compositions').insert(compsToInsert)
+      if (compErr) throw compErr
+
+      const { error: wsErr } = await supabase.from('work_services').insert({
+        work_id: obraId,
+        service_id: finalServiceId,
+        target_quantity: Number(customQuantity),
+        status: 'planned',
+      })
+      if (wsErr) throw wsErr
+
+      toast({ title: 'Serviço personalizado adicionado!' })
+      setOpenCustom(false)
+      setCustomName('')
+      setCustomQuantity('')
+      setCustomUnit('m2')
+      setAiMaterials([])
+      fetchData()
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
     }
   }
 
@@ -290,172 +296,190 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
         <div>
           <h3 className="text-lg font-medium">Serviços Planejados</h3>
           <p className="text-sm text-muted-foreground">
-            Adicione serviços para calcular automaticamente as receitas de insumos.
+            Adicione serviços para calcular automaticamente as necessidades de insumos.
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" /> Adicionar Serviço
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Adicionar Serviço</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4 mt-4">
-              <div className="flex items-center gap-2 mb-4 p-3 border rounded-md bg-muted/50">
-                <Switch checked={isCustomMode} onCheckedChange={setIsCustomMode} id="custom-mode" />
-                <Label htmlFor="custom-mode" className="cursor-pointer font-medium">
-                  Criar Serviço Customizado com IA
-                </Label>
-              </div>
+        <div className="flex gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" /> Adicionar Serviço
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar Serviço do Catálogo</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4 mt-4">
+                <div className="space-y-2 flex-1">
+                  <Label>Serviço (Catálogo)</Label>
+                  <div className="flex items-center gap-2">
+                    <Select value={selectedService} onValueChange={setSelectedService} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o serviço..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalog.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name} ({c.unit})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        setOpen(false)
+                        setOpenCustom(true)
+                      }}
+                      title="Criar Serviço Personalizado com IA"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-              {isCustomMode ? (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="col-span-2 space-y-2">
-                      <Label>Nome do Serviço</Label>
-                      <Input
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        placeholder="Ex: Parede Decorativa Customizada"
-                        required={isCustomMode}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Unidade</Label>
-                      <Input
-                        value={customUnit}
-                        onChange={(e) => setCustomUnit(e.target.value)}
-                        placeholder="Ex: m2"
-                        required={isCustomMode}
-                      />
+                <div className="space-y-2 pt-2">
+                  <Label>
+                    Quantidade Planejada (
+                    {catalog.find((c) => c.id === selectedService)?.unit || ''})
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  Adicionar Serviço
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={openCustom} onOpenChange={setOpenCustom}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Criar Serviço Personalizado</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddCustom} className="space-y-4 mt-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-2">
+                    <Label>Nome do Serviço</Label>
+                    <Input
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      placeholder="Ex: Parede Decorativa"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unidade</Label>
+                    <Input
+                      value={customUnit}
+                      onChange={(e) => setCustomUnit(e.target.value)}
+                      placeholder="Ex: m2"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full gap-2 border-blue-200 hover:bg-blue-50 text-blue-700 transition-colors"
+                  onClick={handleGenerateAI}
+                  disabled={generatingAI}
+                >
+                  {generatingAI ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Sugerir Composição
+                </Button>
+
+                {aiMaterials.length > 0 && (
+                  <div className="space-y-3 mt-4 border rounded-md p-4 bg-card">
+                    <h4 className="font-medium flex items-center gap-2 text-sm">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      Composição Sugerida (Ajuste se necessário)
+                    </h4>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {aiMaterials.map((aim, idx) => {
+                        const densityData = densities[aim.matchedMaterialId]
+                        const convertedCoeff = ConversaoUnidadesService.converterParaKg(
+                          aim.coefficient,
+                          aim.unit,
+                          densityData?.densidade_kg_m3,
+                          densityData?.peso_unitario_kg,
+                        )
+
+                        return (
+                          <div
+                            key={idx}
+                            className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-md text-sm items-center bg-muted/30"
+                          >
+                            <div>
+                              <p className="font-medium text-foreground">{aim.name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                IA Sugere: {aim.coefficient} {aim.unit} (+{aim.waste_percentage}%
+                                perda)
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Select
+                                value={aim.matchedMaterialId}
+                                onValueChange={(val) => {
+                                  const newArr = [...aiMaterials]
+                                  newArr[idx].matchedMaterialId = val
+                                  setAiMaterials(newArr)
+                                }}
+                              >
+                                <SelectTrigger className="h-8 bg-background">
+                                  <SelectValue placeholder="Selecionar Material..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="new">-- Criar Novo Material --</SelectItem>
+                                  {dbMaterials.map((dbm) => (
+                                    <SelectItem key={dbm.id} value={dbm.id}>
+                                      {dbm.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-right text-emerald-600 font-medium">
+                                Conversão por unid (kg): {convertedCoeff.toFixed(2)} kg
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
+                )}
 
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full gap-2 border-blue-200 hover:bg-blue-50 text-blue-700 transition-colors"
-                    onClick={handleGenerateAI}
-                    disabled={generatingAI}
-                  >
-                    {generatingAI ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    Gerar Materiais com IA
-                  </Button>
-
-                  {aiMaterials.length > 0 && (
-                    <div className="space-y-3 mt-4 border rounded-md p-4 bg-card">
-                      <h4 className="font-medium flex items-center gap-2 text-sm">
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                        Composição Sugerida (Mapeie para o Catálogo)
-                      </h4>
-                      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                        {aiMaterials.map((aim, idx) => {
-                          const densityData = densities[aim.matchedMaterialId]
-                          const convertedCoeff = aim.matchedMaterialId
-                            ? ConversaoUnidadesService.converterParaKg(
-                                aim.coefficient,
-                                aim.unit,
-                                densityData?.densidade_kg_m3,
-                                densityData?.peso_unitario_kg,
-                              )
-                            : null
-
-                          return (
-                            <div
-                              key={idx}
-                              className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-md text-sm items-center bg-muted/30"
-                            >
-                              <div>
-                                <p className="font-medium text-foreground">{aim.name}</p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  IA Sugere: {aim.coefficient} {aim.unit} (+{aim.waste_percentage}%
-                                  perda)
-                                </p>
-                              </div>
-                              <div className="space-y-2">
-                                <Select
-                                  value={aim.matchedMaterialId}
-                                  onValueChange={(val) => {
-                                    const newArr = [...aiMaterials]
-                                    newArr[idx].matchedMaterialId = val
-                                    setAiMaterials(newArr)
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 bg-background">
-                                    <SelectValue placeholder="Selecionar Material..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {dbMaterials.map((dbm) => (
-                                      <SelectItem key={dbm.id} value={dbm.id}>
-                                        {dbm.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {convertedCoeff !== null && (
-                                  <p className="text-xs text-right text-emerald-600 font-medium">
-                                    Quantidade (kg): {convertedCoeff.toFixed(2)} kg
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                <div className="space-y-2 pt-2 border-t mt-4 pt-4">
+                  <Label>Quantidade Planejada ({customUnit})</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={customQuantity}
+                    onChange={(e) => setCustomQuantity(e.target.value)}
+                  />
                 </div>
-              ) : (
-                <div className="space-y-2 animate-fade-in">
-                  <Label>Serviço (Catálogo)</Label>
-                  <Select
-                    value={selectedService}
-                    onValueChange={setSelectedService}
-                    required={!isCustomMode}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o serviço..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalog.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.unit})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-2">
-                <Label>
-                  Quantidade Planejada (
-                  {isCustomMode
-                    ? customUnit
-                    : catalog.find((c) => c.id === selectedService)?.unit || ''}
-                  )
-                </Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                {isCustomMode ? 'Salvar Serviço e Composição' : 'Adicionar Serviço'}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <Button type="submit" className="w-full">
+                  Salvar Serviço e Composição
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="rounded-md border bg-card">
