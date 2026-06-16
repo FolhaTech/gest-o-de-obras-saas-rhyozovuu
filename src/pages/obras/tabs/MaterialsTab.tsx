@@ -36,8 +36,8 @@ type ConsolidateItem = {
   nativeUnit: string
   pesoSaco: number | null
   plannedKg: number
+  areaKg: number
   actualKg: number
-  extraKg: number
   stockKg: number
   servicesUsing: { wsId: string; name: string }[]
   extraMaterialId?: string
@@ -106,12 +106,24 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
           const densInfo = Array.isArray(mat.densidades_insumo)
             ? mat.densidades_insumo[0]
             : mat.densidades_insumo
-          const qtyNative =
+
+          const qtyNativeService =
             (ws.target_quantity || 0) *
             (comp.coefficient || 0) *
             (1 + (comp.waste_percentage || 0) / 100)
-          const qtyKg = toKg(
-            qtyNative,
+
+          const qtyNativeArea =
+            (totalArea || 0) * (comp.coefficient || 0) * (1 + (comp.waste_percentage || 0) / 100)
+
+          const qtyKgService = toKg(
+            qtyNativeService,
+            mat.unidade_nativa || mat.unit_of_measure,
+            densInfo?.densidade_kg_m3,
+            densInfo?.peso_unitario_kg,
+          )
+
+          const qtyKgArea = toKg(
+            qtyNativeArea,
             mat.unidade_nativa || mat.unit_of_measure,
             densInfo?.densidade_kg_m3,
             densInfo?.peso_unitario_kg,
@@ -131,14 +143,16 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
               nativeUnit: mat.unidade_nativa || mat.unit_of_measure || 'kg',
               pesoSaco: mat.peso_saco_kg,
               plannedKg: 0,
+              areaKg: 0,
               actualKg: 0,
-              extraKg: 0,
               stockKg: stockKg,
               servicesUsing: [],
             })
           }
           const item = map.get(mat.id)!
-          item.plannedKg += qtyKg
+          item.plannedKg += qtyKgService
+          item.areaKg += qtyKgArea
+
           if (!item.servicesUsing.find((s) => s.wsId === ws.id)) {
             item.servicesUsing.push({
               wsId: ws.id,
@@ -156,9 +170,11 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
         const densInfo = Array.isArray(mat.densidades_insumo)
           ? mat.densidades_insumo[0]
           : mat.densidades_insumo
-        const qtyNative = Number(ex.quantity) || 0
-        const qtyKg = toKg(
-          qtyNative,
+
+        const qtyNativeArea = (totalArea || 0) * (Number(ex.consumption_per_m2) || 0)
+
+        const qtyKgArea = toKg(
+          qtyNativeArea,
           mat.unidade_nativa || mat.unit_of_measure,
           densInfo?.densidade_kg_m3,
           densInfo?.peso_unitario_kg,
@@ -178,14 +194,14 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
             nativeUnit: mat.unidade_nativa || mat.unit_of_measure || 'kg',
             pesoSaco: mat.peso_saco_kg,
             plannedKg: 0,
+            areaKg: 0,
             actualKg: 0,
-            extraKg: 0,
             stockKg: stockKg,
             servicesUsing: [],
           })
         }
         const item = map.get(mat.id)!
-        item.extraKg += qtyKg
+        item.areaKg += qtyKgArea
         item.extraMaterialId = ex.id
         item.extraConsumptionPerM2 = ex.consumption_per_m2
       })
@@ -412,9 +428,9 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
-                  const totalKg = item.plannedKg + item.extraKg
+                  const totalKg = item.plannedKg + item.areaKg
                   const bags = item.pesoSaco ? Math.ceil(totalKg / item.pesoSaco) : null
-                  const needsStock = totalKg > item.stockKg
+                  const needsStockArea = item.areaKg > item.stockKg
                   return (
                     <TableRow key={item.materialId}>
                       <TableCell className="font-medium max-w-[200px] truncate" title={item.name}>
@@ -427,11 +443,13 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                         })}{' '}
                         kg
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell
+                        className={`text-right ${needsStockArea ? 'text-red-500 font-bold' : ''}`}
+                      >
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center justify-end gap-2">
                             <span>
-                              {item.extraKg.toLocaleString('pt-BR', {
+                              {item.areaKg.toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                               })}{' '}
@@ -447,10 +465,20 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                               <Edit2 className="h-4 w-4 text-muted-foreground" />
                             </Button>
                           </div>
+                          {needsStockArea && (
+                            <div className="text-xs font-normal mt-1 flex flex-col items-end">
+                              <span className="text-red-500 font-medium">Estoque insuficiente</span>
+                              <span className="text-muted-foreground">
+                                Atual:{' '}
+                                {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}{' '}
+                                kg
+                              </span>
+                            </div>
+                          )}
                           {item.extraConsumptionPerM2 !== null &&
                             item.extraConsumptionPerM2 !== undefined && (
                               <span className="text-xs text-muted-foreground">
-                                (
+                                Extra: (
                                 {item.extraConsumptionPerM2.toLocaleString('pt-BR', {
                                   minimumFractionDigits: 2,
                                   maximumFractionDigits: 4,
@@ -460,24 +488,12 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                             )}
                         </div>
                       </TableCell>
-                      <TableCell
-                        className={`text-right font-bold ${needsStock ? 'text-red-500' : ''}`}
-                      >
+                      <TableCell className="text-right font-bold">
                         {totalKg.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}{' '}
                         kg
-                        {needsStock && (
-                          <div className="text-xs font-normal mt-1 flex flex-col items-end">
-                            <span className="text-red-500 font-medium">Estoque insuficiente</span>
-                            <span className="text-muted-foreground">
-                              Atual:{' '}
-                              {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}{' '}
-                              kg
-                            </span>
-                          </div>
-                        )}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {bags !== null ? `${bags} un (${item.pesoSaco}kg)` : '-'}
@@ -510,25 +526,27 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
-                  const planned = item.plannedKg + item.extraKg
+                  const planned = item.plannedKg + item.areaKg
                   const dev = planned > 0 ? ((item.actualKg - planned) / planned) * 100 : 0
                   const isOver = item.actualKg > planned
-                  const needsStock = planned > item.stockKg
+                  const needsStockArea = item.areaKg > item.stockKg
 
                   return (
                     <TableRow key={item.materialId}>
-                      <TableCell className={`font-medium ${needsStock ? 'text-destructive' : ''}`}>
+                      <TableCell
+                        className={`font-medium ${needsStockArea ? 'text-destructive' : ''}`}
+                      >
                         {item.name}
                       </TableCell>
                       <TableCell
-                        className={`text-right ${needsStock ? 'text-destructive font-semibold' : ''}`}
+                        className={`text-right ${needsStockArea ? 'text-destructive font-semibold' : ''}`}
                       >
                         {planned.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}{' '}
                         kg
-                        {needsStock && (
+                        {needsStockArea && (
                           <div className="text-xs font-normal">
                             Estoque atual:{' '}
                             {item.stockKg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg
