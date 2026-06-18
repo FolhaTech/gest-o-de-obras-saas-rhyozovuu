@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Table,
   TableBody,
@@ -46,18 +46,22 @@ type ConsolidateItem = {
 
 export default function MaterialsTab({ obraId, workArea }: { obraId: string; workArea?: number }) {
   const [loading, setLoading] = useState(true)
-  const [items, setItems] = useState<ConsolidateItem[]>([])
+  const [rawData, setRawData] = useState<{
+    workServices: any[]
+    extraMaterials: any[]
+    consumptionData: any[]
+  } | null>(null)
+
   const [openConsume, setOpenConsume] = useState(false)
   const [consumeMat, setConsumeMat] = useState('')
   const [consumeWs, setConsumeWs] = useState('')
   const [consumeQty, setConsumeQty] = useState('')
-  const [totalArea, setTotalArea] = useState(workArea || 0)
   const [openEdit, setOpenEdit] = useState(false)
   const [editingItem, setEditingItem] = useState<ConsolidateItem | null>(null)
   const [editConsumption, setEditConsumption] = useState('')
   const { toast } = useToast()
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const [{ data: workServices }, { data: extraMaterials }] = await Promise.all([
@@ -80,98 +84,66 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
           .eq('work_id', obraId),
       ])
 
-      setTotalArea(workArea || 0)
-
       const wsIds = workServices?.map((ws) => ws.id) || []
       const { data: consumptionData } = wsIds.length
         ? await supabase.from('consumption_tracking').select('*').in('work_service_id', wsIds)
         : { data: [] }
 
-      const toKg = (qty: number, nativeUnit: string, dens?: number, weight?: number) => {
-        if (!qty) return 0
-        const u = (nativeUnit || '').toLowerCase()
-        if (u === 'kg' || u === 'quilo' || u === 'kilograma') return qty
-        if (u === 'm3' || u === 'm³') return qty * (dens || 1)
-        if (u === 'l' || u === 'litro') return qty * ((dens || 1000) / 1000)
-        if (u === 'un' || u === 'unidade') return qty * (weight || 1)
-        return qty
-      }
-
-      const map = new Map<string, ConsolidateItem>()
-
-      workServices?.forEach((ws) => {
-        ws.compositions_history?.forEach((comp) => {
-          const mat = Array.isArray(comp.materials) ? comp.materials[0] : comp.materials
-          if (!mat) return
-          const densInfo = Array.isArray(mat.densidades_insumo)
-            ? mat.densidades_insumo[0]
-            : mat.densidades_insumo
-
-          const qtyNativeService =
-            (ws.target_quantity || 0) *
-            (comp.coefficient || 0) *
-            (1 + (comp.waste_percentage || 0) / 100)
-
-          const qtyNativeArea =
-            (totalArea || 0) * (comp.coefficient || 0) * (1 + (comp.waste_percentage || 0) / 100)
-
-          const qtyKgService = toKg(
-            qtyNativeService,
-            mat.unidade_nativa || mat.unit_of_measure,
-            densInfo?.densidade_kg_m3,
-            densInfo?.peso_unitario_kg,
-          )
-
-          const qtyKgArea = toKg(
-            qtyNativeArea,
-            mat.unidade_nativa || mat.unit_of_measure,
-            densInfo?.densidade_kg_m3,
-            densInfo?.peso_unitario_kg,
-          )
-
-          const stockKg = toKg(
-            Number(mat.stock_quantity) || 0,
-            mat.unidade_nativa || mat.unit_of_measure,
-            densInfo?.densidade_kg_m3,
-            densInfo?.peso_unitario_kg,
-          )
-
-          if (!map.has(mat.id)) {
-            map.set(mat.id, {
-              materialId: mat.id,
-              name: mat.name,
-              nativeUnit: mat.unidade_nativa || mat.unit_of_measure || 'kg',
-              pesoSaco: mat.peso_saco_kg,
-              plannedKg: 0,
-              areaKg: 0,
-              actualKg: 0,
-              stockKg: stockKg,
-              servicesUsing: [],
-            })
-          }
-          const item = map.get(mat.id)!
-          item.plannedKg += qtyKgService
-          item.areaKg += qtyKgArea
-
-          if (!item.servicesUsing.find((s) => s.wsId === ws.id)) {
-            item.servicesUsing.push({
-              wsId: ws.id,
-              name: Array.isArray(ws.services)
-                ? ws.services[0].name
-                : ws.services?.name || 'Serviço',
-            })
-          }
-        })
+      setRawData({
+        workServices: workServices || [],
+        extraMaterials: extraMaterials || [],
+        consumptionData: consumptionData || [],
       })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [obraId])
 
-      extraMaterials?.forEach((ex) => {
-        const mat = Array.isArray(ex.materials) ? ex.materials[0] : ex.materials
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const items = useMemo(() => {
+    if (!rawData) return []
+
+    const totalArea = workArea || 0
+
+    const toKg = (qty: number, nativeUnit: string, dens?: number, weight?: number) => {
+      if (!qty) return 0
+      const u = (nativeUnit || '').toLowerCase()
+      if (u === 'kg' || u === 'quilo' || u === 'kilograma') return qty
+      if (u === 'm3' || u === 'm³') return qty * (dens || 1)
+      if (u === 'l' || u === 'litro') return qty * ((dens || 1000) / 1000)
+      if (u === 'un' || u === 'unidade') return qty * (weight || 1)
+      return qty
+    }
+
+    const map = new Map<string, ConsolidateItem>()
+
+    rawData.workServices.forEach((ws) => {
+      ws.compositions_history?.forEach((comp: any) => {
+        const mat = Array.isArray(comp.materials) ? comp.materials[0] : comp.materials
         if (!mat) return
         const densInfo = Array.isArray(mat.densidades_insumo)
           ? mat.densidades_insumo[0]
           : mat.densidades_insumo
 
-        const qtyNativeArea = (totalArea || 0) * (Number(ex.consumption_per_m2) || 0)
+        const qtyNativeService =
+          (ws.target_quantity || 0) *
+          (comp.coefficient || 0) *
+          (1 + (comp.waste_percentage || 0) / 100)
+
+        const qtyNativeArea =
+          totalArea * (comp.coefficient || 0) * (1 + (comp.waste_percentage || 0) / 100)
+
+        const qtyKgService = toKg(
+          qtyNativeService,
+          mat.unidade_nativa || mat.unit_of_measure,
+          densInfo?.densidade_kg_m3,
+          densInfo?.peso_unitario_kg,
+        )
 
         const qtyKgArea = toKg(
           qtyNativeArea,
@@ -201,28 +173,68 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
           })
         }
         const item = map.get(mat.id)!
+        item.plannedKg += qtyKgService
         item.areaKg += qtyKgArea
-        item.extraMaterialId = ex.id
-        item.extraConsumptionPerM2 = ex.consumption_per_m2
-      })
 
-      consumptionData?.forEach((c) => {
-        if (map.has(c.material_id)) {
-          map.get(c.material_id)!.actualKg += Number(c.quantity_actual) || 0
+        if (!item.servicesUsing.find((s) => s.wsId === ws.id)) {
+          item.servicesUsing.push({
+            wsId: ws.id,
+            name: Array.isArray(ws.services) ? ws.services[0].name : ws.services?.name || 'Serviço',
+          })
         }
       })
+    })
 
-      setItems(Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)))
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+    rawData.extraMaterials.forEach((ex) => {
+      const mat = Array.isArray(ex.materials) ? ex.materials[0] : ex.materials
+      if (!mat) return
+      const densInfo = Array.isArray(mat.densidades_insumo)
+        ? mat.densidades_insumo[0]
+        : mat.densidades_insumo
 
-  useEffect(() => {
-    fetchData()
-  }, [obraId, workArea])
+      const qtyNativeArea = totalArea * (Number(ex.consumption_per_m2) || 0)
+
+      const qtyKgArea = toKg(
+        qtyNativeArea,
+        mat.unidade_nativa || mat.unit_of_measure,
+        densInfo?.densidade_kg_m3,
+        densInfo?.peso_unitario_kg,
+      )
+
+      const stockKg = toKg(
+        Number(mat.stock_quantity) || 0,
+        mat.unidade_nativa || mat.unit_of_measure,
+        densInfo?.densidade_kg_m3,
+        densInfo?.peso_unitario_kg,
+      )
+
+      if (!map.has(mat.id)) {
+        map.set(mat.id, {
+          materialId: mat.id,
+          name: mat.name,
+          nativeUnit: mat.unidade_nativa || mat.unit_of_measure || 'kg',
+          pesoSaco: mat.peso_saco_kg,
+          plannedKg: 0,
+          areaKg: 0,
+          actualKg: 0,
+          stockKg: stockKg,
+          servicesUsing: [],
+        })
+      }
+      const item = map.get(mat.id)!
+      item.areaKg += qtyKgArea
+      item.extraMaterialId = ex.id
+      item.extraConsumptionPerM2 = ex.consumption_per_m2
+    })
+
+    rawData.consumptionData.forEach((c) => {
+      if (map.has(c.material_id)) {
+        map.get(c.material_id)!.actualKg += Number(c.quantity_actual) || 0
+      }
+    })
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [rawData, workArea])
 
   const handleEditClick = (item: ConsolidateItem) => {
     setEditingItem(item)
@@ -287,7 +299,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
 
   const selectedMatItem = items.find((i) => i.materialId === consumeMat)
 
-  if (loading) return <Skeleton className="h-48 w-full" />
+  if (loading && !rawData) return <Skeleton className="h-48 w-full" />
 
   return (
     <div className="space-y-4 animate-fade-in-up">
@@ -320,7 +332,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                 />
                 <p className="text-xs text-muted-foreground">
                   Isto adicionará/ajustará a quantidade extra deste material para a obra com base na
-                  área total ({totalArea} m²).
+                  área total ({workArea || 0} m²).
                 </p>
               </div>
               <Button type="submit" className="w-full">
@@ -420,7 +432,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
               <TableHeader>
                 <TableRow>
                   <TableHead>Material</TableHead>
-                  <TableHead className="text-right">Necessário p/ Serviços</TableHead>
+                  <TableHead className="text-right">Consumo por Serviço</TableHead>
                   <TableHead className="text-right">Necessário p/ Área (m²)</TableHead>
                   <TableHead className="text-right">Total Geral</TableHead>
                   <TableHead className="text-right">Sacos Comerciais</TableHead>
@@ -432,8 +444,14 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                   const bags = item.pesoSaco ? Math.ceil(totalKg / item.pesoSaco) : null
                   const needsStockArea = item.areaKg > item.stockKg
                   return (
-                    <TableRow key={item.materialId}>
-                      <TableCell className="font-medium max-w-[200px] truncate" title={item.name}>
+                    <TableRow
+                      key={item.materialId}
+                      className={needsStockArea ? 'text-red-500' : ''}
+                    >
+                      <TableCell
+                        className={`font-medium max-w-[200px] truncate ${needsStockArea ? 'text-red-500' : ''}`}
+                        title={item.name}
+                      >
                         {item.name}
                       </TableCell>
                       <TableCell className="text-right">
@@ -495,7 +513,9 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                         })}{' '}
                         kg
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell
+                        className={`text-right ${needsStockArea ? 'text-red-500/70' : 'text-muted-foreground'}`}
+                      >
                         {bags !== null ? `${bags} un (${item.pesoSaco}kg)` : '-'}
                       </TableCell>
                     </TableRow>
@@ -532,14 +552,15 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                   const needsStockArea = item.areaKg > item.stockKg
 
                   return (
-                    <TableRow key={item.materialId}>
-                      <TableCell
-                        className={`font-medium ${needsStockArea ? 'text-destructive' : ''}`}
-                      >
+                    <TableRow
+                      key={item.materialId}
+                      className={needsStockArea ? 'text-red-500' : ''}
+                    >
+                      <TableCell className={`font-medium ${needsStockArea ? 'text-red-500' : ''}`}>
                         {item.name}
                       </TableCell>
                       <TableCell
-                        className={`text-right ${needsStockArea ? 'text-destructive font-semibold' : ''}`}
+                        className={`text-right ${needsStockArea ? 'text-red-500 font-semibold' : ''}`}
                       >
                         {planned.toLocaleString('pt-BR', {
                           minimumFractionDigits: 2,
@@ -561,7 +582,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                         kg
                       </TableCell>
                       <TableCell
-                        className={`text-right ${isOver ? 'text-destructive font-bold' : 'text-emerald-600'}`}
+                        className={`text-right ${isOver ? 'text-red-600 font-bold' : 'text-emerald-600'}`}
                       >
                         {item.actualKg > 0 ? `${dev > 0 ? '+' : ''}${dev.toFixed(1)}%` : '-'}
                       </TableCell>
