@@ -77,7 +77,53 @@ export interface Equipe {
   daily_cost: number
   work_id: string
   status: string
+  admission_date?: string
+  pix_key?: string
+  payment_type?: string
   works?: { name: string }
+}
+
+export interface ServiceProvider {
+  id: string
+  work_id?: string
+  name: string
+  service_type: string
+  contact_phone: string
+  email: string
+  responsible_person: string
+  quality_rating: string
+  deadline_rating: string
+  team_level: string
+  observations: string
+}
+
+export interface AttendanceRecord {
+  id: string
+  worker_id: string
+  date: string
+  is_present: boolean
+}
+
+export interface AttendanceExtra {
+  id: string
+  worker_id: string
+  week_start_date: string
+  extra_value: number
+  notes: string
+}
+
+export interface ExternalContract {
+  id: string
+  work_id?: string
+  provider_id: string
+  service_description: string
+  unit: string
+  total_value: number
+  executed_quantity: number
+  target_date: string
+  is_completed: boolean
+  notes: string
+  service_providers?: { name: string }
 }
 
 export interface Receita {

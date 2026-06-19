@@ -1,0 +1,329 @@
+import { useState } from 'react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatCurrency, formatDate } from '@/lib/formatters'
+import { useData } from '@/hooks/use-data'
+import { Equipe } from '@/types'
+import { Plus, UserCheck, UserMinus, Edit, Trash } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { supabase } from '@/lib/supabase/client'
+import { useToast } from '@/hooks/use-toast'
+
+export default function WorkersTab() {
+  const { data: equipes, loading, refetch } = useData<Equipe>('team_members')
+  const { toast } = useToast()
+
+  const [open, setOpen] = useState(false)
+  const [formData, setFormData] = useState<Partial<Equipe>>({
+    name: '',
+    role: '',
+    phone: '',
+    type: 'internal',
+    daily_cost: 0,
+    status: 'active',
+    payment_type: 'daily',
+    pix_key: '',
+    admission_date: '',
+  })
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+
+  const handleSave = async (e: React.FormEvent, isEdit: boolean) => {
+    e.preventDefault()
+    const payload = {
+      name: formData.name,
+      role: formData.role,
+      phone: formData.phone || null,
+      type: formData.type,
+      daily_cost: Number(formData.daily_cost),
+      status: formData.status,
+      payment_type: formData.payment_type,
+      pix_key: formData.pix_key || null,
+      admission_date: formData.admission_date || null,
+    }
+
+    const { error } = isEdit
+      ? await supabase.from('team_members').update(payload).eq('id', editId)
+      : await supabase.from('team_members').insert([payload])
+
+    if (!error) {
+      toast({ title: isEdit ? 'Atualizado!' : 'Registrado com sucesso!' })
+      setOpen(false)
+      setEditOpen(false)
+      refetch()
+    } else {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    }
+  }
+
+  const openEdit = (eq: Equipe) => {
+    setEditId(eq.id)
+    setFormData({
+      name: eq.name,
+      role: eq.role || '',
+      phone: eq.phone || '',
+      type: eq.type || 'internal',
+      daily_cost: eq.daily_cost || 0,
+      status: eq.status || 'active',
+      payment_type: eq.payment_type || 'daily',
+      pix_key: eq.pix_key || '',
+      admission_date: eq.admission_date || '',
+    })
+    setEditOpen(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Deseja excluir este registro?')) return
+    const { error } = await supabase.from('team_members').delete().eq('id', id)
+    if (!error) {
+      toast({ title: 'Registro excluído' })
+      refetch()
+    }
+  }
+
+  if (loading) return <Skeleton className="h-64 w-full" />
+
+  const FormContent = () => (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Nome</Label>
+          <Input
+            required
+            value={formData.name || ''}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Função</Label>
+          <Input
+            required
+            value={formData.role || ''}
+            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Telefone</Label>
+          <Input
+            value={formData.phone || ''}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Chave PIX</Label>
+          <Input
+            value={formData.pix_key || ''}
+            onChange={(e) => setFormData({ ...formData, pix_key: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Data de Admissão</Label>
+          <Input
+            type="date"
+            value={formData.admission_date || ''}
+            onChange={(e) => setFormData({ ...formData, admission_date: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Equipe / Tipo</Label>
+          <Select
+            value={formData.type}
+            onValueChange={(val) => setFormData({ ...formData, type: val })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internal">Própria</SelectItem>
+              <SelectItem value="outsourced">Terceirizada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Tipo Pagamento</Label>
+          <Select
+            value={formData.payment_type || 'daily'}
+            onValueChange={(val) => setFormData({ ...formData, payment_type: val })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Diária</SelectItem>
+              <SelectItem value="monthly">Mensal</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Valor (R$)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            value={formData.daily_cost || ''}
+            onChange={(e) => setFormData({ ...formData, daily_cost: Number(e.target.value) })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(val) => setFormData({ ...formData, status: val })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Ativo</SelectItem>
+              <SelectItem value="inactive">Inativo</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </>
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button
+              onClick={() =>
+                setFormData({ type: 'internal', payment_type: 'daily', status: 'active' })
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" /> Novo Funcionário
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Adicionar Funcionário</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={(e) => handleSave(e, false)} className="space-y-4 mt-4">
+              <FormContent />
+              <Button type="submit" className="w-full">
+                Salvar
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome / Função</TableHead>
+              <TableHead>Contato / PIX</TableHead>
+              <TableHead>Admissão</TableHead>
+              <TableHead>Pagamento</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {equipes.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  Nenhum funcionário.
+                </TableCell>
+              </TableRow>
+            )}
+            {equipes.map((eq) => (
+              <TableRow key={eq.id}>
+                <TableCell>
+                  <div className="font-medium">{eq.name}</div>
+                  <div className="text-xs text-muted-foreground">{eq.role}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm">{eq.phone || '-'}</div>
+                  <div className="text-xs text-muted-foreground">Pix: {eq.pix_key || '-'}</div>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {eq.admission_date ? formatDate(eq.admission_date) : '-'}
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">
+                    {eq.payment_type === 'monthly' ? 'Mensal' : formatCurrency(eq.daily_cost)}
+                  </div>
+                  <Badge variant="outline" className="mt-1 text-[10px]">
+                    {eq.type === 'internal' ? 'Própria' : 'Terceira'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  {eq.status === 'active' ? (
+                    <div className="flex items-center justify-center gap-1 text-emerald-600 text-sm font-medium">
+                      <UserCheck className="h-4 w-4" /> Ativo
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground text-sm font-medium">
+                      <UserMinus className="h-4 w-4" /> Inativo
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(eq)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    onClick={() => handleDelete(eq.id)}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Editar Funcionário</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => handleSave(e, true)} className="space-y-4 mt-4">
+            <FormContent />
+            <Button type="submit" className="w-full">
+              Atualizar
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

@@ -9,7 +9,21 @@ interface DashboardChartsProps {
   despesas: Despesa[]
 }
 
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'
+
 export default function DashboardCharts({ despesas }: DashboardChartsProps) {
+  const [laborCost, setLaborCost] = useState(0)
+
+  useEffect(() => {
+    const fetchLabor = async () => {
+      const { data } = await supabase.from('external_contracts').select('total_value')
+      if (data) {
+        setLaborCost(data.reduce((acc, curr) => acc + Number(curr.total_value || 0), 0))
+      }
+    }
+    fetchLabor()
+  }, [])
   const chartData = useMemo(() => {
     const expensesByCategory = despesas.reduce(
       (acc, despesa) => {
@@ -35,8 +49,12 @@ export default function DashboardCharts({ despesas }: DashboardChartsProps) {
 
   return (
     <Card className="col-span-4 hover:shadow-md transition-shadow">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base font-medium">Despesas por Categoria</CardTitle>
+        <div className="text-sm font-medium text-muted-foreground flex flex-col items-end">
+          <span>Custos Contratos Terceiros:</span>
+          <span className="text-primary">{formatCurrency(laborCost)}</span>
+        </div>
       </CardHeader>
       <CardContent className="pl-2">
         {chartData.length === 0 ? (
