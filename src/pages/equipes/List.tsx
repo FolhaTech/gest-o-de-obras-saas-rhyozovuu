@@ -15,15 +15,15 @@ export default function EquipesList() {
         </p>
       </div>
 
-      <Tabs defaultValue="workers" className="w-full">
+      <Tabs defaultValue="attendance" className="w-full">
         <TabsList className="grid w-full grid-cols-4 lg:w-[800px] h-auto p-1">
-          <TabsTrigger value="workers" className="py-2.5 flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Funcionários</span>
-          </TabsTrigger>
           <TabsTrigger value="attendance" className="py-2.5 flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
             <span className="hidden sm:inline">Controle de Diárias</span>
+          </TabsTrigger>
+          <TabsTrigger value="workers" className="py-2.5 flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Funcionários</span>
           </TabsTrigger>
           <TabsTrigger value="providers" className="py-2.5 flex items-center gap-2">
             <Briefcase className="h-4 w-4" />

@@ -9,6 +9,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance_extras: {
+        Row: {
+          created_at: string
+          extra_value: number | null
+          id: string
+          notes: string | null
+          week_start_date: string
+          worker_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          extra_value?: number | null
+          id?: string
+          notes?: string | null
+          week_start_date: string
+          worker_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          extra_value?: number | null
+          id?: string
+          notes?: string | null
+          week_start_date?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_extras_worker_id_fkey'
+            columns: ['worker_id']
+            isOneToOne: false
+            referencedRelation: 'team_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      attendance_records: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          is_present: boolean | null
+          worker_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          is_present?: boolean | null
+          worker_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          is_present?: boolean | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_records_worker_id_fkey'
+            columns: ['worker_id']
+            isOneToOne: false
+            referencedRelation: 'team_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null
@@ -263,6 +330,63 @@ export type Database = {
           },
         ]
       }
+      external_contracts: {
+        Row: {
+          created_at: string
+          executed_quantity: number | null
+          id: string
+          is_completed: boolean | null
+          notes: string | null
+          provider_id: string | null
+          service_description: string
+          target_date: string | null
+          total_value: number | null
+          unit: string | null
+          work_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          executed_quantity?: number | null
+          id?: string
+          is_completed?: boolean | null
+          notes?: string | null
+          provider_id?: string | null
+          service_description: string
+          target_date?: string | null
+          total_value?: number | null
+          unit?: string | null
+          work_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          executed_quantity?: number | null
+          id?: string
+          is_completed?: boolean | null
+          notes?: string | null
+          provider_id?: string | null
+          service_description?: string
+          target_date?: string | null
+          total_value?: number | null
+          unit?: string | null
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'external_contracts_provider_id_fkey'
+            columns: ['provider_id']
+            isOneToOne: false
+            referencedRelation: 'service_providers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'external_contracts_work_id_fkey'
+            columns: ['work_id']
+            isOneToOne: false
+            referencedRelation: 'works'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       material_movements: {
         Row: {
           author_id: string | null
@@ -445,6 +569,59 @@ export type Database = {
           },
         ]
       }
+      service_providers: {
+        Row: {
+          contact_phone: string | null
+          created_at: string
+          deadline_rating: string | null
+          email: string | null
+          id: string
+          name: string
+          observations: string | null
+          quality_rating: string | null
+          responsible_person: string | null
+          service_type: string | null
+          team_level: string | null
+          work_id: string | null
+        }
+        Insert: {
+          contact_phone?: string | null
+          created_at?: string
+          deadline_rating?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          observations?: string | null
+          quality_rating?: string | null
+          responsible_person?: string | null
+          service_type?: string | null
+          team_level?: string | null
+          work_id?: string | null
+        }
+        Update: {
+          contact_phone?: string | null
+          created_at?: string
+          deadline_rating?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          observations?: string | null
+          quality_rating?: string | null
+          responsible_person?: string | null
+          service_type?: string | null
+          team_level?: string | null
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'service_providers_work_id_fkey'
+            columns: ['work_id']
+            isOneToOne: false
+            referencedRelation: 'works'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       services: {
         Row: {
           created_at: string | null
@@ -468,33 +645,42 @@ export type Database = {
       }
       team_members: {
         Row: {
+          admission_date: string | null
           created_at: string | null
           daily_cost: number | null
           id: string
           name: string
+          payment_type: string | null
           phone: string | null
+          pix_key: string | null
           role: string | null
           status: string | null
           type: string | null
           work_id: string | null
         }
         Insert: {
+          admission_date?: string | null
           created_at?: string | null
           daily_cost?: number | null
           id?: string
           name: string
+          payment_type?: string | null
           phone?: string | null
+          pix_key?: string | null
           role?: string | null
           status?: string | null
           type?: string | null
           work_id?: string | null
         }
         Update: {
+          admission_date?: string | null
           created_at?: string | null
           daily_cost?: number | null
           id?: string
           name?: string
+          payment_type?: string | null
           phone?: string | null
+          pix_key?: string | null
           role?: string | null
           status?: string | null
           type?: string | null
