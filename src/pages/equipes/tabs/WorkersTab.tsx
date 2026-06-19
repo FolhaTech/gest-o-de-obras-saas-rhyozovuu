@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import WorkerDetailSheet from './WorkerDetailSheet'
 
 export default function WorkersTab() {
   const { data: equipes, loading, refetch } = useData<Equipe>('team_members')
@@ -51,7 +52,7 @@ export default function WorkersTab() {
   })
 
   const [editOpen, setEditOpen] = useState(false)
-  const [editId, setEditId] = useState<string | null>(null)
+  const [selectedWorker, setSelectedWorker] = useState<Equipe | null>(null)
 
   const handleSave = async (e: React.FormEvent, isEdit: boolean) => {
     e.preventDefault()
@@ -68,7 +69,7 @@ export default function WorkersTab() {
     }
 
     const { error } = isEdit
-      ? await supabase.from('team_members').update(payload).eq('id', editId)
+      ? await supabase.from('team_members').update(payload).eq('id', selectedWorker?.id)
       : await supabase.from('team_members').insert([payload])
 
     if (!error) {
@@ -82,18 +83,7 @@ export default function WorkersTab() {
   }
 
   const openEdit = (eq: Equipe) => {
-    setEditId(eq.id)
-    setFormData({
-      name: eq.name,
-      role: eq.role || '',
-      phone: eq.phone || '',
-      type: eq.type || 'internal',
-      daily_cost: eq.daily_cost || 0,
-      status: eq.status || 'active',
-      payment_type: eq.payment_type || 'daily',
-      pix_key: eq.pix_key || '',
-      admission_date: eq.admission_date || '',
-    })
+    setSelectedWorker(eq)
     setEditOpen(true)
   }
 
@@ -311,19 +301,14 @@ export default function WorkersTab() {
         </Table>
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Editar Funcionário</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={(e) => handleSave(e, true)} className="space-y-4 mt-4">
-            <FormContent />
-            <Button type="submit" className="w-full">
-              Atualizar
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {selectedWorker && (
+        <WorkerDetailSheet
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          worker={selectedWorker}
+          onUpdated={refetch}
+        />
+      )}
     </div>
   )
 }
