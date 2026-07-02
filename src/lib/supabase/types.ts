@@ -9,6 +9,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_types: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       attendance_extras: {
         Row: {
           created_at: string
@@ -232,6 +253,36 @@ export type Database = {
           },
         ]
       }
+      dashboards: {
+        Row: {
+          created_at: string
+          display_time: number
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          display_time?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          url: string
+        }
+        Update: {
+          created_at?: string
+          display_time?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          url?: string
+        }
+        Relationships: []
+      }
       densidades_insumo: {
         Row: {
           created_at: string | null
@@ -266,6 +317,36 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      display_settings: {
+        Row: {
+          auto_refresh_on_switch: boolean
+          company_logo_url: string | null
+          created_at: string
+          default_rotation_time: number
+          id: string
+          show_clock: boolean
+          show_header: boolean
+        }
+        Insert: {
+          auto_refresh_on_switch?: boolean
+          company_logo_url?: string | null
+          created_at?: string
+          default_rotation_time?: number
+          id?: string
+          show_clock?: boolean
+          show_header?: boolean
+        }
+        Update: {
+          auto_refresh_on_switch?: boolean
+          company_logo_url?: string | null
+          created_at?: string
+          default_rotation_time?: number
+          id?: string
+          show_clock?: boolean
+          show_header?: boolean
+        }
+        Relationships: []
       }
       expenses: {
         Row: {
@@ -508,6 +589,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          email: string | null
           full_name: string
           id: string
           role: string | null
@@ -515,6 +597,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name: string
           id: string
           role?: string | null
@@ -522,6 +605,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name?: string
           id?: string
           role?: string | null
@@ -643,13 +727,51 @@ export type Database = {
         }
         Relationships: []
       }
+      team_member_documents: {
+        Row: {
+          created_at: string
+          file_path: string
+          file_type: string
+          id: string
+          name: string
+          team_member_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          file_type: string
+          id?: string
+          name: string
+          team_member_id: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          file_type?: string
+          id?: string
+          name?: string
+          team_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'team_member_documents_team_member_id_fkey'
+            columns: ['team_member_id']
+            isOneToOne: false
+            referencedRelation: 'team_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       team_members: {
         Row: {
           admission_date: string | null
+          average_start_date: string | null
           created_at: string | null
           daily_cost: number | null
+          fixed_salary: number | null
           id: string
           name: string
+          participates_in_averages: boolean | null
           payment_type: string | null
           phone: string | null
           pix_key: string | null
@@ -660,10 +782,13 @@ export type Database = {
         }
         Insert: {
           admission_date?: string | null
+          average_start_date?: string | null
           created_at?: string | null
           daily_cost?: number | null
+          fixed_salary?: number | null
           id?: string
           name: string
+          participates_in_averages?: boolean | null
           payment_type?: string | null
           phone?: string | null
           pix_key?: string | null
@@ -674,10 +799,13 @@ export type Database = {
         }
         Update: {
           admission_date?: string | null
+          average_start_date?: string | null
           created_at?: string | null
           daily_cost?: number | null
+          fixed_salary?: number | null
           id?: string
           name?: string
+          participates_in_averages?: boolean | null
           payment_type?: string | null
           phone?: string | null
           pix_key?: string | null
@@ -894,15 +1022,29 @@ export type Database = {
         Row: {
           address: string | null
           budget_planned: number | null
+          cancellation_date: string | null
+          cancellation_reason: string | null
           client: string | null
+          client_cpf: string | null
+          client_email: string | null
+          client_phone: string | null
+          consultant_id: string | null
           contracted_value: number | null
           created_at: string | null
           end_date_planned: string | null
+          entry_payment_method: string | null
+          entry_value: number | null
           id: string
+          installments: number | null
+          internal_failure: boolean | null
+          is_entry_paid: boolean | null
           manager: string | null
           name: string
           notes: string | null
+          payment_method: string | null
+          pre_processual_agent_id: string | null
           progress_percentage: number | null
+          service_type: string | null
           start_date: string | null
           status: string | null
           total_area: number | null
@@ -910,15 +1052,29 @@ export type Database = {
         Insert: {
           address?: string | null
           budget_planned?: number | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
           client?: string | null
+          client_cpf?: string | null
+          client_email?: string | null
+          client_phone?: string | null
+          consultant_id?: string | null
           contracted_value?: number | null
           created_at?: string | null
           end_date_planned?: string | null
+          entry_payment_method?: string | null
+          entry_value?: number | null
           id?: string
+          installments?: number | null
+          internal_failure?: boolean | null
+          is_entry_paid?: boolean | null
           manager?: string | null
           name: string
           notes?: string | null
+          payment_method?: string | null
+          pre_processual_agent_id?: string | null
           progress_percentage?: number | null
+          service_type?: string | null
           start_date?: string | null
           status?: string | null
           total_area?: number | null
@@ -926,27 +1082,63 @@ export type Database = {
         Update: {
           address?: string | null
           budget_planned?: number | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
           client?: string | null
+          client_cpf?: string | null
+          client_email?: string | null
+          client_phone?: string | null
+          consultant_id?: string | null
           contracted_value?: number | null
           created_at?: string | null
           end_date_planned?: string | null
+          entry_payment_method?: string | null
+          entry_value?: number | null
           id?: string
+          installments?: number | null
+          internal_failure?: boolean | null
+          is_entry_paid?: boolean | null
           manager?: string | null
           name?: string
           notes?: string | null
+          payment_method?: string | null
+          pre_processual_agent_id?: string | null
           progress_percentage?: number | null
+          service_type?: string | null
           start_date?: string | null
           status?: string | null
           total_area?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'works_consultant_id_fkey'
+            columns: ['consultant_id']
+            isOneToOne: false
+            referencedRelation: 'team_members'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'works_pre_processual_agent_id_fkey'
+            columns: ['pre_processual_agent_id']
+            isOneToOne: false
+            referencedRelation: 'team_members'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'works_service_type_fkey'
+            columns: ['service_type']
+            isOneToOne: false
+            referencedRelation: 'action_types'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
