@@ -49,7 +49,9 @@ export default function Index() {
   const today = new Date().toISOString().split('T')[0]
   const totalObras = obras.length
   const emAndamento = obras.filter((o) => o.status === 'in_progress').length
-  const atrasadas = obras.filter((o) => o.end_date_planned < today && o.status !== 'finished')
+  const atrasadas = obras.filter(
+    (o) => !!o.end_date_planned && o.end_date_planned < today && o.status !== 'finished',
+  )
   const avgProgress =
     obras.reduce((acc, o) => acc + (Number(o.progress_percentage) || 0), 0) / (totalObras || 1)
 

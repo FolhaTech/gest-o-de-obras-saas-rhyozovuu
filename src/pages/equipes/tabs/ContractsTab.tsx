@@ -67,6 +67,7 @@ export default function ContractsTab() {
     const { service_providers: _sp, ...rest } = formData
     const payload = {
       ...rest,
+      service_description: formData.service_description || '',
       total_value: Number(formData.total_value),
       executed_quantity: Number(formData.executed_quantity),
     }
