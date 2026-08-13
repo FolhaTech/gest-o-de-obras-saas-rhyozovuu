@@ -46,9 +46,10 @@ export default function ProvidersTab() {
 
   const handleSave = async (e: React.FormEvent, isEdit: boolean) => {
     e.preventDefault()
+    const insertPayload = { ...formData, name: formData.name || '' }
     const { error } = isEdit
       ? await supabase.from('service_providers').update(formData).eq('id', editId)
-      : await supabase.from('service_providers').insert([formData])
+      : await supabase.from('service_providers').insert([insertPayload])
 
     if (!error) {
       toast({ title: isEdit ? 'Prestador atualizado!' : 'Prestador salvo!' })

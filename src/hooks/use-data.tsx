@@ -8,7 +8,7 @@ export function useData<T>(table: string, select = '*') {
   const fetch = useCallback(async () => {
     setLoading(true)
     const { data: result } = await supabase
-      .from(table)
+      .from(table as any)
       .select(select)
       .order('created_at', { ascending: false })
     if (result) setData(result as unknown as T[])
@@ -35,7 +35,7 @@ export function useDataFilter<T>(
     if (!value) return
     setLoading(true)
     const { data: result } = await supabase
-      .from(table)
+      .from(table as any)
       .select(select)
       .eq(column, value)
       .order('created_at', { ascending: false })

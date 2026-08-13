@@ -81,7 +81,10 @@ export default function DashboardCharts({ despesas }: DashboardChartsProps) {
               <ChartTooltip
                 cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                 content={
-                  <ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />
+                  <ChartTooltipContent
+                    payload={[]}
+                    formatter={(value) => formatCurrency(Number(value))}
+                  />
                 }
               />
               <Bar dataKey="total" fill="var(--color-total)" radius={[4, 4, 0, 0]} />

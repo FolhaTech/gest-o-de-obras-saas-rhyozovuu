@@ -1,16 +1,18 @@
 export interface Obra {
   id: string
   name: string
-  client: string
-  manager: string
-  address: string
-  start_date: string
-  end_date_planned: string
-  contracted_value: number
-  budget_planned: number
-  status: 'planned' | 'in_progress' | 'paused' | 'delayed' | 'finished'
-  progress_percentage: number
-  notes: string
+  client: string | null
+  manager: string | null
+  address: string | null
+  start_date: string | null
+  end_date_planned: string | null
+  contracted_value: number | null
+  budget_planned: number | null
+  total_area?: number | null
+  status: 'planned' | 'in_progress' | 'paused' | 'delayed' | 'finished' | 'completed' | string
+  progress_percentage: number | null
+  notes: string | null
+  created_at?: string | null
 }
 
 export interface Stage {
@@ -43,14 +45,17 @@ export interface Diario {
 export interface Material {
   id: string
   name: string
-  unit_of_measure: string
-  supplier: string
-  stock_quantity: number
-  min_quantity: number
-  category: string
-  unit_price: number
-  work_id: string
-  status: string
+  unidade_nativa?: string | null
+  unit_of_measure: string | null
+  supplier: string | null
+  stock_quantity: number | null
+  min_quantity: number | null
+  category: string | null
+  unit_price: number | null
+  work_id: string | null
+  status: string | null
+  peso_saco_kg?: number | null
+  densidades_insumo?: { densidade_kg_m3: number | null; peso_unitario_kg: number | null }[]
 }
 
 export interface Despesa {
@@ -71,30 +76,40 @@ export interface Despesa {
 export interface Equipe {
   id: string
   name: string
-  role: string
-  phone: string
-  type: string
-  daily_cost: number
-  work_id: string
-  status: string
-  admission_date?: string
-  pix_key?: string
-  payment_type?: string
+  role: string | null
+  phone: string | null
+  type: string | null
+  daily_cost: number | null
+  work_id: string | null
+  status: string | null
+  admission_date?: string | null
+  pix_key?: string | null
+  payment_type?: string | null
+  created_at?: string | null
   works?: { name: string }
+}
+
+export interface TeamMemberDocument {
+  id: string
+  team_member_id: string
+  name: string
+  file_path: string
+  file_type: string
+  created_at: string
 }
 
 export interface ServiceProvider {
   id: string
-  work_id?: string
+  work_id?: string | null
   name: string
-  service_type: string
-  contact_phone: string
-  email: string
-  responsible_person: string
-  quality_rating: string
-  deadline_rating: string
-  team_level: string
-  observations: string
+  service_type?: string | null
+  contact_phone?: string | null
+  email?: string | null
+  responsible_person?: string | null
+  quality_rating?: string | null
+  deadline_rating?: string | null
+  team_level?: string | null
+  observations?: string | null
 }
 
 export interface AttendanceRecord {
@@ -114,16 +129,16 @@ export interface AttendanceExtra {
 
 export interface ExternalContract {
   id: string
-  work_id?: string
-  provider_id: string
+  work_id?: string | null
+  provider_id: string | null
   service_description: string
-  unit: string
-  total_value: number
-  executed_quantity: number
-  target_date: string
-  is_completed: boolean
-  notes: string
-  service_providers?: { name: string }
+  unit?: string | null
+  total_value?: number | null
+  executed_quantity?: number | null
+  target_date?: string | null
+  is_completed?: boolean | null
+  notes?: string | null
+  service_providers?: { name: string } | null
 }
 
 export interface Receita {
@@ -149,7 +164,7 @@ export interface Composition {
   material_id: string
   coefficient: number
   waste_percentage: number
-  materials?: { name: string; unit_of_measure: string }
+  materials?: { name: string; unidade_nativa?: string; unit_of_measure: string }
 }
 
 export interface WorkService {

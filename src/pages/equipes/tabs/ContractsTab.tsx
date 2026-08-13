@@ -38,9 +38,7 @@ export default function ContractsTab() {
     data: contracts,
     loading,
     refetch,
-  } = useData<ExternalContract>('external_contracts', {
-    query: '*, service_providers(name)',
-  })
+  } = useData<ExternalContract>('external_contracts', '*, service_providers(name)')
   const { data: providers } = useData<ServiceProvider>('service_providers')
   const { toast } = useToast()
 
@@ -66,12 +64,12 @@ export default function ContractsTab() {
       return
     }
 
+    const { service_providers: _sp, ...rest } = formData
     const payload = {
-      ...formData,
+      ...rest,
       total_value: Number(formData.total_value),
       executed_quantity: Number(formData.executed_quantity),
     }
-    delete payload.service_providers // clean virtual join fields
 
     const { error } = isEdit
       ? await supabase.from('external_contracts').update(payload).eq('id', editId)

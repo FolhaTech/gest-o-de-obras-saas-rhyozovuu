@@ -22,7 +22,7 @@ import NotFound from './pages/NotFound'
 
 const App = () => (
   <AuthProvider>
-    <BrowserRouter future={{ v7_startTransition: false, v7_relativeSplatPath: false }}>
+    <BrowserRouter>
       <TooltipProvider>
         <Toaster />
         <Sonner />
