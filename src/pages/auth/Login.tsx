@@ -12,8 +12,9 @@ import {
   CardTitle,
   CardFooter,
 } from '@/components/ui/card'
-import { Building2 } from 'lucide-react'
+import { Building2, MailCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -22,16 +23,60 @@ export default function Login() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [showResend, setShowResend] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     const { error } = await signIn(email, password)
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+      const message = error.message || ''
+      const isEmailNotConfirmed = message.toLowerCase().includes('email not confirmed')
+      if (isEmailNotConfirmed) {
+        setShowResend(true)
+        toast({
+          title: 'Email não confirmado',
+          description:
+            'Sua conta foi criada, mas o email ainda não foi confirmado. Verifique sua caixa de entrada (e a pasta de spam) pelo email de confirmação.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Erro', description: message, variant: 'destructive' })
+      }
       setLoading(false)
     } else {
       navigate('/')
+    }
+  }
+
+  const handleResend = async () => {
+    if (!email) {
+      toast({
+        title: 'Informe seu email',
+        description: 'Preencha o campo de email para reenviar a confirmação.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setResending(true)
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    })
+    setResending(false)
+    if (error) {
+      toast({
+        title: 'Não foi possível reenviar',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Email reenviado',
+        description: `Enviamos um novo email de confirmação para ${email}.`,
+      })
     }
   }
 
@@ -82,6 +127,18 @@ export default function Login() {
               {loading ? 'Autenticando...' : 'Acessar Sistema'}
             </Button>
           </form>
+          {showResend && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-11 text-base font-medium mt-4"
+              disabled={resending}
+              onClick={handleResend}
+            >
+              <MailCheck className="mr-2 h-4 w-4" />
+              {resending ? 'Enviando...' : 'Reenviar email de confirmação'}
+            </Button>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-3 border-t p-4">
           <p className="text-sm text-muted-foreground text-center">Ainda não tem uma conta?</p>

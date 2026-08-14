@@ -12,8 +12,9 @@ import {
   CardTitle,
   CardFooter,
 } from '@/components/ui/card'
-import { Building2, ArrowLeft } from 'lucide-react'
+import { Building2, ArrowLeft, MailCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Signup() {
   const [email, setEmail] = useState('')
@@ -21,9 +22,40 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [resending, setResending] = useState(false)
   const { signUp } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
+
+  const handleResend = async () => {
+    if (!email) {
+      toast({
+        title: 'Email não informado',
+        description: 'Preencha o campo de email para reenviar a confirmação.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setResending(true)
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    })
+    setResending(false)
+    if (error) {
+      toast({
+        title: 'Não foi possível reenviar',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Email reenviado',
+        description: `Enviamos um novo email de confirmação para ${email}.`,
+      })
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -86,6 +118,16 @@ export default function Signup() {
                 Enviamos um email de confirmação para <strong>{email}</strong>. Confirme seu email
                 para liberar o acesso ao sistema.
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={resending}
+                onClick={handleResend}
+              >
+                <MailCheck className="mr-2 h-4 w-4" />
+                {resending ? 'Enviando...' : 'Reenviar email de confirmação'}
+              </Button>
               <Button asChild variant="outline" className="w-full">
                 <Link to="/login">Ir para o Login</Link>
               </Button>

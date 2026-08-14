@@ -42,28 +42,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       })
   }
 
+  const applySession = (session: Session | null) => {
+    setSession(session)
+    setUser(session?.user ?? null)
+    if (session?.user) {
+      fetchProfile(session.user.id)
+    } else {
+      setProfile(null)
+    }
+    setLoading(false)
+  }
+
   useEffect(() => {
+    // Recover any session persisted in localStorage on first load.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session)
+    })
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
-    })
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session)
     })
     return () => subscription.unsubscribe()
   }, [])
