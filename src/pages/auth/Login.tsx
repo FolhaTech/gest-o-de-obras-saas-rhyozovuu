@@ -83,6 +83,12 @@ export default function Login() {
             </Button>
           </form>
         </CardContent>
+        <CardFooter className="flex flex-col gap-3 border-t p-4">
+          <p className="text-sm text-muted-foreground text-center">Ainda não tem uma conta?</p>
+          <Button asChild variant="default" className="w-full h-11 text-base font-medium">
+            <Link to="/signup">Criar Conta</Link>
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   )
