@@ -38,12 +38,13 @@ export default function ResetPassword() {
     setLoading(false)
 
     if (error) {
+      console.error('[ResetPassword] Supabase updatePassword error:', error)
       const msg = error.message || ''
       const lower = msg.toLowerCase()
       if (lower.includes('failed to fetch')) {
         toast({
           title: 'Erro de conexão',
-          description: 'Não foi possível contatar o Supabase para redefinir a senha.',
+          description: `Não foi possível contatar o Supabase para redefinir a senha (${msg || 'Network error'}).`,
           variant: 'destructive',
         })
       } else {

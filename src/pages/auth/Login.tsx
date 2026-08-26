@@ -29,45 +29,67 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const { error } = await signIn(email, password)
-    if (error) {
-      const message = error.message || ''
-      const lowerMsg = message.toLowerCase()
-      const isEmailNotConfirmed = lowerMsg.includes('email not confirmed')
-      const isFailedToFetch = lowerMsg.includes('failed to fetch') || lowerMsg.includes('network')
-      const isInvalidCredentials =
-        lowerMsg.includes('invalid login credentials') ||
-        lowerMsg.includes('invalid credentials') ||
-        lowerMsg.includes('invalid grant')
+    try {
+      const { error } = await signIn(email.trim(), password)
+      if (error) {
+        console.error('[Login] Supabase signIn error:', error)
+        const message = error.message || (typeof error === 'string' ? error : JSON.stringify(error))
+        const lowerMsg = message.toLowerCase()
+        const isEmailNotConfirmed = lowerMsg.includes('email not confirmed')
+        const isFailedToFetch =
+          lowerMsg.includes('failed to fetch') ||
+          lowerMsg.includes('network') ||
+          lowerMsg.includes('load failed') ||
+          lowerMsg.includes('fetch failed')
+        const isInvalidCredentials =
+          lowerMsg.includes('invalid login credentials') ||
+          lowerMsg.includes('invalid credentials') ||
+          lowerMsg.includes('invalid grant')
 
-      if (isEmailNotConfirmed) {
-        setShowResend(true)
-        toast({
-          title: 'Email não confirmado',
-          description:
-            'Sua conta foi criada, mas o email ainda não foi confirmado. Você pode confirmar pelo link recebido por email ou via SQL no Supabase.',
-          variant: 'destructive',
-        })
-      } else if (isFailedToFetch) {
-        toast({
-          title: 'Erro de conexão com o Supabase',
-          description:
-            'Não foi possível conectar ao servidor. Verifique a URL do projeto e sua conexão de rede.',
-          variant: 'destructive',
-        })
-      } else if (isInvalidCredentials) {
-        toast({
-          title: 'Credenciais inválidas',
-          description:
-            'Email ou senha incorretos. Se acabou de criar a conta, certifique-se de que o email está confirmado.',
-          variant: 'destructive',
-        })
+        if (isEmailNotConfirmed) {
+          setShowResend(true)
+          toast({
+            title: 'Email não confirmado',
+            description:
+              'Sua conta foi criada, mas o email ainda não foi confirmado. Verifique sua caixa de entrada ou reenvie a confirmação.',
+            variant: 'destructive',
+          })
+        } else if (isFailedToFetch) {
+          toast({
+            title: 'Erro de conexão com o Supabase',
+            description: `Não foi possível conectar ao servidor (${message || 'Failed to fetch'}). Verifique a URL do projeto e sua conexão de rede.`,
+            variant: 'destructive',
+          })
+        } else if (isInvalidCredentials) {
+          toast({
+            title: 'Credenciais inválidas',
+            description:
+              'Email ou senha incorretos. Verifique os dados digitados e tente novamente.',
+            variant: 'destructive',
+          })
+        } else {
+          toast({
+            title: 'Erro ao autenticar',
+            description: message,
+            variant: 'destructive',
+          })
+        }
       } else {
-        toast({ title: 'Erro ao autenticar', description: message, variant: 'destructive' })
+        toast({
+          title: 'Login realizado com sucesso!',
+          description: 'Acessando o sistema...',
+        })
+        navigate('/')
       }
+    } catch (err: any) {
+      console.error('[Login] Unexpected exception during login:', err)
+      toast({
+        title: 'Erro inesperado',
+        description: err?.message || 'Ocorreu um erro ao processar o login.',
+        variant: 'destructive',
+      })
+    } finally {
       setLoading(false)
-    } else {
-      navigate('/')
     }
   }
 
@@ -88,12 +110,13 @@ export default function Login() {
     })
     setResending(false)
     if (error) {
+      console.error('[Login] Supabase resend error:', error)
       const msg = error.message || ''
       const lower = msg.toLowerCase()
       if (lower.includes('failed to fetch')) {
         toast({
           title: 'Erro de conexão',
-          description: 'Não foi possível contatar o Supabase para reenviar o email.',
+          description: `Não foi possível contatar o Supabase para reenviar o email (${msg || 'Network error'}).`,
           variant: 'destructive',
         })
       } else {
@@ -130,12 +153,13 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
-                placeholder="fernando.andrade@folhatech.com.br"
+                placeholder="igor.arimura.arquitetura@hotmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
-            </div>
+            </div>{' '}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
@@ -149,8 +173,10 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
+                placeholder="Sua senha"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>

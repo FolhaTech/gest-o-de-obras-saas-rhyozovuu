@@ -29,12 +29,13 @@ export default function ForgotPassword() {
     setLoading(false)
 
     if (error) {
+      console.error('[ForgotPassword] Supabase resetPassword error:', error)
       const msg = error.message || ''
       const lower = msg.toLowerCase()
       if (lower.includes('failed to fetch')) {
         toast({
           title: 'Erro de conexão',
-          description: 'Não foi possível contatar o Supabase para recuperar a senha.',
+          description: `Não foi possível contatar o Supabase para recuperar a senha (${msg || 'Network error'}).`,
           variant: 'destructive',
         })
       } else {

@@ -88,13 +88,13 @@ export default function Signup() {
     setLoading(false)
 
     if (error) {
+      console.error('[Signup] Supabase signUp error:', error)
       const msg = error.message || ''
       const lower = msg.toLowerCase()
       if (lower.includes('failed to fetch')) {
         toast({
           title: 'Erro de conexão',
-          description:
-            'Não foi possível conectar ao Supabase para criar sua conta. Verifique sua chave de API e conexão de rede.',
+          description: `Não foi possível conectar ao Supabase (${msg || 'Network error'}). Verifique a URL do projeto e sua conexão de rede.`,
           variant: 'destructive',
         })
       } else {

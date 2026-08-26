@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string)?.trim()
-const SUPABASE_PUBLISHABLE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string)?.trim()
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string)?.trim() ||
+  'https://lsvqvfvkoilxhjefrqvq.supabase.co'
+const SUPABASE_PUBLISHABLE_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string)?.trim() ||
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string)?.trim() ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzdnF2ZnZrb2lseGhqZWZycXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NDIxMTgsImV4cCI6MjEwMjIxODExOH0.zO2BdAJgN6-TEp2U__prUuRyUMZ-CE5TlfbiDMtkj9Q'
 
 const DEFAULT_SUPABASE_URL = 'https://lsvqvfvkoilxhjefrqvq.supabase.co'
 
@@ -27,9 +32,9 @@ export const isSupabaseConfigured = Boolean(
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || !isJwtLike(SUPABASE_PUBLISHABLE_KEY)) {
   const problems: string[] = []
   if (!SUPABASE_URL) problems.push('VITE_SUPABASE_URL ausente')
-  if (!SUPABASE_PUBLISHABLE_KEY) problems.push('VITE_SUPABASE_PUBLISHABLE_KEY ausente')
-  else if (!isJwtLike(SUPABASE_PUBLISHABLE_KEY))
-    problems.push('VITE_SUPABASE_PUBLISHABLE_KEY com formato incomum')
+  if (!SUPABASE_PUBLISHABLE_KEY)
+    problems.push('VITE_SUPABASE_PUBLISHABLE_KEY / VITE_SUPABASE_ANON_KEY ausente')
+  else if (!isJwtLike(SUPABASE_PUBLISHABLE_KEY)) problems.push('Chave Supabase com formato incomum')
   console.warn(
     `[Supabase] Verificação de configuração: ${problems.join('; ')}. ` +
       `URL: ${SUPABASE_URL || DEFAULT_SUPABASE_URL}`,
