@@ -26,10 +26,20 @@ export default function ForgotPassword() {
     e.preventDefault()
     setLoading(true)
     const { error } = await resetPasswordForEmail(email)
-
     setLoading(false)
+
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+      const msg = error.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('failed to fetch')) {
+        toast({
+          title: 'Erro de conexão',
+          description: 'Não foi possível contatar o Supabase para recuperar a senha.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Erro', description: msg, variant: 'destructive' })
+      }
     } else {
       setSuccess(true)
     }

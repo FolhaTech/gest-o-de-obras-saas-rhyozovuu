@@ -69,13 +69,23 @@ export default function MateriaisList() {
   })
 
   const fetchData = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('materials')
-      .select('*, densidades_insumo(densidade_kg_m3, peso_unitario_kg)')
-      .order('name')
-    setMateriais(data || [])
-    setLoading(false)
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('materials')
+        .select('*, densidades_insumo(densidade_kg_m3, peso_unitario_kg)')
+        .order('name')
+      if (!error && data) {
+        setMateriais(data)
+      } else {
+        setMateriais([])
+      }
+    } catch (err) {
+      console.warn('[MateriaisList] Error fetching materials:', err)
+      setMateriais([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {

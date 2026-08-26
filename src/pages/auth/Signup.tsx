@@ -44,11 +44,21 @@ export default function Signup() {
     })
     setResending(false)
     if (error) {
-      toast({
-        title: 'Não foi possível reenviar',
-        description: error.message,
-        variant: 'destructive',
-      })
+      const msg = error.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('failed to fetch')) {
+        toast({
+          title: 'Erro de conexão',
+          description: 'Não foi possível contatar o Supabase para reenviar o email.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Não foi possível reenviar',
+          description: msg,
+          variant: 'destructive',
+        })
+      }
     } else {
       toast({
         title: 'Email reenviado',
@@ -78,7 +88,18 @@ export default function Signup() {
     setLoading(false)
 
     if (error) {
-      toast({ title: 'Erro ao criar conta', description: error.message, variant: 'destructive' })
+      const msg = error.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('failed to fetch')) {
+        toast({
+          title: 'Erro de conexão',
+          description:
+            'Não foi possível conectar ao Supabase para criar sua conta. Verifique sua chave de API e conexão de rede.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Erro ao criar conta', description: msg, variant: 'destructive' })
+      }
       return
     }
 

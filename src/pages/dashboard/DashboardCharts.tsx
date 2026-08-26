@@ -16,13 +16,21 @@ export default function DashboardCharts({ despesas }: DashboardChartsProps) {
   const [laborCost, setLaborCost] = useState(0)
 
   useEffect(() => {
+    let isMounted = true
     const fetchLabor = async () => {
-      const { data } = await supabase.from('external_contracts').select('total_value')
-      if (data) {
-        setLaborCost(data.reduce((acc, curr) => acc + Number(curr.total_value || 0), 0))
+      try {
+        const { data, error } = await supabase.from('external_contracts').select('total_value')
+        if (!error && data && isMounted) {
+          setLaborCost(data.reduce((acc, curr) => acc + Number(curr.total_value || 0), 0))
+        }
+      } catch (err) {
+        console.warn('[DashboardCharts] Error loading labor costs:', err)
       }
     }
     fetchLabor()
+    return () => {
+      isMounted = false
+    }
   }, [])
   const chartData = useMemo(() => {
     const expensesByCategory = despesas.reduce(

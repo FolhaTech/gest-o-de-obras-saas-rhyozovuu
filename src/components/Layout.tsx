@@ -17,15 +17,26 @@ export default function Layout() {
   } | null>(null)
 
   useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data) setProfile(data)
-        })
+    let isMounted = true
+    const loadProfile = async () => {
+      if (!user?.id) return
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (!error && data && isMounted) {
+          setProfile(data)
+        }
+      } catch (err) {
+        console.warn('[Layout] Could not load profile:', err)
+      }
+    }
+    loadProfile()
+    return () => {
+      isMounted = false
     }
   }, [user?.id])
 

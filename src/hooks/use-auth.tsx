@@ -31,15 +31,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = (userId: string) => {
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-      .then(({ data }) => {
-        if (data) setProfile(data)
-      })
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (!error && data) {
+        setProfile(data)
+      } else if (error) {
+        // Table may not exist yet or profile row hasn't been created
+        console.warn('[useAuth] Could not load profile:', error.message)
+      }
+    } catch (err) {
+      console.warn('[useAuth] Exception loading profile:', err)
+    }
   }
 
   const applySession = (session: Session | null) => {
@@ -55,9 +63,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     // Recover any session persisted in localStorage on first load.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      applySession(session)
-    })
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        applySession(session)
+      })
+      .catch((err) => {
+        console.warn('[useAuth] Error getting initial session:', err)
+        setLoading(false)
+      })
 
     const {
       data: { subscription },

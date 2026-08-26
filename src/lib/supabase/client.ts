@@ -10,18 +10,29 @@ const DEFAULT_SUPABASE_URL = 'https://lsvqvfvkoilxhjefrqvq.supabase.co'
 // The app needs both the project URL and the public anon (publishable) key.
 // Passing an empty/invalid key to createClient surfaces as a confusing
 // "invalid api key" error at runtime, so we validate before constructing.
-const isJwtLike = (key: string) => key.split('.').length === 3 && key.length > 40
+const isJwtLike = (key: string) => {
+  if (!key) return false
+  // Legacy anon keys are 3-part JWTs, newer supabase keys can also start with sb_ or eyJ
+  return (
+    (key.split('.').length === 3 && key.length > 30) ||
+    (key.startsWith('sb_') && key.length > 20) ||
+    key.startsWith('eyJ')
+  )
+}
+
+export const isSupabaseConfigured = Boolean(
+  SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && SUPABASE_PUBLISHABLE_KEY !== 'INVALID_KEY',
+)
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || !isJwtLike(SUPABASE_PUBLISHABLE_KEY)) {
   const problems: string[] = []
   if (!SUPABASE_URL) problems.push('VITE_SUPABASE_URL ausente')
   if (!SUPABASE_PUBLISHABLE_KEY) problems.push('VITE_SUPABASE_PUBLISHABLE_KEY ausente')
   else if (!isJwtLike(SUPABASE_PUBLISHABLE_KEY))
-    problems.push('VITE_SUPABASE_PUBLISHABLE_KEY não parece ser uma chave anon (JWT) válida')
-  console.error(
-    `[Supabase] Configuração inválida: ${problems.join('; ')}. ` +
-      `Defina VITE_SUPABASE_URL (${DEFAULT_SUPABASE_URL}) e a ` +
-      'VITE_SUPABASE_PUBLISHABLE_KEY (anon key pública do projeto) no ambiente.',
+    problems.push('VITE_SUPABASE_PUBLISHABLE_KEY com formato incomum')
+  console.warn(
+    `[Supabase] Verificação de configuração: ${problems.join('; ')}. ` +
+      `URL: ${SUPABASE_URL || DEFAULT_SUPABASE_URL}`,
   )
 }
 
@@ -35,6 +46,12 @@ export const supabase = createClient<Database>(
       storage: localStorage,
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    global: {
+      headers: {
+        'x-client-info': 'gestao-obras-saas',
+      },
     },
   },
 )

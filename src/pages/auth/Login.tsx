@@ -32,17 +32,38 @@ export default function Login() {
     const { error } = await signIn(email, password)
     if (error) {
       const message = error.message || ''
-      const isEmailNotConfirmed = message.toLowerCase().includes('email not confirmed')
+      const lowerMsg = message.toLowerCase()
+      const isEmailNotConfirmed = lowerMsg.includes('email not confirmed')
+      const isFailedToFetch = lowerMsg.includes('failed to fetch') || lowerMsg.includes('network')
+      const isInvalidCredentials =
+        lowerMsg.includes('invalid login credentials') ||
+        lowerMsg.includes('invalid credentials') ||
+        lowerMsg.includes('invalid grant')
+
       if (isEmailNotConfirmed) {
         setShowResend(true)
         toast({
           title: 'Email não confirmado',
           description:
-            'Sua conta foi criada, mas o email ainda não foi confirmado. Verifique sua caixa de entrada (e a pasta de spam) pelo email de confirmação.',
+            'Sua conta foi criada, mas o email ainda não foi confirmado. Você pode confirmar pelo link recebido por email ou via SQL no Supabase.',
+          variant: 'destructive',
+        })
+      } else if (isFailedToFetch) {
+        toast({
+          title: 'Erro de conexão com o Supabase',
+          description:
+            'Não foi possível conectar ao servidor. Verifique a URL do projeto e sua conexão de rede.',
+          variant: 'destructive',
+        })
+      } else if (isInvalidCredentials) {
+        toast({
+          title: 'Credenciais inválidas',
+          description:
+            'Email ou senha incorretos. Se acabou de criar a conta, certifique-se de que o email está confirmado.',
           variant: 'destructive',
         })
       } else {
-        toast({ title: 'Erro', description: message, variant: 'destructive' })
+        toast({ title: 'Erro ao autenticar', description: message, variant: 'destructive' })
       }
       setLoading(false)
     } else {
@@ -67,11 +88,21 @@ export default function Login() {
     })
     setResending(false)
     if (error) {
-      toast({
-        title: 'Não foi possível reenviar',
-        description: error.message,
-        variant: 'destructive',
-      })
+      const msg = error.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('failed to fetch')) {
+        toast({
+          title: 'Erro de conexão',
+          description: 'Não foi possível contatar o Supabase para reenviar o email.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Não foi possível reenviar',
+          description: msg,
+          variant: 'destructive',
+        })
+      }
     } else {
       toast({
         title: 'Email reenviado',

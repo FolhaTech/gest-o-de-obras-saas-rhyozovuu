@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import {
   AlertCircle,
@@ -8,22 +8,70 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  Package,
+  Database,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react'
 import { formatCurrency, getStatusColor, translateStatus, formatDate } from '@/lib/formatters'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import DashboardCharts from './dashboard/DashboardCharts'
 import { useData } from '@/hooks/use-data'
 import { Obra, Despesa, Receita, Material } from '@/types'
-import { Package } from 'lucide-react'
 
 export default function Index() {
-  const { data: obras, loading: loadObras } = useData<Obra>('works')
-  const { data: despesas, loading: loadDespesas } = useData<Despesa>('expenses')
-  const { data: receitas, loading: loadReceitas } = useData<Receita>('revenues')
-  const { data: materiais, loading: loadMateriais } = useData<Material>('materials')
+  const {
+    data: obras,
+    loading: loadObras,
+    error: errObras,
+    isTableMissing: missingObras,
+    isNetworkError: netObras,
+    refetch: refetchObras,
+  } = useData<Obra>('works')
 
-  if (loadObras || loadDespesas || loadReceitas || loadMateriais) {
+  const {
+    data: despesas,
+    loading: loadDespesas,
+    error: errDespesas,
+    isTableMissing: missingDespesas,
+    isNetworkError: netDespesas,
+    refetch: refetchDespesas,
+  } = useData<Despesa>('expenses')
+
+  const {
+    data: receitas,
+    loading: loadReceitas,
+    error: errReceitas,
+    isTableMissing: missingReceitas,
+    isNetworkError: netReceitas,
+    refetch: refetchReceitas,
+  } = useData<Receita>('revenues')
+
+  const {
+    data: materiais,
+    loading: loadMateriais,
+    error: errMateriais,
+    isTableMissing: missingMateriais,
+    isNetworkError: netMateriais,
+    refetch: refetchMateriais,
+  } = useData<Material>('materials')
+
+  const isLoading = loadObras || loadDespesas || loadReceitas || loadMateriais
+  const hasTableMissing = missingObras || missingDespesas || missingReceitas || missingMateriais
+  const hasNetworkError = netObras || netDespesas || netReceitas || netMateriais
+  const hasAnyError = Boolean(errObras || errDespesas || errReceitas || errMateriais)
+
+  const handleRefreshAll = () => {
+    refetchObras()
+    refetchDespesas()
+    refetchReceitas()
+    refetchMateriais()
+  }
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -66,7 +114,67 @@ export default function Index() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      {hasTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Configure seu banco de dados no Supabase para ver os indicadores
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            Algumas tabelas do sistema ainda não foram criadas ou inicializadas no projeto Supabase
+            conectado. Execute o script de migração SQL no seu painel Supabase para habilitar todos
+            os recursos e relatórios em tempo real.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshAll}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar Indicadores
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {hasNetworkError && !hasTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão com o Supabase</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar os dados atualizados. Verifique sua conexão com a internet ou
+            se as credenciais do Supabase estão ativas.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshAll}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Visão consolidada de obras, finanças e insumos.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshAll}
+          className="gap-2 self-start sm:self-auto"
+        >
+          <RefreshCw className="h-4 w-4" /> Atualizar
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="hover:shadow-md transition-shadow">

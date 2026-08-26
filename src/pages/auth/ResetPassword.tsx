@@ -35,10 +35,20 @@ export default function ResetPassword() {
 
     setLoading(true)
     const { error } = await updatePassword(password)
-
     setLoading(false)
+
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+      const msg = error.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('failed to fetch')) {
+        toast({
+          title: 'Erro de conexão',
+          description: 'Não foi possível contatar o Supabase para redefinir a senha.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Erro', description: msg, variant: 'destructive' })
+      }
     } else {
       toast({ title: 'Sucesso', description: 'Sua senha foi atualizada com sucesso!' })
       navigate('/login')

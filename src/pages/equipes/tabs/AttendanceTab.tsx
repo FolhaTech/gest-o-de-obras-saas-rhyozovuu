@@ -39,24 +39,29 @@ export default function AttendanceTab() {
   }, [weekStart])
 
   const fetchData = async () => {
-    setLoading(true)
-    const startDateStr = format(days[0], 'yyyy-MM-dd')
-    const endDateStr = format(days[6], 'yyyy-MM-dd')
+    try {
+      setLoading(true)
+      const startDateStr = format(days[0], 'yyyy-MM-dd')
+      const endDateStr = format(days[6], 'yyyy-MM-dd')
 
-    const [workersRes, recordsRes, extrasRes] = await Promise.all([
-      supabase.from('team_members').select('*').eq('status', 'active').order('name'),
-      supabase
-        .from('attendance_records')
-        .select('*')
-        .gte('date', startDateStr)
-        .lte('date', endDateStr),
-      supabase.from('attendance_extras').select('*').eq('week_start_date', startDateStr),
-    ])
+      const [workersRes, recordsRes, extrasRes] = await Promise.all([
+        supabase.from('team_members').select('*').eq('status', 'active').order('name'),
+        supabase
+          .from('attendance_records')
+          .select('*')
+          .gte('date', startDateStr)
+          .lte('date', endDateStr),
+        supabase.from('attendance_extras').select('*').eq('week_start_date', startDateStr),
+      ])
 
-    if (workersRes.data) setWorkers(workersRes.data)
-    if (recordsRes.data) setRecords(recordsRes.data)
-    if (extrasRes.data) setExtras(extrasRes.data)
-    setLoading(false)
+      if (workersRes?.data) setWorkers(workersRes.data)
+      if (recordsRes?.data) setRecords(recordsRes.data)
+      if (extrasRes?.data) setExtras(extrasRes.data)
+    } catch (err) {
+      console.warn('[AttendanceTab] Error fetching attendance data:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const togglePresence = async (workerId: string, currentStatus: boolean) => {
