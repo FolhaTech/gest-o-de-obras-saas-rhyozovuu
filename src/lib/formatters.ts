@@ -43,3 +43,32 @@ export function translateStatus(status: string) {
   }
   return map[status] || status
 }
+
+export function isMissingTableError(error: any): boolean {
+  if (!error) return false
+  const msg = typeof error === 'string' ? error : error?.message || error?.details || ''
+  const code = error?.code || ''
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    msg.includes('schema cache') ||
+    msg.includes('Could not find the table') ||
+    (msg.includes('relation') && msg.includes('does not exist'))
+  )
+}
+
+export function formatSupabaseError(error: any): string {
+  if (!error) return 'Erro desconhecido.'
+  if (isMissingTableError(error)) {
+    return 'A tabela correspondente ainda não foi criada no banco de dados Supabase. Execute o script SQL no Supabase SQL Editor.'
+  }
+  const msg = typeof error === 'string' ? error : error.message || ''
+  if (msg.includes('JWT') || msg.includes('token') || msg.includes('auth')) {
+    return 'Sessão expirada ou não autorizada. Faça login novamente.'
+  }
+  return msg || 'Ocorreu um erro ao comunicar com o servidor.'
+}
+
+export function formatErrorMessage(err: unknown): string {
+  return formatSupabaseError(err)
+}

@@ -10,19 +10,23 @@ export interface UseDataResult<T> {
   refetch: () => Promise<void>
 }
 
-function isMissingTableError(err: any): boolean {
+export function isMissingTableError(err: any): boolean {
   if (!err) return false
-  const msg = (err.message || '').toLowerCase()
+  const msg = (typeof err === 'string' ? err : err.message || err.details || '').toLowerCase()
   const code = (err.code || '').toString()
-  // PostgREST 42P01: undefined_table, PGRST204/PGRST200, 404 relation does not exist
+  // PostgREST PGRST205 / PGRST204 / PGRST200, Postgres 42P01: undefined_table, etc.
   return (
     code === '42P01' ||
+    code === 'PGRST205' ||
     code === 'PGRST204' ||
     code === 'PGRST200' ||
+    code === 'PGRST116' ||
+    msg.includes('schema cache') ||
     (msg.includes('relation') && msg.includes('does not exist')) ||
     (msg.includes('table') && msg.includes('does not exist')) ||
     msg.includes('could not find the table') ||
-    msg.includes('not found')
+    msg.includes('not find the table') ||
+    msg.includes('not found in the schema cache')
   )
 }
 
