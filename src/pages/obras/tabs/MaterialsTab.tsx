@@ -8,9 +8,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Plus, Edit2 } from 'lucide-react'
+import { Plus, Edit2, Database, RefreshCw, WifiOff } from 'lucide-react'
+import { isMissingTableError, isNetworkOrFetchError } from '@/hooks/use-data'
 import {
   Dialog,
   DialogContent,
@@ -46,6 +48,9 @@ type ConsolidateItem = {
 
 export default function MaterialsTab({ obraId, workArea }: { obraId: string; workArea?: number }) {
   const [loading, setLoading] = useState(true)
+  const [isTableMissing, setIsTableMissing] = useState(false)
+  const [isNetworkError, setIsNetworkError] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [rawData, setRawData] = useState<{
     workServices: any[]
     extraMaterials: any[]
@@ -63,8 +68,11 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setErrorMsg(null)
+    setIsTableMissing(false)
+    setIsNetworkError(false)
     try {
-      const [{ data: workServices }, { data: extraMaterials }] = await Promise.all([
+      const [wsRes, exRes] = await Promise.all([
         supabase
           .from('work_services')
           .select(`
@@ -84,18 +92,52 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
           .eq('work_id', obraId),
       ])
 
-      const wsIds = workServices?.map((ws) => ws.id) || []
-      const { data: consumptionData } = wsIds.length
-        ? await supabase.from('consumption_tracking').select('*').in('work_service_id', wsIds)
-        : { data: [] }
+      if (wsRes.error || exRes.error) {
+        const anyErr = wsRes.error || exRes.error
+        console.warn('[MaterialsTab] Supabase error:', anyErr)
+        if (isMissingTableError(anyErr)) {
+          setIsTableMissing(true)
+        } else if (isNetworkOrFetchError(anyErr)) {
+          setIsNetworkError(true)
+        } else {
+          setErrorMsg(anyErr?.message || 'Erro ao carregar materiais')
+        }
+      }
+
+      const workServices = wsRes.data || []
+      const extraMaterials = exRes.data || []
+
+      const wsIds = workServices.map((ws) => ws.id) || []
+      let consumptionData: any[] = []
+      if (wsIds.length > 0) {
+        const { data: cData, error: cErr } = await supabase
+          .from('consumption_tracking')
+          .select('*')
+          .in('work_service_id', wsIds)
+        if (!cErr && cData) {
+          consumptionData = cData
+        }
+      }
 
       setRawData({
-        workServices: workServices || [],
-        extraMaterials: extraMaterials || [],
-        consumptionData: consumptionData || [],
+        workServices,
+        extraMaterials,
+        consumptionData,
       })
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      console.warn('[MaterialsTab] Exception fetching:', e)
+      if (isMissingTableError(e)) {
+        setIsTableMissing(true)
+      } else if (isNetworkOrFetchError(e)) {
+        setIsNetworkError(true)
+      } else {
+        setErrorMsg(e?.message || 'Falha ao carregar materiais')
+      }
+      setRawData({
+        workServices: [],
+        extraMaterials: [],
+        consumptionData: [],
+      })
     } finally {
       setLoading(false)
     }
@@ -303,6 +345,50 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
 
   return (
     <div className="space-y-4 animate-fade-in-up">
+      {isTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Tabelas de materiais ainda não inicializadas no Supabase
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            As tabelas de materiais (
+            <code className="font-mono">materials, work_services, consumption_tracking</code>) ainda
+            não foram criadas no banco de dados. Execute o script SQL no Supabase para habilitar o
+            controle de insumos.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isNetworkError && !isTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar os materiais. Verifique sua conexão com o Supabase.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex justify-between items-center mb-4">
         <div>
           <h3 className="text-lg font-medium">Gestão de Materiais (KG)</h3>

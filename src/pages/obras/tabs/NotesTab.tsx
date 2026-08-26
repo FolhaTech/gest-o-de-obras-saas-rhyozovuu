@@ -13,10 +13,20 @@ import { Diario } from '@/types'
 import { formatDate } from '@/lib/formatters'
 import { Skeleton } from '@/components/ui/skeleton'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Database, RefreshCw, WifiOff } from 'lucide-react'
+import { isMissingTableError } from '@/hooks/use-data'
+
 export default function NotesTab({ obraId }: { obraId: string }) {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { data: notes, loading, refetch } = useDataFilter<Diario>('work_diaries', 'work_id', obraId)
+  const {
+    data: notes,
+    loading,
+    isTableMissing,
+    isNetworkError,
+    refetch,
+  } = useDataFilter<Diario>('work_diaries', 'work_id', obraId)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [noteDate, setNoteDate] = useState(new Date().toISOString().split('T')[0])
@@ -93,6 +103,49 @@ export default function NotesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-6">
+      {isTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Tabela do diário de obra não configurada
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            A tabela <code className="font-mono">work_diaries</code> ainda não foi criada no
+            Supabase. Execute o script de migração SQL para salvar notas e fotos.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isNetworkError && !isTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar as notas. Verifique sua conexão.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Nova Nota</CardTitle>

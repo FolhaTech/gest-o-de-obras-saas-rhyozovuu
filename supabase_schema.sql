@@ -1,4 +1,40 @@
+-- 3. TABELA: works (Obras do Sistema)
 -- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.works (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  address TEXT,
+  manager TEXT,
+  total_area NUMERIC(12, 2) DEFAULT 0,
+  start_date DATE,
+  end_date_planned DATE,
+  budget_planned NUMERIC(14, 2) DEFAULT 0,
+  progress_percentage NUMERIC(5, 2) DEFAULT 0,
+  status TEXT DEFAULT 'planning' CHECK (status IN ('planning', 'in_progress', 'delayed', 'completed', 'paused')),
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+=======
+-- ==============================================================================
+-- 3. TABELA: works (Obras do Sistema)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.works (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  client TEXT,
+  address TEXT,
+  manager TEXT,
+  total_area NUMERIC(12, 2) DEFAULT 0,
+  start_date DATE,
+  end_date_planned DATE,
+  contracted_value NUMERIC(14, 2) DEFAULT 0,
+  budget_planned NUMERIC(14, 2) DEFAULT 0,
+  progress_percentage NUMERIC(5, 2) DEFAULT 0,
+  status TEXT DEFAULT 'planning' CHECK (status IN ('planning', 'in_progress', 'delayed', 'completed', 'paused')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);==============================================================================
 -- SCHEMA COMPLETO DO SUPABASE - GESTÃO DE OBRAS SAAS
 -- Execute este script no SQL Editor do seu projeto Supabase:
 -- https://supabase.com/dashboard/project/_/sql

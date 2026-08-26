@@ -19,10 +19,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { CalendarDays, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, AlertCircle, CheckCircle2, Database, RefreshCw, WifiOff } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 
 export default function ScheduleTab({ obraId }: { obraId: string }) {
-  const { data: stages, loading } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
+  const {
+    data: stages,
+    loading,
+    isTableMissing,
+    isNetworkError,
+    refetch,
+  } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
 
   const validStages = useMemo(() => {
     return (stages || [])
@@ -73,6 +81,53 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
           <Skeleton className="h-64 w-full" />
         </CardContent>
       </Card>
+    )
+  }
+
+  if (isTableMissing) {
+    return (
+      <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+        <Database className="h-5 w-5 text-amber-600" />
+        <AlertTitle className="font-semibold text-amber-900">
+          Tabela de cronograma/etapas não configurada
+        </AlertTitle>
+        <AlertDescription className="text-amber-800 text-sm mt-1">
+          A tabela <code className="font-mono">work_stages</code> ainda não foi criada no Supabase.
+          Execute o script SQL para visualizar o gráfico Gantt.
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+            >
+              <RefreshCw className="h-4 w-4" /> Recarregar
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (isNetworkError) {
+    return (
+      <Alert variant="destructive">
+        <WifiOff className="h-5 w-5" />
+        <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+        <AlertDescription className="text-sm mt-1">
+          Não foi possível carregar as etapas do cronograma.
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2 bg-white text-destructive hover:bg-red-50"
+            >
+              <RefreshCw className="h-4 w-4" /> Tentar Novamente
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
     )
   }
 

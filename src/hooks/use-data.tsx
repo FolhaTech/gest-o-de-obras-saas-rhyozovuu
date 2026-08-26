@@ -12,33 +12,43 @@ export interface UseDataResult<T> {
 
 export function isMissingTableError(err: any): boolean {
   if (!err) return false
-  const msg = (typeof err === 'string' ? err : err.message || err.details || '').toLowerCase()
+  const msg = (
+    typeof err === 'string' ? err : `${err.message || ''} ${err.details || ''} ${err.hint || ''}`
+  ).toLowerCase()
   const code = (err.code || '').toString()
-  // PostgREST PGRST205 / PGRST204 / PGRST200, Postgres 42P01: undefined_table, etc.
+  // PostgREST PGRST205 / PGRST204 / PGRST200, Postgres 42P01: undefined_table, 42703 (undefined column), etc.
   return (
     code === '42P01' ||
     code === 'PGRST205' ||
     code === 'PGRST204' ||
     code === 'PGRST200' ||
     code === 'PGRST116' ||
+    code === '42703' ||
+    code === 'PGRST202' ||
     msg.includes('schema cache') ||
     (msg.includes('relation') && msg.includes('does not exist')) ||
     (msg.includes('table') && msg.includes('does not exist')) ||
     msg.includes('could not find the table') ||
     msg.includes('not find the table') ||
-    msg.includes('not found in the schema cache')
+    msg.includes('could not find the') ||
+    msg.includes('not found in the schema cache') ||
+    msg.includes('does not exist')
   )
 }
 
-function isNetworkOrFetchError(err: any): boolean {
+export function isNetworkOrFetchError(err: any): boolean {
   if (!err) return false
-  const msg = (err.message || '').toLowerCase()
+  const msg = (
+    typeof err === 'string' ? err : `${err.message || ''} ${err.details || ''}`
+  ).toLowerCase()
   return (
     msg.includes('failed to fetch') ||
     msg.includes('network error') ||
     msg.includes('networkrequestfailed') ||
     msg.includes('load failed') ||
-    msg.includes('fetch failed')
+    msg.includes('fetch failed') ||
+    msg.includes('err_connection_refused') ||
+    msg.includes('network')
   )
 }
 

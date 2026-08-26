@@ -46,21 +46,28 @@ export function translateStatus(status: string) {
 
 export function isMissingTableError(error: any): boolean {
   if (!error) return false
-  const msg = typeof error === 'string' ? error : error?.message || error?.details || ''
-  const code = error?.code || ''
+  const msg = (
+    typeof error === 'string' ? error : error?.message || error?.details || ''
+  ).toLowerCase()
+  const code = (error?.code || '').toString()
   return (
     code === 'PGRST205' ||
+    code === 'PGRST204' ||
+    code === 'PGRST200' ||
     code === '42P01' ||
+    code === '42703' ||
     msg.includes('schema cache') ||
-    msg.includes('Could not find the table') ||
-    (msg.includes('relation') && msg.includes('does not exist'))
+    msg.includes('could not find the table') ||
+    msg.includes('could not find the') ||
+    (msg.includes('relation') && msg.includes('does not exist')) ||
+    (msg.includes('column') && msg.includes('does not exist'))
   )
 }
 
 export function formatSupabaseError(error: any): string {
   if (!error) return 'Erro desconhecido.'
   if (isMissingTableError(error)) {
-    return 'A tabela correspondente ainda não foi criada no banco de dados Supabase. Execute o script SQL no Supabase SQL Editor.'
+    return 'A estrutura do banco de dados (tabela ou coluna) ainda não foi atualizada no Supabase. Execute o script de migração SQL no SQL Editor.'
   }
   const msg = typeof error === 'string' ? error : error.message || ''
   if (msg.includes('JWT') || msg.includes('token') || msg.includes('auth')) {

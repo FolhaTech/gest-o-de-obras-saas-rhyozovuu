@@ -25,8 +25,18 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Receita } from '@/types'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Database, RefreshCw, WifiOff } from 'lucide-react'
+import { isMissingTableError } from '@/hooks/use-data'
+
 export default function RevenuesTab({ obraId }: { obraId: string }) {
-  const { data: receitas, loading, refetch } = useDataFilter<Receita>('revenues', 'work_id', obraId)
+  const {
+    data: receitas,
+    loading,
+    isTableMissing,
+    isNetworkError,
+    refetch,
+  } = useDataFilter<Receita>('revenues', 'work_id', obraId)
   const { toast } = useToast()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -91,6 +101,49 @@ export default function RevenuesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
+      {isTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Tabela de receitas ainda não configurada
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            A tabela <code className="font-mono">revenues</code> ainda não foi criada no Supabase.
+            Execute o script de migração SQL para salvar e gerenciar entradas financeiras.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isNetworkError && !isTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar as receitas da obra.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
           <CardTitle className="text-sm font-medium">Total Recebido</CardTitle>

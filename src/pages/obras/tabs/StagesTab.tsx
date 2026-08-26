@@ -27,10 +27,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Database, RefreshCw, WifiOff } from 'lucide-react'
+import { isMissingTableError } from '@/hooks/use-data'
+
 export default function StagesTab({ obraId }: { obraId: string }) {
   const {
     data: obraStages,
     loading,
+    isTableMissing,
+    isNetworkError,
     refetch,
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
   const { toast } = useToast()
@@ -66,21 +72,37 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     e.preventDefault()
     const status =
       formData.progress === 100 ? 'completed' : formData.progress > 0 ? 'in_progress' : 'pending'
-    const { error } = await supabase.from('work_stages').insert({
-      work_id: obraId,
-      name: formData.name,
-      manager: formData.manager,
-      progress_percentage: formData.progress,
-      status: status,
-    })
+    try {
+      const { error } = await supabase.from('work_stages').insert({
+        work_id: obraId,
+        name: formData.name,
+        manager: formData.manager,
+        progress_percentage: formData.progress,
+        status: status,
+      })
 
-    if (!error) {
-      toast({ title: 'Etapa adicionada!' })
-      setOpen(false)
-      setFormData({ name: '', manager: '', progress: 0 })
-      refetch()
-    } else {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+      if (!error) {
+        toast({ title: 'Etapa adicionada!' })
+        setOpen(false)
+        setFormData({ name: '', manager: '', progress: 0 })
+        refetch()
+      } else {
+        if (isMissingTableError(error)) {
+          toast({
+            title: 'Tabela ausente no Supabase',
+            description: 'A tabela work_stages precisa ser criada no Supabase.',
+            variant: 'destructive',
+          })
+        } else {
+          toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+        }
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err?.message || 'Falha ao salvar',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -146,6 +168,49 @@ export default function StagesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-4">
+      {isTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Tabela de etapas ainda não criada no Supabase
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            A tabela <code className="font-mono">work_stages</code> ainda não existe. Execute o
+            script de migração no Supabase para salvar e gerenciar etapas da obra.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isNetworkError && !isTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar as etapas da obra.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-between items-center pb-2">
         <h3 className="text-lg font-semibold">Etapas da Obra</h3>
         <Dialog open={open} onOpenChange={setOpen}>

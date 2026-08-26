@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Table,
   TableBody,
@@ -10,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -27,8 +29,19 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Trash, Plus, Sparkles, Loader2, Info, Eye } from 'lucide-react'
+import {
+  Trash,
+  Plus,
+  Sparkles,
+  Loader2,
+  Info,
+  Eye,
+  Database,
+  RefreshCw,
+  WifiOff,
+} from 'lucide-react'
 import { ConversaoUnidadesService } from '@/lib/conversao-unidades'
+import { isMissingTableError, isNetworkOrFetchError } from '@/hooks/use-data'
 
 function CompositionDetails({
   wsId,
@@ -158,6 +171,8 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   const [dbMaterials, setDbMaterials] = useState<any[]>([])
   const [densities, setDensities] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
+  const [isTableMissing, setIsTableMissing] = useState(false)
+  const [isNetworkError, setIsNetworkError] = useState(false)
   const { toast } = useToast()
 
   const [open, setOpen] = useState(false)
@@ -174,30 +189,52 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
 
   const [selectedServiceComps, setSelectedServiceComps] = useState<any[]>([])
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
-    const [wsRes, catRes, matRes, densRes] = await Promise.all([
-      supabase.from('work_services').select('*, services(name, unit)').eq('work_id', obraId),
-      supabase.from('services').select('*'),
-      supabase.from('materials').select('*'),
-      supabase.from('densidades_insumo').select('*'),
-    ])
-    setServices(wsRes.data || [])
-    setCatalog(catRes.data || [])
-    setDbMaterials(matRes.data || [])
+    setIsTableMissing(false)
+    setIsNetworkError(false)
+    try {
+      const [wsRes, catRes, matRes, densRes] = await Promise.all([
+        supabase.from('work_services').select('*, services(name, unit)').eq('work_id', obraId),
+        supabase.from('services').select('*'),
+        supabase.from('materials').select('*'),
+        supabase.from('densidades_insumo').select('*'),
+      ])
 
-    const dMap: Record<string, any> = {}
-    densRes.data?.forEach((d) => {
-      if (d.material_id) dMap[d.material_id] = d
-    })
-    setDensities(dMap)
+      const anyErr = wsRes.error || catRes.error || matRes.error || densRes.error
+      if (anyErr) {
+        console.warn('[WorkServicesTab] Supabase error:', anyErr)
+        if (isMissingTableError(anyErr)) {
+          setIsTableMissing(true)
+        } else if (isNetworkOrFetchError(anyErr)) {
+          setIsNetworkError(true)
+        }
+      }
 
-    setLoading(false)
-  }
+      setServices(wsRes.data || [])
+      setCatalog(catRes.data || [])
+      setDbMaterials(matRes.data || [])
+
+      const dMap: Record<string, any> = {}
+      densRes.data?.forEach((d) => {
+        if (d.material_id) dMap[d.material_id] = d
+      })
+      setDensities(dMap)
+    } catch (e: any) {
+      console.warn('[WorkServicesTab] Exception:', e)
+      if (isMissingTableError(e)) {
+        setIsTableMissing(true)
+      } else if (isNetworkOrFetchError(e)) {
+        setIsNetworkError(true)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [obraId])
 
   useEffect(() => {
     fetchData()
-  }, [obraId])
+  }, [fetchData])
 
   useEffect(() => {
     if (selectedService) {
@@ -443,6 +480,50 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-4 animate-fade-in-up">
+      {isTableMissing && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <Database className="h-5 w-5 text-amber-600" />
+          <AlertTitle className="font-semibold text-amber-900">
+            Tabelas de serviços ainda não criadas no Supabase
+          </AlertTitle>
+          <AlertDescription className="text-amber-800 text-sm mt-1">
+            As tabelas <code className="font-mono">work_services</code> e{' '}
+            <code className="font-mono">services</code> ainda não foram configuradas. Execute o
+            script de migração no Supabase.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+              >
+                <RefreshCw className="h-4 w-4" /> Recarregar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isNetworkError && !isTableMissing && (
+        <Alert variant="destructive">
+          <WifiOff className="h-5 w-5" />
+          <AlertTitle className="font-semibold">Erro de conexão</AlertTitle>
+          <AlertDescription className="text-sm mt-1">
+            Não foi possível carregar os serviços. Verifique a conexão com o banco de dados.
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                className="gap-2 bg-white text-destructive hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4" /> Tentar Novamente
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-medium">Serviços Planejados</h3>
