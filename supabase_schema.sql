@@ -161,6 +161,15 @@ CREATE TABLE IF NOT EXISTS public.works (
 -- Adicionar foreign key de team_members -> works se ainda não existir
 DO $$
 BEGIN
+  -- Garantir que a coluna work_id existe (para tabelas criadas em execuções anteriores incompletas)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'team_members' AND column_name = 'work_id'
+  ) THEN
+    ALTER TABLE public.team_members ADD COLUMN work_id UUID;
+  END IF;
+
+  -- Adicionar foreign key se ainda não existir
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints 
     WHERE constraint_name = 'team_members_work_id_fkey' 
