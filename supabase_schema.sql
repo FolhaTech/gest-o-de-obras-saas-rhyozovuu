@@ -9,7 +9,8 @@
 --
 -- Características deste script:
 -- - Idempotente: pode ser executado múltiplas vezes com segurança (IF NOT EXISTS, CREATE OR REPLACE, DO blocks)
--- - 27 Tabelas estruturadas com seus tipos, constraints e relacionamentos
+-- - 25 Tabelas estruturadas com seus tipos, constraints e relacionamentos
+-- - Proteção com ALTER TABLE ... ADD COLUMN IF NOT EXISTS para suportar execuções parciais anteriores
 -- - Chaves estrangeiras (Foreign Keys) completas
 -- - Row Level Security (RLS) habilitado e com políticas completas
 -- - Índices de performance para colunas mais consultadas
@@ -107,7 +108,6 @@ CREATE TABLE IF NOT EXISTS public.services (
 );
 
 -- 2.7. TABELA: team_members (Membros da Equipe / Funcionários / Terceiros)
--- Nota: work_id e relacionamentos com works serão validados após a criação da tabela works
 CREATE TABLE IF NOT EXISTS public.team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS public.team_members (
   admission_date DATE,
   average_start_date DATE,
   participates_in_averages BOOLEAN DEFAULT true,
-  work_id UUID, -- Foreign key adicionada/garantida abaixo
+  work_id UUID,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -157,29 +157,6 @@ CREATE TABLE IF NOT EXISTS public.works (
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
-
--- Adicionar foreign key de team_members -> works se ainda não existir
-DO $$
-BEGIN
-  -- Garantir que a coluna work_id existe (para tabelas criadas em execuções anteriores incompletas)
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_schema = 'public' AND table_name = 'team_members' AND column_name = 'work_id'
-  ) THEN
-    ALTER TABLE public.team_members ADD COLUMN work_id UUID;
-  END IF;
-
-  -- Adicionar foreign key se ainda não existir
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'team_members_work_id_fkey' 
-      AND table_name = 'team_members'
-  ) THEN
-    ALTER TABLE public.team_members 
-      ADD CONSTRAINT team_members_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
-  END IF;
-END $$;
 
 -- 2.9. TABELA: materials (Catálogo de Materiais e Insumos)
 CREATE TABLE IF NOT EXISTS public.materials (
@@ -394,6 +371,542 @@ CREATE TABLE IF NOT EXISTS public.work_diaries (
 );
 
 -- ==============================================================================
+-- 2.26. GARANTIA DE COLUNAS E CONSTRAINTS (IDEMPOTÊNCIA PARA EXECUÇÕES PARCIAIS)
+-- Executado ANTES dos índices para evitar erros como "column does not exist"
+-- em bancos com schemas parciais/antigos criados anteriormente.
+-- ==============================================================================
+DO $$
+BEGIN
+  -- 1. profiles
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'engineer';
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 2. action_types
+  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
+  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 3. company_settings
+  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS company_name TEXT;
+  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS tax_id TEXT;
+  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS address TEXT;
+  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS contact_email TEXT;
+  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 4. dashboards
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS url TEXT;
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS display_time NUMERIC DEFAULT 30;
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS order_index NUMERIC DEFAULT 0;
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 5. display_settings
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS company_logo_url TEXT;
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS default_rotation_time NUMERIC DEFAULT 30;
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS show_clock BOOLEAN DEFAULT true;
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS show_header BOOLEAN DEFAULT true;
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS auto_refresh_on_switch BOOLEAN DEFAULT false;
+  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 6. services
+  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS unit TEXT;
+  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- 7. team_members
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS role TEXT;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS type TEXT;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS phone TEXT;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS pix_key TEXT;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS daily_cost NUMERIC DEFAULT 0;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS fixed_salary NUMERIC DEFAULT 0;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS payment_type TEXT DEFAULT 'daily';
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS admission_date DATE;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS average_start_date DATE;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS participates_in_averages BOOLEAN DEFAULT true;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- Foreign Key: team_members.work_id -> works(id)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'team_members_work_id_fkey' 
+      AND table_name = 'team_members'
+  ) THEN
+    ALTER TABLE public.team_members 
+      ADD CONSTRAINT team_members_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 8. works
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_cpf TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_email TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_phone TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS address TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS manager TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS service_type UUID;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS consultant_id UUID;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS pre_processual_agent_id UUID;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS start_date DATE;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS end_date_planned DATE;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS cancellation_date DATE;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS contracted_value NUMERIC DEFAULT 0;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS budget_planned NUMERIC DEFAULT 0;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS entry_value NUMERIC DEFAULT 0;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS entry_payment_method TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS is_entry_paid BOOLEAN DEFAULT false;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS installments NUMERIC DEFAULT 1;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS payment_method TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS internal_failure BOOLEAN DEFAULT false;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS progress_percentage NUMERIC DEFAULT 0;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'planned';
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS total_area NUMERIC DEFAULT 0;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  -- Foreign Keys da tabela works
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'works_service_type_fkey' AND table_name = 'works'
+  ) THEN
+    ALTER TABLE public.works 
+      ADD CONSTRAINT works_service_type_fkey 
+      FOREIGN KEY (service_type) REFERENCES public.action_types(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'works_consultant_id_fkey' AND table_name = 'works'
+  ) THEN
+    ALTER TABLE public.works 
+      ADD CONSTRAINT works_consultant_id_fkey 
+      FOREIGN KEY (consultant_id) REFERENCES public.team_members(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'works_pre_processual_agent_id_fkey' AND table_name = 'works'
+  ) THEN
+    ALTER TABLE public.works 
+      ADD CONSTRAINT works_pre_processual_agent_id_fkey 
+      FOREIGN KEY (pre_processual_agent_id) REFERENCES public.team_members(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 9. materials
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS category TEXT;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS supplier TEXT;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unit_of_measure TEXT;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unidade_nativa TEXT;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS peso_saco_kg NUMERIC;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS estoque_minimo_kg NUMERIC;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS stock_quantity NUMERIC DEFAULT 0;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS min_quantity NUMERIC DEFAULT 10;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unit_price NUMERIC DEFAULT 0;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'materials_work_id_fkey' AND table_name = 'materials'
+  ) THEN
+    ALTER TABLE public.materials 
+      ADD CONSTRAINT materials_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 10. densidades_insumo
+  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS densidade_kg_m3 NUMERIC;
+  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS peso_unitario_kg NUMERIC;
+  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS data_vigencia DATE;
+  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'densidades_insumo_material_id_fkey' AND table_name = 'densidades_insumo'
+  ) THEN
+    ALTER TABLE public.densidades_insumo 
+      ADD CONSTRAINT densidades_insumo_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 11. compositions
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS service_id UUID;
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS coefficient NUMERIC DEFAULT 1;
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS waste_percentage NUMERIC DEFAULT 0;
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS version NUMERIC DEFAULT 1;
+  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'compositions_service_id_fkey' AND table_name = 'compositions'
+  ) THEN
+    ALTER TABLE public.compositions 
+      ADD CONSTRAINT compositions_service_id_fkey 
+      FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'compositions_material_id_fkey' AND table_name = 'compositions'
+  ) THEN
+    ALTER TABLE public.compositions 
+      ADD CONSTRAINT compositions_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 12. work_stages
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS manager TEXT;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS start_date DATE;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS end_date_planned DATE;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS end_date_real DATE;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS progress_percentage NUMERIC DEFAULT 0;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_stages_work_id_fkey' AND table_name = 'work_stages'
+  ) THEN
+    ALTER TABLE public.work_stages 
+      ADD CONSTRAINT work_stages_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 13. work_services
+  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS service_id UUID;
+  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS target_quantity NUMERIC DEFAULT 0;
+  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_services_work_id_fkey' AND table_name = 'work_services'
+  ) THEN
+    ALTER TABLE public.work_services 
+      ADD CONSTRAINT work_services_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_services_service_id_fkey' AND table_name = 'work_services'
+  ) THEN
+    ALTER TABLE public.work_services 
+      ADD CONSTRAINT work_services_service_id_fkey 
+      FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE RESTRICT;
+  END IF;
+
+  -- 14. compositions_history
+  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS work_service_id UUID;
+  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS coefficient NUMERIC DEFAULT 1;
+  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS waste_percentage NUMERIC DEFAULT 0;
+  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'compositions_history_work_service_id_fkey' AND table_name = 'compositions_history'
+  ) THEN
+    ALTER TABLE public.compositions_history 
+      ADD CONSTRAINT compositions_history_work_service_id_fkey 
+      FOREIGN KEY (work_service_id) REFERENCES public.work_services(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'compositions_history_material_id_fkey' AND table_name = 'compositions_history'
+  ) THEN
+    ALTER TABLE public.compositions_history 
+      ADD CONSTRAINT compositions_history_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE RESTRICT;
+  END IF;
+
+  -- 15. consumption_tracking
+  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS work_service_id UUID;
+  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS quantity_actual NUMERIC DEFAULT 0;
+  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'consumption_tracking_work_service_id_fkey' AND table_name = 'consumption_tracking'
+  ) THEN
+    ALTER TABLE public.consumption_tracking 
+      ADD CONSTRAINT consumption_tracking_work_service_id_fkey 
+      FOREIGN KEY (work_service_id) REFERENCES public.work_services(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'consumption_tracking_material_id_fkey' AND table_name = 'consumption_tracking'
+  ) THEN
+    ALTER TABLE public.consumption_tracking 
+      ADD CONSTRAINT consumption_tracking_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE RESTRICT;
+  END IF;
+
+  -- 16. work_extra_materials
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS consumption_per_m2 NUMERIC;
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_extra_materials_work_id_fkey' AND table_name = 'work_extra_materials'
+  ) THEN
+    ALTER TABLE public.work_extra_materials 
+      ADD CONSTRAINT work_extra_materials_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_extra_materials_material_id_fkey' AND table_name = 'work_extra_materials'
+  ) THEN
+    ALTER TABLE public.work_extra_materials 
+      ADD CONSTRAINT work_extra_materials_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 17. material_movements
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS material_id UUID;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS author_id UUID;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS type TEXT;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'material_movements_material_id_fkey' AND table_name = 'material_movements'
+  ) THEN
+    ALTER TABLE public.material_movements 
+      ADD CONSTRAINT material_movements_material_id_fkey 
+      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'material_movements_work_id_fkey' AND table_name = 'material_movements'
+  ) THEN
+    ALTER TABLE public.material_movements 
+      ADD CONSTRAINT material_movements_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'material_movements_author_id_fkey' AND table_name = 'material_movements'
+  ) THEN
+    ALTER TABLE public.material_movements 
+      ADD CONSTRAINT material_movements_author_id_fkey 
+      FOREIGN KEY (author_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 18. service_providers
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS service_type TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS responsible_person TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS contact_phone TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS email TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS quality_rating TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS deadline_rating TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS team_level TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS observations TEXT;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'service_providers_work_id_fkey' AND table_name = 'service_providers'
+  ) THEN
+    ALTER TABLE public.service_providers 
+      ADD CONSTRAINT service_providers_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 19. external_contracts
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS provider_id UUID;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS service_description TEXT;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS unit TEXT;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS total_value NUMERIC DEFAULT 0;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS executed_quantity NUMERIC DEFAULT 0;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS target_date DATE;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS is_completed BOOLEAN DEFAULT false;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'external_contracts_provider_id_fkey' AND table_name = 'external_contracts'
+  ) THEN
+    ALTER TABLE public.external_contracts 
+      ADD CONSTRAINT external_contracts_provider_id_fkey 
+      FOREIGN KEY (provider_id) REFERENCES public.service_providers(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'external_contracts_work_id_fkey' AND table_name = 'external_contracts'
+  ) THEN
+    ALTER TABLE public.external_contracts 
+      ADD CONSTRAINT external_contracts_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 20. team_member_documents
+  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS team_member_id UUID;
+  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS name TEXT;
+  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS file_path TEXT;
+  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS file_type TEXT;
+  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'team_member_documents_team_member_id_fkey' AND table_name = 'team_member_documents'
+  ) THEN
+    ALTER TABLE public.team_member_documents 
+      ADD CONSTRAINT team_member_documents_team_member_id_fkey 
+      FOREIGN KEY (team_member_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 21. attendance_records
+  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS worker_id UUID;
+  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS date DATE;
+  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS is_present BOOLEAN DEFAULT true;
+  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'attendance_records_worker_id_fkey' AND table_name = 'attendance_records'
+  ) THEN
+    ALTER TABLE public.attendance_records 
+      ADD CONSTRAINT attendance_records_worker_id_fkey 
+      FOREIGN KEY (worker_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 22. attendance_extras
+  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS worker_id UUID;
+  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS week_start_date DATE;
+  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS extra_value NUMERIC DEFAULT 0;
+  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'attendance_extras_worker_id_fkey' AND table_name = 'attendance_extras'
+  ) THEN
+    ALTER TABLE public.attendance_extras 
+      ADD CONSTRAINT attendance_extras_worker_id_fkey 
+      FOREIGN KEY (worker_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 23. expenses
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS manager_id UUID;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS category TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS description TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS value NUMERIC DEFAULT 0;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_method TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS merchant_name TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS merchant_cnpj TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS metadata JSONB;
+  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'expenses_work_id_fkey' AND table_name = 'expenses'
+  ) THEN
+    ALTER TABLE public.expenses 
+      ADD CONSTRAINT expenses_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'expenses_manager_id_fkey' AND table_name = 'expenses'
+  ) THEN
+    ALTER TABLE public.expenses 
+      ADD CONSTRAINT expenses_manager_id_fkey 
+      FOREIGN KEY (manager_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+  END IF;
+
+  -- 24. revenues
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS source TEXT;
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS description TEXT;
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS value NUMERIC DEFAULT 0;
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'received';
+  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'revenues_work_id_fkey' AND table_name = 'revenues'
+  ) THEN
+    ALTER TABLE public.revenues 
+      ADD CONSTRAINT revenues_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  -- 25. work_diaries
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS work_id UUID;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS author_id UUID;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS description TEXT;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS occurrences TEXT;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS notes TEXT;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS weather TEXT;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS workers_count NUMERIC DEFAULT 0;
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS photos TEXT[];
+  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_diaries_work_id_fkey' AND table_name = 'work_diaries'
+  ) THEN
+    ALTER TABLE public.work_diaries 
+      ADD CONSTRAINT work_diaries_work_id_fkey 
+      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'work_diaries_author_id_fkey' AND table_name = 'work_diaries'
+  ) THEN
+    ALTER TABLE public.work_diaries 
+      ADD CONSTRAINT work_diaries_author_id_fkey 
+      FOREIGN KEY (author_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- ==============================================================================
 -- 3. ÍNDICES DE PERFORMANCE (COLUNAS FREQUENTEMENTE CONSULTADAS / JOINS)
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_works_status ON public.works(status);
@@ -546,7 +1059,7 @@ CREATE TRIGGER on_stage_progress_change
 
 -- ==============================================================================
 -- 5. ROW LEVEL SECURITY (RLS) & POLÍTICAS DE ACESSO
--- Todas as 27 tabelas possuem RLS habilitado e política permissiva para usuários autenticados
+-- Todas as 25 tabelas possuem RLS habilitado e política permissiva para usuários autenticados
 -- ==============================================================================
 DO $$
 DECLARE
