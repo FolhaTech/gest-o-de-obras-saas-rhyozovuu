@@ -25,8 +25,23 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==============================================================================
--- 2. FUNÇÃO AUXILIAR: is_admin
+-- 2. CRIAÇÃO DAS TABELAS (EM ORDEM DE DEPENDÊNCIA)
+-- ==============================================================================
+
+-- 2.1. TABELA: profiles (Perfis de usuários vinculados ao auth.users)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  email TEXT,
+  role TEXT DEFAULT 'engineer',
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- ==============================================================================
+-- FUNÇÃO AUXILIAR: is_admin
 -- Verifica se o usuário autenticado atual possui a role 'admin'
+-- (Criada após a tabela profiles para evitar erro 42P01)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
@@ -43,21 +58,7 @@ AS $$
   );
 $$;
 
--- ==============================================================================
--- 3. CRIAÇÃO DAS 27 TABELAS (EM ORDEM DE DEPENDÊNCIA)
--- ==============================================================================
-
--- 3.1. TABELA: profiles (Perfis de usuários vinculados ao auth.users)
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name TEXT NOT NULL,
-  email TEXT,
-  role TEXT DEFAULT 'engineer',
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
-);
-
--- 3.2. TABELA: action_types (Tipos de Ação / Tipos de Serviço de Obras)
+-- 2.2. TABELA: action_types (Tipos de Ação / Tipos de Serviço de Obras)
 CREATE TABLE IF NOT EXISTS public.action_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -65,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.action_types (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.3. TABELA: company_settings (Configurações Gerais da Empresa)
+-- 2.3. TABELA: company_settings (Configurações Gerais da Empresa)
 CREATE TABLE IF NOT EXISTS public.company_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_name TEXT,
@@ -75,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.4. TABELA: dashboards (Painéis e Dashboards de Visualização)
+-- 2.4. TABELA: dashboards (Painéis e Dashboards de Visualização)
 CREATE TABLE IF NOT EXISTS public.dashboards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -86,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.dashboards (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.5. TABELA: display_settings (Configurações de Exibição / Modo TV / Apresentação)
+-- 2.5. TABELA: display_settings (Configurações de Exibição / Modo TV / Apresentação)
 CREATE TABLE IF NOT EXISTS public.display_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_logo_url TEXT,
@@ -97,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.display_settings (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.6. TABELA: services (Catálogo Global de Serviços)
+-- 2.6. TABELA: services (Catálogo Global de Serviços)
 CREATE TABLE IF NOT EXISTS public.services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -105,7 +106,7 @@ CREATE TABLE IF NOT EXISTS public.services (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.7. TABELA: team_members (Membros da Equipe / Funcionários / Terceiros)
+-- 2.7. TABELA: team_members (Membros da Equipe / Funcionários / Terceiros)
 -- Nota: work_id e relacionamentos com works serão validados após a criação da tabela works
 CREATE TABLE IF NOT EXISTS public.team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -125,7 +126,7 @@ CREATE TABLE IF NOT EXISTS public.team_members (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.8. TABELA: works (Obras / Projetos)
+-- 2.8. TABELA: works (Obras / Projetos)
 CREATE TABLE IF NOT EXISTS public.works (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -171,7 +172,7 @@ BEGIN
   END IF;
 END $$;
 
--- 3.9. TABELA: materials (Catálogo de Materiais e Insumos)
+-- 2.9. TABELA: materials (Catálogo de Materiais e Insumos)
 CREATE TABLE IF NOT EXISTS public.materials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -189,7 +190,7 @@ CREATE TABLE IF NOT EXISTS public.materials (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.10. TABELA: densidades_insumo (Densidades e Pesos Unitários de Materiais)
+-- 2.10. TABELA: densidades_insumo (Densidades e Pesos Unitários de Materiais)
 CREATE TABLE IF NOT EXISTS public.densidades_insumo (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID REFERENCES public.materials(id) ON DELETE CASCADE,
@@ -199,7 +200,7 @@ CREATE TABLE IF NOT EXISTS public.densidades_insumo (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.11. TABELA: compositions (Composições de Insumos para Serviços Globais)
+-- 2.11. TABELA: compositions (Composições de Insumos para Serviços Globais)
 CREATE TABLE IF NOT EXISTS public.compositions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE CASCADE,
@@ -210,7 +211,7 @@ CREATE TABLE IF NOT EXISTS public.compositions (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.12. TABELA: work_stages (Etapas da Obra / Cronograma Gantt)
+-- 2.12. TABELA: work_stages (Etapas da Obra / Cronograma Gantt)
 CREATE TABLE IF NOT EXISTS public.work_stages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -225,7 +226,7 @@ CREATE TABLE IF NOT EXISTS public.work_stages (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.13. TABELA: work_services (Serviços Planejados na Obra)
+-- 2.13. TABELA: work_services (Serviços Planejados na Obra)
 CREATE TABLE IF NOT EXISTS public.work_services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID NOT NULL REFERENCES public.works(id) ON DELETE CASCADE,
@@ -235,7 +236,7 @@ CREATE TABLE IF NOT EXISTS public.work_services (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.14. TABELA: compositions_history (Histórico/Snapshot de Composição por Serviço da Obra)
+-- 2.14. TABELA: compositions_history (Histórico/Snapshot de Composição por Serviço da Obra)
 CREATE TABLE IF NOT EXISTS public.compositions_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_service_id UUID NOT NULL REFERENCES public.work_services(id) ON DELETE CASCADE,
@@ -245,7 +246,7 @@ CREATE TABLE IF NOT EXISTS public.compositions_history (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.15. TABELA: consumption_tracking (Acompanhamento do Consumo Real de Insumos)
+-- 2.15. TABELA: consumption_tracking (Acompanhamento do Consumo Real de Insumos)
 CREATE TABLE IF NOT EXISTS public.consumption_tracking (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_service_id UUID NOT NULL REFERENCES public.work_services(id) ON DELETE CASCADE,
@@ -255,7 +256,7 @@ CREATE TABLE IF NOT EXISTS public.consumption_tracking (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.16. TABELA: work_extra_materials (Materiais Extras e Adicionais da Obra)
+-- 2.16. TABELA: work_extra_materials (Materiais Extras e Adicionais da Obra)
 CREATE TABLE IF NOT EXISTS public.work_extra_materials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -266,7 +267,7 @@ CREATE TABLE IF NOT EXISTS public.work_extra_materials (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.17. TABELA: material_movements (Movimentações de Estoque - Entrada/Saída)
+-- 2.17. TABELA: material_movements (Movimentações de Estoque - Entrada/Saída)
 CREATE TABLE IF NOT EXISTS public.material_movements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID REFERENCES public.materials(id) ON DELETE CASCADE,
@@ -279,7 +280,7 @@ CREATE TABLE IF NOT EXISTS public.material_movements (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.18. TABELA: service_providers (Prestadores de Serviços / Empreiteiros)
+-- 2.18. TABELA: service_providers (Prestadores de Serviços / Empreiteiros)
 CREATE TABLE IF NOT EXISTS public.service_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -295,7 +296,7 @@ CREATE TABLE IF NOT EXISTS public.service_providers (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.19. TABELA: external_contracts (Contratos de Empreitadas / Contratos Externos)
+-- 2.19. TABELA: external_contracts (Contratos de Empreitadas / Contratos Externos)
 CREATE TABLE IF NOT EXISTS public.external_contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider_id UUID REFERENCES public.service_providers(id) ON DELETE SET NULL,
@@ -310,7 +311,7 @@ CREATE TABLE IF NOT EXISTS public.external_contracts (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.20. TABELA: team_member_documents (Documentos dos Membros da Equipe)
+-- 2.20. TABELA: team_member_documents (Documentos dos Membros da Equipe)
 CREATE TABLE IF NOT EXISTS public.team_member_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_member_id UUID NOT NULL REFERENCES public.team_members(id) ON DELETE CASCADE,
@@ -320,7 +321,7 @@ CREATE TABLE IF NOT EXISTS public.team_member_documents (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.21. TABELA: attendance_records (Registros Diários de Frequência/Presença)
+-- 2.21. TABELA: attendance_records (Registros Diários de Frequência/Presença)
 CREATE TABLE IF NOT EXISTS public.attendance_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   worker_id UUID REFERENCES public.team_members(id) ON DELETE CASCADE,
@@ -329,7 +330,7 @@ CREATE TABLE IF NOT EXISTS public.attendance_records (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.22. TABELA: attendance_extras (Valores Extras / Horas Extras Semanais)
+-- 2.22. TABELA: attendance_extras (Valores Extras / Horas Extras Semanais)
 CREATE TABLE IF NOT EXISTS public.attendance_extras (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   worker_id UUID REFERENCES public.team_members(id) ON DELETE CASCADE,
@@ -339,7 +340,7 @@ CREATE TABLE IF NOT EXISTS public.attendance_extras (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 3.23. TABELA: expenses (Despesas e Lançamentos Financeiros)
+-- 2.23. TABELA: expenses (Despesas e Lançamentos Financeiros)
 CREATE TABLE IF NOT EXISTS public.expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -356,7 +357,7 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.24. TABELA: revenues (Receitas / Aportes / Entradas Financeiras)
+-- 2.24. TABELA: revenues (Receitas / Aportes / Entradas Financeiras)
 CREATE TABLE IF NOT EXISTS public.revenues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -368,7 +369,7 @@ CREATE TABLE IF NOT EXISTS public.revenues (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3.25. TABELA: work_diaries (Diário de Obras / RDO)
+-- 2.25. TABELA: work_diaries (Diário de Obras / RDO)
 CREATE TABLE IF NOT EXISTS public.work_diaries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -384,7 +385,7 @@ CREATE TABLE IF NOT EXISTS public.work_diaries (
 );
 
 -- ==============================================================================
--- 4. ÍNDICES DE PERFORMANCE (COLUNAS FREQUENTEMENTE CONSULTADAS / JOINS)
+-- 3. ÍNDICES DE PERFORMANCE (COLUNAS FREQUENTEMENTE CONSULTADAS / JOINS)
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_works_status ON public.works(status);
 CREATE INDEX IF NOT EXISTS idx_works_service_type ON public.works(service_type);
@@ -450,10 +451,10 @@ CREATE INDEX IF NOT EXISTS idx_work_diaries_date ON public.work_diaries(date);
 CREATE INDEX IF NOT EXISTS idx_dashboards_order_index ON public.dashboards(order_index);
 
 -- ==============================================================================
--- 5. TRIGGERS E FUNÇÕES AUTOMÁTICAS
+-- 4. TRIGGERS E FUNÇÕES AUTOMÁTICAS
 -- ==============================================================================
 
--- 5.1. Trigger para criação automática de perfil ao registrar usuário no Supabase Auth
+-- 4.1. Trigger para criação automática de perfil ao registrar usuário no Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -478,7 +479,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT OR UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 5.2. Trigger para atualizar estoque com base em movimentações
+-- 4.2. Trigger para atualizar estoque com base em movimentações
 CREATE OR REPLACE FUNCTION public.handle_material_movement()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -500,7 +501,7 @@ CREATE TRIGGER on_material_movement
   AFTER INSERT ON public.material_movements
   FOR EACH ROW EXECUTE FUNCTION public.handle_material_movement();
 
--- 5.3. Trigger para recalcular progresso da obra a partir das etapas
+-- 4.3. Trigger para recalcular progresso da obra a partir das etapas
 CREATE OR REPLACE FUNCTION public.calculate_work_progress()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -535,7 +536,7 @@ CREATE TRIGGER on_stage_progress_change
   FOR EACH ROW EXECUTE FUNCTION public.calculate_work_progress();
 
 -- ==============================================================================
--- 6. ROW LEVEL SECURITY (RLS) & POLÍTICAS DE ACESSO
+-- 5. ROW LEVEL SECURITY (RLS) & POLÍTICAS DE ACESSO
 -- Todas as 27 tabelas possuem RLS habilitado e política permissiva para usuários autenticados
 -- ==============================================================================
 DO $$
@@ -609,7 +610,7 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 7. STORAGE BUCKETS (Arquivos, Fotos de Diário, Recibos e Documentos)
+-- 6. STORAGE BUCKETS (Arquivos, Fotos de Diário, Recibos e Documentos)
 -- ==============================================================================
 INSERT INTO storage.buckets (id, name, public)
 VALUES 
@@ -634,7 +635,7 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 8. REGISTROS INICIAIS / SEED PADRÃO (OPCIONAL / IDEMPOTENTE)
+-- 7. REGISTROS INICIAIS / SEED PADRÃO (OPCIONAL / IDEMPOTENTE)
 -- Garante configurações padrão de display e empresa se a tabela estiver vazia
 -- ==============================================================================
 INSERT INTO public.company_settings (id, company_name, tax_id, address, contact_email)
