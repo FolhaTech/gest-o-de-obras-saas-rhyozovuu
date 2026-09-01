@@ -1,36 +1,78 @@
 -- ==============================================================================
--- SCHEMA COMPLETO DO SUPABASE - GESTÃO DE OBRAS SAAS
--- Gerado com base nas definições de tipos em src/lib/supabase/types.ts
+-- SCHEMA COMPLETO E DEFINITIVO DO SUPABASE - GESTÃO DE OBRAS SAAS
+-- Projeto: Gestão de Obras SaaS
 --
--- Instruções de Execução:
--- 1. Abra o painel do seu projeto no Supabase: https://supabase.com/dashboard
--- 2. Vá em SQL Editor (Editor SQL)
--- 3. Crie uma nova query, cole todo o conteúdo deste script e clique em "RUN"
---
--- Características deste script:
--- - Idempotente: pode ser executado múltiplas vezes com segurança (IF NOT EXISTS, CREATE OR REPLACE, DO blocks)
--- - 25 Tabelas estruturadas com seus tipos, constraints e relacionamentos
--- - Proteção com ALTER TABLE ... ADD COLUMN IF NOT EXISTS para suportar execuções parciais anteriores
--- - Chaves estrangeiras (Foreign Keys) completas
--- - Row Level Security (RLS) habilitado e com políticas completas
--- - Índices de performance para colunas mais consultadas
--- - Triggers para criação automática de perfil de usuário e timestamps
--- - Função is_admin() implementada conforme especificado
--- - Configuração inicial de Storage Buckets e RLS
+-- INSTRUÇÕES DE USO NO SUPABASE:
+-- 1. Acesse o painel do Supabase: https://supabase.com/dashboard
+-- 2. Selecione seu projeto e navegue até "SQL Editor" no menu lateral.
+-- 3. Clique em "+ New Query" (Nova Consulta).
+-- 4. Copie TODO o conteúdo deste arquivo, cole no editor e clique em "RUN".
+-- 5. O script limpa qualquer resquício inconsistente anterior e recria 100%
+--    da estrutura de tabelas, relacionamentos, funções, triggers, RLS, buckets
+--    de storage e sementes (seeds) padrão sem erros.
 -- ==============================================================================
 
 -- ==============================================================================
--- 1. EXTENSÕES DO POSTGRESQL
+-- ETAPA 1: EXTENSÕES ESSENCIAIS DO POSTGRESQL
 -- ==============================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==============================================================================
--- 2. CRIAÇÃO DAS TABELAS (EM ORDEM DE DEPENDÊNCIA)
+-- ETAPA 2: LIMPEZA SEGURA DE ESTADO ANTERIOR (DROP SEGURO E EM ORDEM)
+-- Remove triggers, funções, tabelas e políticas anteriores sem quebrar extensões.
 -- ==============================================================================
 
--- 2.1. TABELA: profiles (Perfis de usuários vinculados ao auth.users)
-CREATE TABLE IF NOT EXISTS public.profiles (
+-- 2.1. Remoção de triggers antigos
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_material_movement ON public.material_movements;
+DROP TRIGGER IF EXISTS on_stage_progress_change ON public.work_stages;
+DROP TRIGGER IF EXISTS on_work_service_created ON public.work_services;
+DROP TRIGGER IF EXISTS on_works_area_update ON public.works;
+DROP TRIGGER IF EXISTS on_extra_material_consumption_update ON public.work_extra_materials;
+
+-- 2.2. Remoção de funções antigas
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS public.handle_material_movement() CASCADE;
+DROP FUNCTION IF EXISTS public.calculate_work_progress() CASCADE;
+DROP FUNCTION IF EXISTS public.snapshot_work_service_composition() CASCADE;
+DROP FUNCTION IF EXISTS public.recalculate_extra_materials_on_area_update() CASCADE;
+DROP FUNCTION IF EXISTS public.recalculate_extra_material_quantity() CASCADE;
+DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
+
+-- 2.3. Remoção de tabelas na ordem correta de dependência de chaves estrangeiras
+DROP TABLE IF EXISTS public.team_member_documents CASCADE;
+DROP TABLE IF EXISTS public.attendance_extras CASCADE;
+DROP TABLE IF EXISTS public.attendance_records CASCADE;
+DROP TABLE IF EXISTS public.external_contracts CASCADE;
+DROP TABLE IF EXISTS public.consumption_tracking CASCADE;
+DROP TABLE IF EXISTS public.compositions_history CASCADE;
+DROP TABLE IF EXISTS public.work_extra_materials CASCADE;
+DROP TABLE IF EXISTS public.work_services CASCADE;
+DROP TABLE IF EXISTS public.compositions CASCADE;
+DROP TABLE IF EXISTS public.densidades_insumo CASCADE;
+DROP TABLE IF EXISTS public.material_movements CASCADE;
+DROP TABLE IF EXISTS public.materials CASCADE;
+DROP TABLE IF EXISTS public.work_stages CASCADE;
+DROP TABLE IF EXISTS public.work_diaries CASCADE;
+DROP TABLE IF EXISTS public.revenues CASCADE;
+DROP TABLE IF EXISTS public.expenses CASCADE;
+DROP TABLE IF EXISTS public.service_providers CASCADE;
+DROP TABLE IF EXISTS public.works CASCADE;
+DROP TABLE IF EXISTS public.team_members CASCADE;
+DROP TABLE IF EXISTS public.services CASCADE;
+DROP TABLE IF EXISTS public.display_settings CASCADE;
+DROP TABLE IF EXISTS public.dashboards CASCADE;
+DROP TABLE IF EXISTS public.company_settings CASCADE;
+DROP TABLE IF EXISTS public.action_types CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- ==============================================================================
+-- ETAPA 3: CRIAÇÃO DAS 25 TABELAS NA ORDEM EXATA DE DEPENDÊNCIA DE CHAVES
+-- ==============================================================================
+
+-- 3.1. TABELA: profiles (Perfis de usuários vinculados ao auth.users)
+CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
   email TEXT,
@@ -39,11 +81,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- ==============================================================================
--- FUNÇÃO AUXILIAR: is_admin
--- Verifica se o usuário autenticado atual possui a role 'admin'
--- (Criada após a tabela profiles para evitar erro 42P01)
--- ==============================================================================
+-- 3.2. FUNÇÃO AUXILIAR: is_admin() (Usada por RLS e rotinas administrativas)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -59,16 +97,16 @@ AS $$
   );
 $$;
 
--- 2.2. TABELA: action_types (Tipos de Ação / Tipos de Serviço de Obras)
-CREATE TABLE IF NOT EXISTS public.action_types (
+-- 3.3. TABELA: action_types (Tipos de Ação / Tipos de Serviço de Obras)
+CREATE TABLE public.action_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.3. TABELA: company_settings (Configurações Gerais da Empresa)
-CREATE TABLE IF NOT EXISTS public.company_settings (
+-- 3.4. TABELA: company_settings (Configurações Gerais da Empresa)
+CREATE TABLE public.company_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_name TEXT,
   tax_id TEXT,
@@ -77,8 +115,8 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.4. TABELA: dashboards (Painéis e Dashboards de Visualização)
-CREATE TABLE IF NOT EXISTS public.dashboards (
+-- 3.5. TABELA: dashboards (Painéis e Dashboards de Apresentação)
+CREATE TABLE public.dashboards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   url TEXT NOT NULL,
@@ -88,8 +126,8 @@ CREATE TABLE IF NOT EXISTS public.dashboards (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.5. TABELA: display_settings (Configurações de Exibição / Modo TV / Apresentação)
-CREATE TABLE IF NOT EXISTS public.display_settings (
+-- 3.6. TABELA: display_settings (Configurações do Modo TV / Apresentação)
+CREATE TABLE public.display_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_logo_url TEXT,
   default_rotation_time NUMERIC NOT NULL DEFAULT 30,
@@ -99,16 +137,17 @@ CREATE TABLE IF NOT EXISTS public.display_settings (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.6. TABELA: services (Catálogo Global de Serviços)
-CREATE TABLE IF NOT EXISTS public.services (
+-- 3.7. TABELA: services (Catálogo Global de Serviços SINAPI / Composições)
+CREATE TABLE public.services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   unit TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.7. TABELA: team_members (Membros da Equipe / Funcionários / Terceiros)
-CREATE TABLE IF NOT EXISTS public.team_members (
+-- 3.8. TABELA: team_members (Membros da Equipe / Funcionários)
+-- Nota: a FK work_id -> works(id) é adicionada logo após a criação da tabela works
+CREATE TABLE public.team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   role TEXT,
@@ -126,8 +165,8 @@ CREATE TABLE IF NOT EXISTS public.team_members (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.8. TABELA: works (Obras / Projetos)
-CREATE TABLE IF NOT EXISTS public.works (
+-- 3.9. TABELA: works (Obras / Projetos)
+CREATE TABLE public.works (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   client TEXT,
@@ -158,8 +197,13 @@ CREATE TABLE IF NOT EXISTS public.works (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.9. TABELA: materials (Catálogo de Materiais e Insumos)
-CREATE TABLE IF NOT EXISTS public.materials (
+-- Adiciona a restrição de FK em team_members.work_id agora que works existe
+ALTER TABLE public.team_members 
+  ADD CONSTRAINT team_members_work_id_fkey 
+  FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
+
+-- 3.10. TABELA: materials (Catálogo de Materiais e Insumos)
+CREATE TABLE public.materials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   category TEXT,
@@ -176,8 +220,8 @@ CREATE TABLE IF NOT EXISTS public.materials (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.10. TABELA: densidades_insumo (Densidades e Pesos Unitários de Materiais)
-CREATE TABLE IF NOT EXISTS public.densidades_insumo (
+-- 3.11. TABELA: densidades_insumo (Densidades e Pesos Unitários de Materiais)
+CREATE TABLE public.densidades_insumo (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID REFERENCES public.materials(id) ON DELETE CASCADE,
   densidade_kg_m3 NUMERIC,
@@ -186,8 +230,8 @@ CREATE TABLE IF NOT EXISTS public.densidades_insumo (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.11. TABELA: compositions (Composições de Insumos para Serviços Globais)
-CREATE TABLE IF NOT EXISTS public.compositions (
+-- 3.12. TABELA: compositions (Composições Globais de Insumos para Serviços)
+CREATE TABLE public.compositions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE CASCADE,
   material_id UUID NOT NULL REFERENCES public.materials(id) ON DELETE CASCADE,
@@ -197,8 +241,8 @@ CREATE TABLE IF NOT EXISTS public.compositions (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.12. TABELA: work_stages (Etapas da Obra / Cronograma Gantt)
-CREATE TABLE IF NOT EXISTS public.work_stages (
+-- 3.13. TABELA: work_stages (Etapas da Obra / Cronograma Gantt)
+CREATE TABLE public.work_stages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -212,8 +256,8 @@ CREATE TABLE IF NOT EXISTS public.work_stages (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.13. TABELA: work_services (Serviços Planejados na Obra)
-CREATE TABLE IF NOT EXISTS public.work_services (
+-- 3.14. TABELA: work_services (Serviços Planejados na Obra)
+CREATE TABLE public.work_services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID NOT NULL REFERENCES public.works(id) ON DELETE CASCADE,
   service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
@@ -222,8 +266,8 @@ CREATE TABLE IF NOT EXISTS public.work_services (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.14. TABELA: compositions_history (Histórico/Snapshot de Composição por Serviço da Obra)
-CREATE TABLE IF NOT EXISTS public.compositions_history (
+-- 3.15. TABELA: compositions_history (Snapshot da Composição ao Vincular Serviço à Obra)
+CREATE TABLE public.compositions_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_service_id UUID NOT NULL REFERENCES public.work_services(id) ON DELETE CASCADE,
   material_id UUID NOT NULL REFERENCES public.materials(id) ON DELETE RESTRICT,
@@ -232,8 +276,8 @@ CREATE TABLE IF NOT EXISTS public.compositions_history (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.15. TABELA: consumption_tracking (Acompanhamento do Consumo Real de Insumos)
-CREATE TABLE IF NOT EXISTS public.consumption_tracking (
+-- 3.16. TABELA: consumption_tracking (Acompanhamento do Consumo Real de Insumos)
+CREATE TABLE public.consumption_tracking (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_service_id UUID NOT NULL REFERENCES public.work_services(id) ON DELETE CASCADE,
   material_id UUID NOT NULL REFERENCES public.materials(id) ON DELETE RESTRICT,
@@ -242,8 +286,8 @@ CREATE TABLE IF NOT EXISTS public.consumption_tracking (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.16. TABELA: work_extra_materials (Materiais Extras e Adicionais da Obra)
-CREATE TABLE IF NOT EXISTS public.work_extra_materials (
+-- 3.17. TABELA: work_extra_materials (Materiais Extras e Insumos Adicionais da Obra)
+CREATE TABLE public.work_extra_materials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
   material_id UUID REFERENCES public.materials(id) ON DELETE CASCADE,
@@ -253,8 +297,8 @@ CREATE TABLE IF NOT EXISTS public.work_extra_materials (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.17. TABELA: material_movements (Movimentações de Estoque - Entrada/Saída)
-CREATE TABLE IF NOT EXISTS public.material_movements (
+-- 3.18. TABELA: material_movements (Movimentações de Estoque - Entrada / Saída)
+CREATE TABLE public.material_movements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID REFERENCES public.materials(id) ON DELETE CASCADE,
   work_id UUID REFERENCES public.works(id) ON DELETE SET NULL,
@@ -266,8 +310,8 @@ CREATE TABLE IF NOT EXISTS public.material_movements (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.18. TABELA: service_providers (Prestadores de Serviços / Empreiteiros)
-CREATE TABLE IF NOT EXISTS public.service_providers (
+-- 3.19. TABELA: service_providers (Prestadores de Serviços / Empreiteiros)
+CREATE TABLE public.service_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   service_type TEXT,
@@ -282,8 +326,8 @@ CREATE TABLE IF NOT EXISTS public.service_providers (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.19. TABELA: external_contracts (Contratos de Empreitadas / Contratos Externos)
-CREATE TABLE IF NOT EXISTS public.external_contracts (
+-- 3.20. TABELA: external_contracts (Contratos de Empreitadas / Terceirizados)
+CREATE TABLE public.external_contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider_id UUID REFERENCES public.service_providers(id) ON DELETE SET NULL,
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
@@ -297,8 +341,8 @@ CREATE TABLE IF NOT EXISTS public.external_contracts (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.20. TABELA: team_member_documents (Documentos dos Membros da Equipe)
-CREATE TABLE IF NOT EXISTS public.team_member_documents (
+-- 3.21. TABELA: team_member_documents (Documentos dos Membros da Equipe)
+CREATE TABLE public.team_member_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_member_id UUID NOT NULL REFERENCES public.team_members(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -307,8 +351,8 @@ CREATE TABLE IF NOT EXISTS public.team_member_documents (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.21. TABELA: attendance_records (Registros Diários de Frequência/Presença)
-CREATE TABLE IF NOT EXISTS public.attendance_records (
+-- 3.22. TABELA: attendance_records (Registros Diários de Frequência/Presença)
+CREATE TABLE public.attendance_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   worker_id UUID REFERENCES public.team_members(id) ON DELETE CASCADE,
   date DATE NOT NULL,
@@ -316,8 +360,8 @@ CREATE TABLE IF NOT EXISTS public.attendance_records (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.22. TABELA: attendance_extras (Valores Extras / Horas Extras Semanais)
-CREATE TABLE IF NOT EXISTS public.attendance_extras (
+-- 3.23. TABELA: attendance_extras (Horas Extras e Valores Adicionais Semanais)
+CREATE TABLE public.attendance_extras (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   worker_id UUID REFERENCES public.team_members(id) ON DELETE CASCADE,
   week_start_date DATE NOT NULL,
@@ -326,8 +370,8 @@ CREATE TABLE IF NOT EXISTS public.attendance_extras (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 2.23. TABELA: expenses (Despesas e Lançamentos Financeiros)
-CREATE TABLE IF NOT EXISTS public.expenses (
+-- 3.24. TABELA: expenses (Despesas e Lançamentos Financeiros)
+CREATE TABLE public.expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
   manager_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -343,8 +387,8 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.24. TABELA: revenues (Receitas / Aportes / Entradas Financeiras)
-CREATE TABLE IF NOT EXISTS public.revenues (
+-- 3.25. TABELA: revenues (Receitas / Aportes e Entradas Financeiras)
+CREATE TABLE public.revenues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
   source TEXT,
@@ -355,8 +399,8 @@ CREATE TABLE IF NOT EXISTS public.revenues (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 2.25. TABELA: work_diaries (Diário de Obras / RDO)
-CREATE TABLE IF NOT EXISTS public.work_diaries (
+-- 3.26. TABELA: work_diaries (Diário de Obra / Relatório Diário de Obra - RDO)
+CREATE TABLE public.work_diaries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_id UUID REFERENCES public.works(id) ON DELETE CASCADE,
   author_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -371,543 +415,7 @@ CREATE TABLE IF NOT EXISTS public.work_diaries (
 );
 
 -- ==============================================================================
--- 2.26. GARANTIA DE COLUNAS E CONSTRAINTS (IDEMPOTÊNCIA PARA EXECUÇÕES PARCIAIS)
--- Executado ANTES dos índices para evitar erros como "column does not exist"
--- em bancos com schemas parciais/antigos criados anteriormente.
--- ==============================================================================
-DO $$
-BEGIN
-  -- 1. profiles
-  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
-  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
-  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'engineer';
-  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 2. action_types
-  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
-  ALTER TABLE public.action_types ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 3. company_settings
-  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS company_name TEXT;
-  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS tax_id TEXT;
-  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS address TEXT;
-  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS contact_email TEXT;
-  ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 4. dashboards
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS url TEXT;
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS display_time NUMERIC DEFAULT 30;
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS order_index NUMERIC DEFAULT 0;
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
-  ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 5. display_settings
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS company_logo_url TEXT;
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS default_rotation_time NUMERIC DEFAULT 30;
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS show_clock BOOLEAN DEFAULT true;
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS show_header BOOLEAN DEFAULT true;
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS auto_refresh_on_switch BOOLEAN DEFAULT false;
-  ALTER TABLE public.display_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 6. services
-  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS unit TEXT;
-  ALTER TABLE public.services ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- 7. team_members
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS role TEXT;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS type TEXT;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS phone TEXT;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS pix_key TEXT;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS daily_cost NUMERIC DEFAULT 0;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS fixed_salary NUMERIC DEFAULT 0;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS payment_type TEXT DEFAULT 'daily';
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS admission_date DATE;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS average_start_date DATE;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS participates_in_averages BOOLEAN DEFAULT true;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- Foreign Key: team_members.work_id -> works(id)
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'team_members_work_id_fkey' 
-      AND table_name = 'team_members'
-  ) THEN
-    ALTER TABLE public.team_members 
-      ADD CONSTRAINT team_members_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 8. works
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_cpf TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_email TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS client_phone TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS address TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS manager TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS service_type UUID;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS consultant_id UUID;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS pre_processual_agent_id UUID;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS start_date DATE;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS end_date_planned DATE;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS cancellation_date DATE;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS contracted_value NUMERIC DEFAULT 0;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS budget_planned NUMERIC DEFAULT 0;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS entry_value NUMERIC DEFAULT 0;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS entry_payment_method TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS is_entry_paid BOOLEAN DEFAULT false;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS installments NUMERIC DEFAULT 1;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS payment_method TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS internal_failure BOOLEAN DEFAULT false;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS progress_percentage NUMERIC DEFAULT 0;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'planned';
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS total_area NUMERIC DEFAULT 0;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.works ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  -- Foreign Keys da tabela works
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'works_service_type_fkey' AND table_name = 'works'
-  ) THEN
-    ALTER TABLE public.works 
-      ADD CONSTRAINT works_service_type_fkey 
-      FOREIGN KEY (service_type) REFERENCES public.action_types(id) ON DELETE SET NULL;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'works_consultant_id_fkey' AND table_name = 'works'
-  ) THEN
-    ALTER TABLE public.works 
-      ADD CONSTRAINT works_consultant_id_fkey 
-      FOREIGN KEY (consultant_id) REFERENCES public.team_members(id) ON DELETE SET NULL;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'works_pre_processual_agent_id_fkey' AND table_name = 'works'
-  ) THEN
-    ALTER TABLE public.works 
-      ADD CONSTRAINT works_pre_processual_agent_id_fkey 
-      FOREIGN KEY (pre_processual_agent_id) REFERENCES public.team_members(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 9. materials
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS category TEXT;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS supplier TEXT;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unit_of_measure TEXT;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unidade_nativa TEXT;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS peso_saco_kg NUMERIC;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS estoque_minimo_kg NUMERIC;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS stock_quantity NUMERIC DEFAULT 0;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS min_quantity NUMERIC DEFAULT 10;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS unit_price NUMERIC DEFAULT 0;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'materials_work_id_fkey' AND table_name = 'materials'
-  ) THEN
-    ALTER TABLE public.materials 
-      ADD CONSTRAINT materials_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 10. densidades_insumo
-  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS densidade_kg_m3 NUMERIC;
-  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS peso_unitario_kg NUMERIC;
-  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS data_vigencia DATE;
-  ALTER TABLE public.densidades_insumo ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'densidades_insumo_material_id_fkey' AND table_name = 'densidades_insumo'
-  ) THEN
-    ALTER TABLE public.densidades_insumo 
-      ADD CONSTRAINT densidades_insumo_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 11. compositions
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS service_id UUID;
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS coefficient NUMERIC DEFAULT 1;
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS waste_percentage NUMERIC DEFAULT 0;
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS version NUMERIC DEFAULT 1;
-  ALTER TABLE public.compositions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'compositions_service_id_fkey' AND table_name = 'compositions'
-  ) THEN
-    ALTER TABLE public.compositions 
-      ADD CONSTRAINT compositions_service_id_fkey 
-      FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'compositions_material_id_fkey' AND table_name = 'compositions'
-  ) THEN
-    ALTER TABLE public.compositions 
-      ADD CONSTRAINT compositions_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 12. work_stages
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS manager TEXT;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS start_date DATE;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS end_date_planned DATE;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS end_date_real DATE;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS progress_percentage NUMERIC DEFAULT 0;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.work_stages ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_stages_work_id_fkey' AND table_name = 'work_stages'
-  ) THEN
-    ALTER TABLE public.work_stages 
-      ADD CONSTRAINT work_stages_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 13. work_services
-  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS service_id UUID;
-  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS target_quantity NUMERIC DEFAULT 0;
-  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
-  ALTER TABLE public.work_services ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_services_work_id_fkey' AND table_name = 'work_services'
-  ) THEN
-    ALTER TABLE public.work_services 
-      ADD CONSTRAINT work_services_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_services_service_id_fkey' AND table_name = 'work_services'
-  ) THEN
-    ALTER TABLE public.work_services 
-      ADD CONSTRAINT work_services_service_id_fkey 
-      FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE RESTRICT;
-  END IF;
-
-  -- 14. compositions_history
-  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS work_service_id UUID;
-  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS coefficient NUMERIC DEFAULT 1;
-  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS waste_percentage NUMERIC DEFAULT 0;
-  ALTER TABLE public.compositions_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'compositions_history_work_service_id_fkey' AND table_name = 'compositions_history'
-  ) THEN
-    ALTER TABLE public.compositions_history 
-      ADD CONSTRAINT compositions_history_work_service_id_fkey 
-      FOREIGN KEY (work_service_id) REFERENCES public.work_services(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'compositions_history_material_id_fkey' AND table_name = 'compositions_history'
-  ) THEN
-    ALTER TABLE public.compositions_history 
-      ADD CONSTRAINT compositions_history_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE RESTRICT;
-  END IF;
-
-  -- 15. consumption_tracking
-  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS work_service_id UUID;
-  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS quantity_actual NUMERIC DEFAULT 0;
-  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
-  ALTER TABLE public.consumption_tracking ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'consumption_tracking_work_service_id_fkey' AND table_name = 'consumption_tracking'
-  ) THEN
-    ALTER TABLE public.consumption_tracking 
-      ADD CONSTRAINT consumption_tracking_work_service_id_fkey 
-      FOREIGN KEY (work_service_id) REFERENCES public.work_services(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'consumption_tracking_material_id_fkey' AND table_name = 'consumption_tracking'
-  ) THEN
-    ALTER TABLE public.consumption_tracking 
-      ADD CONSTRAINT consumption_tracking_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE RESTRICT;
-  END IF;
-
-  -- 16. work_extra_materials
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS consumption_per_m2 NUMERIC;
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.work_extra_materials ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_extra_materials_work_id_fkey' AND table_name = 'work_extra_materials'
-  ) THEN
-    ALTER TABLE public.work_extra_materials 
-      ADD CONSTRAINT work_extra_materials_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_extra_materials_material_id_fkey' AND table_name = 'work_extra_materials'
-  ) THEN
-    ALTER TABLE public.work_extra_materials 
-      ADD CONSTRAINT work_extra_materials_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 17. material_movements
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS material_id UUID;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS author_id UUID;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS type TEXT;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.material_movements ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'material_movements_material_id_fkey' AND table_name = 'material_movements'
-  ) THEN
-    ALTER TABLE public.material_movements 
-      ADD CONSTRAINT material_movements_material_id_fkey 
-      FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'material_movements_work_id_fkey' AND table_name = 'material_movements'
-  ) THEN
-    ALTER TABLE public.material_movements 
-      ADD CONSTRAINT material_movements_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'material_movements_author_id_fkey' AND table_name = 'material_movements'
-  ) THEN
-    ALTER TABLE public.material_movements 
-      ADD CONSTRAINT material_movements_author_id_fkey 
-      FOREIGN KEY (author_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 18. service_providers
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS service_type TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS responsible_person TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS contact_phone TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS email TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS quality_rating TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS deadline_rating TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS team_level TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS observations TEXT;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.service_providers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'service_providers_work_id_fkey' AND table_name = 'service_providers'
-  ) THEN
-    ALTER TABLE public.service_providers 
-      ADD CONSTRAINT service_providers_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 19. external_contracts
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS provider_id UUID;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS service_description TEXT;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS unit TEXT;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS total_value NUMERIC DEFAULT 0;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS executed_quantity NUMERIC DEFAULT 0;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS target_date DATE;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS is_completed BOOLEAN DEFAULT false;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.external_contracts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'external_contracts_provider_id_fkey' AND table_name = 'external_contracts'
-  ) THEN
-    ALTER TABLE public.external_contracts 
-      ADD CONSTRAINT external_contracts_provider_id_fkey 
-      FOREIGN KEY (provider_id) REFERENCES public.service_providers(id) ON DELETE SET NULL;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'external_contracts_work_id_fkey' AND table_name = 'external_contracts'
-  ) THEN
-    ALTER TABLE public.external_contracts 
-      ADD CONSTRAINT external_contracts_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 20. team_member_documents
-  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS team_member_id UUID;
-  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS name TEXT;
-  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS file_path TEXT;
-  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS file_type TEXT;
-  ALTER TABLE public.team_member_documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'team_member_documents_team_member_id_fkey' AND table_name = 'team_member_documents'
-  ) THEN
-    ALTER TABLE public.team_member_documents 
-      ADD CONSTRAINT team_member_documents_team_member_id_fkey 
-      FOREIGN KEY (team_member_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 21. attendance_records
-  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS worker_id UUID;
-  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS date DATE;
-  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS is_present BOOLEAN DEFAULT true;
-  ALTER TABLE public.attendance_records ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'attendance_records_worker_id_fkey' AND table_name = 'attendance_records'
-  ) THEN
-    ALTER TABLE public.attendance_records 
-      ADD CONSTRAINT attendance_records_worker_id_fkey 
-      FOREIGN KEY (worker_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 22. attendance_extras
-  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS worker_id UUID;
-  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS week_start_date DATE;
-  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS extra_value NUMERIC DEFAULT 0;
-  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.attendance_extras ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'attendance_extras_worker_id_fkey' AND table_name = 'attendance_extras'
-  ) THEN
-    ALTER TABLE public.attendance_extras 
-      ADD CONSTRAINT attendance_extras_worker_id_fkey 
-      FOREIGN KEY (worker_id) REFERENCES public.team_members(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 23. expenses
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS manager_id UUID;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS category TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS description TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS value NUMERIC DEFAULT 0;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_method TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS merchant_name TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS merchant_cnpj TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS receipt_url TEXT;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS metadata JSONB;
-  ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'expenses_work_id_fkey' AND table_name = 'expenses'
-  ) THEN
-    ALTER TABLE public.expenses 
-      ADD CONSTRAINT expenses_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'expenses_manager_id_fkey' AND table_name = 'expenses'
-  ) THEN
-    ALTER TABLE public.expenses 
-      ADD CONSTRAINT expenses_manager_id_fkey 
-      FOREIGN KEY (manager_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
-  END IF;
-
-  -- 24. revenues
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS source TEXT;
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS description TEXT;
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS value NUMERIC DEFAULT 0;
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'received';
-  ALTER TABLE public.revenues ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'revenues_work_id_fkey' AND table_name = 'revenues'
-  ) THEN
-    ALTER TABLE public.revenues 
-      ADD CONSTRAINT revenues_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  -- 25. work_diaries
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS work_id UUID;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS author_id UUID;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS description TEXT;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS occurrences TEXT;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS notes TEXT;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS weather TEXT;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS workers_count NUMERIC DEFAULT 0;
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS photos TEXT[];
-  ALTER TABLE public.work_diaries ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_diaries_work_id_fkey' AND table_name = 'work_diaries'
-  ) THEN
-    ALTER TABLE public.work_diaries 
-      ADD CONSTRAINT work_diaries_work_id_fkey 
-      FOREIGN KEY (work_id) REFERENCES public.works(id) ON DELETE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'work_diaries_author_id_fkey' AND table_name = 'work_diaries'
-  ) THEN
-    ALTER TABLE public.work_diaries 
-      ADD CONSTRAINT work_diaries_author_id_fkey 
-      FOREIGN KEY (author_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
--- ==============================================================================
--- 3. ÍNDICES DE PERFORMANCE (COLUNAS FREQUENTEMENTE CONSULTADAS / JOINS)
+-- ETAPA 4: ÍNDICES DE PERFORMANCE PARA OTIMIZAÇÃO DE CONSULTAS E JOINS
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_works_status ON public.works(status);
 CREATE INDEX IF NOT EXISTS idx_works_service_type ON public.works(service_type);
@@ -973,10 +481,10 @@ CREATE INDEX IF NOT EXISTS idx_work_diaries_date ON public.work_diaries(date);
 CREATE INDEX IF NOT EXISTS idx_dashboards_order_index ON public.dashboards(order_index);
 
 -- ==============================================================================
--- 4. TRIGGERS E FUNÇÕES AUTOMÁTICAS
+-- ETAPA 5: FUNÇÕES E TRIGGERS AUTOMÁTICOS DE REGRAS DE NEGÓCIO
 -- ==============================================================================
 
--- 4.1. Trigger para criação automática de perfil ao registrar usuário no Supabase Auth
+-- 5.1. Trigger: Criação automática de perfil ao cadastrar usuário no Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -996,12 +504,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT OR UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 4.2. Trigger para atualizar estoque com base em movimentações
+-- 5.2. Trigger: Atualização de saldo de estoque a cada movimentação (entrada/saída)
 CREATE OR REPLACE FUNCTION public.handle_material_movement()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1018,12 +525,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS on_material_movement ON public.material_movements;
 CREATE TRIGGER on_material_movement
   AFTER INSERT ON public.material_movements
   FOR EACH ROW EXECUTE FUNCTION public.handle_material_movement();
 
--- 4.3. Trigger para recalcular progresso da obra a partir das etapas
+-- 5.3. Trigger: Recalcular percentual de progresso da obra a partir das etapas
 CREATE OR REPLACE FUNCTION public.calculate_work_progress()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1052,14 +558,66 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS on_stage_progress_change ON public.work_stages;
 CREATE TRIGGER on_stage_progress_change
   AFTER INSERT OR UPDATE OR DELETE ON public.work_stages
   FOR EACH ROW EXECUTE FUNCTION public.calculate_work_progress();
 
+-- 5.4. Trigger: Snapshot da composição ao adicionar serviço à obra
+CREATE OR REPLACE FUNCTION public.snapshot_work_service_composition()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.compositions_history (work_service_id, material_id, coefficient, waste_percentage)
+  SELECT NEW.id, c.material_id, c.coefficient, c.waste_percentage
+  FROM public.compositions c
+  WHERE c.service_id = NEW.service_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_work_service_created
+  AFTER INSERT ON public.work_services
+  FOR EACH ROW EXECUTE FUNCTION public.snapshot_work_service_composition();
+
+-- 5.5. Trigger: Recalcular materiais extras quando a área total da obra for alterada
+CREATE OR REPLACE FUNCTION public.recalculate_extra_materials_on_area_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.total_area IS DISTINCT FROM NEW.total_area THEN
+    UPDATE public.work_extra_materials
+    SET quantity = CASE 
+      WHEN COALESCE(NEW.total_area, 0) > 0 AND consumption_per_m2 > 0 THEN consumption_per_m2 * NEW.total_area
+      ELSE 1 
+    END
+    WHERE work_id = NEW.id AND consumption_per_m2 IS NOT NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_works_area_update
+  AFTER UPDATE OF total_area ON public.works
+  FOR EACH ROW EXECUTE FUNCTION public.recalculate_extra_materials_on_area_update();
+
+-- 5.6. Trigger: Recalcular quantidade de material extra ao alterar consumo por m2
+CREATE OR REPLACE FUNCTION public.recalculate_extra_material_quantity()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_total_area numeric;
+BEGIN
+  IF NEW.consumption_per_m2 IS NOT NULL THEN
+    SELECT COALESCE(total_area, 0) INTO v_total_area FROM public.works WHERE id = NEW.work_id;
+    NEW.quantity := NEW.consumption_per_m2 * COALESCE(v_total_area, 0);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_extra_material_consumption_update
+  BEFORE INSERT OR UPDATE OF consumption_per_m2, work_id ON public.work_extra_materials
+  FOR EACH ROW EXECUTE FUNCTION public.recalculate_extra_material_quantity();
+
 -- ==============================================================================
--- 5. ROW LEVEL SECURITY (RLS) & POLÍTICAS DE ACESSO
--- Todas as 25 tabelas possuem RLS habilitado e política permissiva para usuários autenticados
+-- ETAPA 6: ROW LEVEL SECURITY (RLS) EM TODAS AS 25 TABELAS
 -- ==============================================================================
 DO $$
 DECLARE
@@ -1094,15 +652,10 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY all_tables
   LOOP
-    -- Habilita RLS na tabela
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
-
-    -- Remove política existente com mesmo nome para evitar duplicatas ao reexecutar
     EXECUTE format('DROP POLICY IF EXISTS "Allow authenticated full access" ON public.%I;', t);
     EXECUTE format('DROP POLICY IF EXISTS "allow_all_authenticated" ON public.%I;', t);
     EXECUTE format('DROP POLICY IF EXISTS "Allow auth all on %s" ON public.%I;', t, t);
-
-    -- Cria política padrão para usuários autenticados
     EXECUTE format(
       'CREATE POLICY "Allow authenticated full access" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true);',
       t
@@ -1110,7 +663,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Políticas de leitura opcionais para usuários anônimos (telas públicas / dashboards compartilhados)
+-- Políticas de leitura opcionais para usuários anônimos (telas públicas de dashboard/TV)
 DO $$
 DECLARE
   t TEXT;
@@ -1132,7 +685,7 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 6. STORAGE BUCKETS (Arquivos, Fotos de Diário, Recibos e Documentos)
+-- ETAPA 7: STORAGE BUCKETS E POLÍTICAS DE ACESSO A ARQUIVOS
 -- ==============================================================================
 INSERT INTO storage.buckets (id, name, public)
 VALUES 
@@ -1157,27 +710,218 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 7. REGISTROS INICIAIS / SEED PADRÃO (OPCIONAL / IDEMPOTENTE)
--- Garante configurações padrão de display e empresa se a tabela estiver vazia
+-- ETAPA 8: DADOS INICIAIS / SEEDS PADRÃO
 -- ==============================================================================
+
+-- 8.1. Configurações padrão da empresa
 INSERT INTO public.company_settings (id, company_name, tax_id, address, contact_email)
-SELECT 
+VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
   'Gestão de Obras Engenharia',
   '00.000.000/0001-00',
   'Av. Principal, 1000',
   'contato@gestaodeobras.com.br'
-WHERE NOT EXISTS (SELECT 1 FROM public.company_settings LIMIT 1);
+)
+ON CONFLICT (id) DO UPDATE 
+SET 
+  company_name = EXCLUDED.company_name,
+  tax_id = EXCLUDED.tax_id,
+  address = EXCLUDED.address,
+  contact_email = EXCLUDED.contact_email;
 
+-- 8.2. Configurações padrão do modo TV / Dashboards
 INSERT INTO public.display_settings (id, default_rotation_time, show_clock, show_header, auto_refresh_on_switch)
-SELECT 
+VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
   30,
   true,
   true,
   false
-WHERE NOT EXISTS (SELECT 1 FROM public.display_settings LIMIT 1);
+)
+ON CONFLICT (id) DO UPDATE 
+SET 
+  default_rotation_time = EXCLUDED.default_rotation_time,
+  show_clock = EXCLUDED.show_clock,
+  show_header = EXCLUDED.show_header,
+  auto_refresh_on_switch = EXCLUDED.auto_refresh_on_switch;
+
+-- 8.3. Sementes de Materiais e Composições Padrão SINAPI
+DO $$
+DECLARE
+  mat_tijolo_id UUID := gen_random_uuid();
+  mat_cimento_id UUID := gen_random_uuid();
+  mat_areia_id UUID := gen_random_uuid();
+  mat_cal_id UUID := gen_random_uuid();
+  mat_piso_id UUID := gen_random_uuid();
+  mat_argamassa_id UUID := gen_random_uuid();
+  mat_tinta_id UUID := gen_random_uuid();
+  mat_selador_id UUID := gen_random_uuid();
+
+  srv_alvenaria_id UUID := gen_random_uuid();
+  srv_chapisco_id UUID := gen_random_uuid();
+  srv_reboco_id UUID := gen_random_uuid();
+  srv_contrapiso_id UUID := gen_random_uuid();
+  srv_piso_id UUID := gen_random_uuid();
+  srv_pintura_id UUID := gen_random_uuid();
+BEGIN
+  -- Materiais de teste e composições
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Tijolo Cerâmico 9x19x19cm') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price)
+    VALUES (mat_tijolo_id, 'Tijolo Cerâmico 9x19x19cm', 'un', 'Alvenaria', 1000, 100, 1.20);
+  ELSE
+    SELECT id INTO mat_tijolo_id FROM public.materials WHERE name = 'Tijolo Cerâmico 9x19x19cm' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Cimento CP II 50kg') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price, peso_saco_kg, estoque_minimo_kg)
+    VALUES (mat_cimento_id, 'Cimento CP II 50kg', 'sc', 'Aglomerantes', 100, 20, 38.50, 50, 1000);
+  ELSE
+    SELECT id INTO mat_cimento_id FROM public.materials WHERE name = 'Cimento CP II 50kg' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Areia Média') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price)
+    VALUES (mat_areia_id, 'Areia Média', 'm3', 'Agregados', 20, 5, 120.00);
+  ELSE
+    SELECT id INTO mat_areia_id FROM public.materials WHERE name = 'Areia Média' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Cal Hidratada 20kg') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price, peso_saco_kg)
+    VALUES (mat_cal_id, 'Cal Hidratada 20kg', 'sc', 'Aglomerantes', 50, 10, 18.00, 20);
+  ELSE
+    SELECT id INTO mat_cal_id FROM public.materials WHERE name = 'Cal Hidratada 20kg' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Piso Cerâmico 60x60cm') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price)
+    VALUES (mat_piso_id, 'Piso Cerâmico 60x60cm', 'm2', 'Revestimentos', 200, 30, 45.00);
+  ELSE
+    SELECT id INTO mat_piso_id FROM public.materials WHERE name = 'Piso Cerâmico 60x60cm' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Argamassa ACII 20kg') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price, peso_saco_kg)
+    VALUES (mat_argamassa_id, 'Argamassa ACII 20kg', 'sc', 'Aglomerantes', 80, 15, 24.00, 20);
+  ELSE
+    SELECT id INTO mat_argamassa_id FROM public.materials WHERE name = 'Argamassa ACII 20kg' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Tinta Acrílica Branca 18L') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price)
+    VALUES (mat_tinta_id, 'Tinta Acrílica Branca 18L', 'l', 'Pintura', 30, 5, 210.00);
+  ELSE
+    SELECT id INTO mat_tinta_id FROM public.materials WHERE name = 'Tinta Acrílica Branca 18L' LIMIT 1;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.materials WHERE name = 'Selador Acrílico 18L') THEN
+    INSERT INTO public.materials (id, name, unit_of_measure, category, stock_quantity, min_quantity, unit_price)
+    VALUES (mat_selador_id, 'Selador Acrílico 18L', 'l', 'Pintura', 20, 5, 140.00);
+  ELSE
+    SELECT id INTO mat_selador_id FROM public.materials WHERE name = 'Selador Acrílico 18L' LIMIT 1;
+  END IF;
+
+  -- Serviços e suas Composições
+  -- 1. Alvenaria de Vedação SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Alvenaria de Vedação SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_alvenaria_id, 'Alvenaria de Vedação SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_alvenaria_id FROM public.services WHERE name = 'Alvenaria de Vedação SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_alvenaria_id, mat_tijolo_id, 25, 5),
+    (srv_alvenaria_id, mat_cimento_id, 0.15, 5),
+    (srv_alvenaria_id, mat_areia_id, 0.015, 10)
+  ON CONFLICT DO NOTHING;
+
+  -- 2. Chapisco SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Chapisco SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_chapisco_id, 'Chapisco SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_chapisco_id FROM public.services WHERE name = 'Chapisco SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_chapisco_id, mat_cimento_id, 0.05, 5),
+    (srv_chapisco_id, mat_areia_id, 0.005, 10)
+  ON CONFLICT DO NOTHING;
+
+  -- 3. Reboco SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Reboco SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_reboco_id, 'Reboco SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_reboco_id FROM public.services WHERE name = 'Reboco SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_reboco_id, mat_cimento_id, 0.1, 5),
+    (srv_reboco_id, mat_cal_id, 0.1, 5),
+    (srv_reboco_id, mat_areia_id, 0.018, 10)
+  ON CONFLICT DO NOTHING;
+
+  -- 4. Contrapiso SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Contrapiso SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_contrapiso_id, 'Contrapiso SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_contrapiso_id FROM public.services WHERE name = 'Contrapiso SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_contrapiso_id, mat_cimento_id, 0.2, 5),
+    (srv_contrapiso_id, mat_areia_id, 0.025, 10)
+  ON CONFLICT DO NOTHING;
+
+  -- 5. Assentamento de Piso Cerâmico SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Assentamento de Piso Cerâmico SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_piso_id, 'Assentamento de Piso Cerâmico SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_piso_id FROM public.services WHERE name = 'Assentamento de Piso Cerâmico SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_piso_id, mat_piso_id, 1, 10),
+    (srv_piso_id, mat_argamassa_id, 0.25, 5)
+  ON CONFLICT DO NOTHING;
+
+  -- 6. Pintura Acrílica 2 Demãos SINAPI
+  IF NOT EXISTS (SELECT 1 FROM public.services WHERE name = 'Pintura Acrílica 2 Demãos SINAPI') THEN
+    INSERT INTO public.services (id, name, unit) VALUES (srv_pintura_id, 'Pintura Acrílica 2 Demãos SINAPI', 'm2');
+  ELSE
+    SELECT id INTO srv_pintura_id FROM public.services WHERE name = 'Pintura Acrílica 2 Demãos SINAPI' LIMIT 1;
+  END IF;
+  INSERT INTO public.compositions (service_id, material_id, coefficient, waste_percentage)
+  VALUES 
+    (srv_pintura_id, mat_tinta_id, 0.25, 5),
+    (srv_pintura_id, mat_selador_id, 0.15, 5)
+  ON CONFLICT DO NOTHING;
+
+END $$;
+
+-- 8.4. Sincronização dos perfis de usuários existentes em auth.users para public.profiles
+-- Garante que quaisquer usuários já registrados no Supabase Auth tenham seu perfil
+-- criado imediatamente com seus devidos privilégios de acesso.
+DO $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, email, role)
+  SELECT 
+    id,
+    COALESCE(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', split_part(email, '@', 1), 'Usuário'),
+    email,
+    COALESCE(raw_user_meta_data->>'role', 'engineer')
+  FROM auth.users
+  ON CONFLICT (id) DO UPDATE
+  SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name);
+
+  -- Concede privilégio de admin para contas de e-mail específicas se existirem
+  UPDATE public.profiles
+  SET role = 'admin'
+  WHERE LOWER(email) IN ('igor.arimura.arquitetura@hotmail.com', 'tiago.izaias@folhatech.com.br');
+END $$;
 
 -- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA
+-- O banco de dados agora está 100% estruturado, seguro e funcional.
 -- ==============================================================================
