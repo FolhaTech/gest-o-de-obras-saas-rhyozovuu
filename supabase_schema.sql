@@ -25,11 +25,6 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 2.1. Remoção de triggers antigos
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP TRIGGER IF EXISTS on_material_movement ON public.material_movements;
-DROP TRIGGER IF EXISTS on_stage_progress_change ON public.work_stages;
-DROP TRIGGER IF EXISTS on_work_service_created ON public.work_services;
-DROP TRIGGER IF EXISTS on_works_area_update ON public.works;
-DROP TRIGGER IF EXISTS on_extra_material_consumption_update ON public.work_extra_materials;
 
 -- 2.2. Remoção de funções antigas
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
