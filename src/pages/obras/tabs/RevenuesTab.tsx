@@ -23,13 +23,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataFilter } from '@/hooks/use-data'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Receita } from '@/types'
-
+import { Receita, Despesa, Obra } from '@/types'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Database, RefreshCw, WifiOff } from 'lucide-react'
-import { isMissingTableError } from '@/hooks/use-data'
+import { calculateWorkFinancialMetrics } from '@/lib/financial-calculator'
+import { WorkFinancialReturnSection } from '@/components/financial/WorkFinancialReturnSection'
 
-export default function RevenuesTab({ obraId }: { obraId: string }) {
+export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: Obra }) {
   const {
     data: receitas,
     loading,
@@ -37,6 +37,13 @@ export default function RevenuesTab({ obraId }: { obraId: string }) {
     isNetworkError,
     refetch,
   } = useDataFilter<Receita>('revenues', 'work_id', obraId)
+
+  const { data: despesas, refetch: refetchDespesas } = useDataFilter<Despesa>(
+    'expenses',
+    'work_id',
+    obraId,
+  )
+
   const { toast } = useToast()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -54,6 +61,14 @@ export default function RevenuesTab({ obraId }: { obraId: string }) {
   }
 
   const total = receitas?.reduce((acc, curr) => acc + Number(curr.value), 0) || 0
+
+  const metrics = obra
+    ? calculateWorkFinancialMetrics({
+        obra,
+        expenses: despesas,
+        revenues: receitas,
+      })
+    : null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -144,17 +159,7 @@ export default function RevenuesTab({ obraId }: { obraId: string }) {
         </Alert>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-          <CardTitle className="text-sm font-medium">Total Recebido</CardTitle>
-          <DollarSign className="w-4 h-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-green-600 dark:text-green-500">
-            {formatCurrency(total)}
-          </div>
-        </CardContent>
-      </Card>
+      {obra && metrics && <WorkFinancialReturnSection obra={obra} metrics={metrics} />}
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Histórico de Receitas</h3>

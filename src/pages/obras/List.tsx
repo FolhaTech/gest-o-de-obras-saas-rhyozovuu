@@ -35,19 +35,39 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { getStatusColor, formatDate, formatCurrency, translateStatus } from '@/lib/formatters'
 import { useData, isMissingTableError, isNetworkOrFetchError } from '@/hooks/use-data'
-import { Obra } from '@/types'
+import { Obra, Despesa, Receita } from '@/types'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { WorkRoiBadge } from '@/components/financial/WorkRoiBadge'
+import { calculateWorkFinancialMetrics } from '@/lib/financial-calculator'
 
 export default function ObrasList() {
   const {
     data: obras,
-    loading,
+    loading: loadingObras,
     error,
     isTableMissing,
     isNetworkError,
-    refetch,
+    refetch: refetchObras,
   } = useData<Obra>('works')
+
+  const {
+    data: allExpenses,
+    loading: loadingExpenses,
+    refetch: refetchExpenses,
+  } = useData<Despesa>('expenses')
+
+  const {
+    data: allRevenues,
+    loading: loadingRevenues,
+    refetch: refetchRevenues,
+  } = useData<Receita>('revenues')
+
+  const loading = loadingObras
+
+  const refetch = async () => {
+    await Promise.allSettled([refetchObras(), refetchExpenses(), refetchRevenues()])
+  }
 
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -378,48 +398,76 @@ export default function ObrasList() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {obras.map((obra) => (
-            <Link key={obra.id} to={`/obras/${obra.id}`}>
-              <Card className="hover:shadow-md transition-all cursor-pointer h-full flex flex-col group">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <Badge variant="outline" className={getStatusColor(obra.status)}>
-                      {translateStatus(obra.status)}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-xl group-hover:text-primary transition-colors">
-                    {obra.name}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {obra.client || 'Sem cliente informado'}
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-3 flex-1">
-                  <div className="flex items-center text-sm text-muted-foreground gap-2">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{obra.address || 'Sem endereço'}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-muted-foreground gap-2">
-                    <Calendar className="h-4 w-4 shrink-0" />
-                    <span>{formatDate(obra.end_date_planned)} (Previsão)</span>
-                  </div>
-                  <div className="pt-2">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium">Progresso</span>
-                      <span>{obra.progress_percentage || 0}%</span>
+          {obras.map((obra) => {
+            const obraExpenses = allExpenses?.filter((e) => e.work_id === obra.id) || []
+            const obraRevenues = allRevenues?.filter((r) => r.work_id === obra.id) || []
+            const metrics = calculateWorkFinancialMetrics({
+              obra,
+              expenses: obraExpenses,
+              revenues: obraRevenues,
+            })
+
+            return (
+              <Link key={obra.id} to={`/obras/${obra.id}`}>
+                <Card className="hover:shadow-md transition-all cursor-pointer h-full flex flex-col group">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <Badge variant="outline" className={getStatusColor(obra.status)}>
+                        {translateStatus(obra.status)}
+                      </Badge>
+                      <WorkRoiBadge
+                        roiPercentage={metrics.roiPercentage}
+                        status={metrics.roiStatus}
+                      />
                     </div>
-                    <Progress value={Number(obra.progress_percentage) || 0} className="h-2" />
-                  </div>
-                </CardContent>
-                <CardFooter className="bg-muted/30 border-t py-3">
-                  <div className="w-full flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Orçamento</span>
-                    <span className="font-semibold">{formatCurrency(obra.budget_planned)}</span>
-                  </div>
-                </CardFooter>
-              </Card>
-            </Link>
-          ))}
+                    <CardTitle className="text-xl group-hover:text-primary transition-colors">
+                      {obra.name}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {obra.client || 'Sem cliente informado'}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3 flex-1">
+                    <div className="flex items-center text-sm text-muted-foreground gap-2">
+                      <MapPin className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{obra.address || 'Sem endereço'}</span>
+                    </div>
+                    <div className="flex items-center text-sm text-muted-foreground gap-2">
+                      <Calendar className="h-4 w-4 shrink-0" />
+                      <span>{formatDate(obra.end_date_planned)} (Previsão)</span>
+                    </div>
+                    <div className="pt-2">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium">Progresso</span>
+                        <span>{obra.progress_percentage || 0}%</span>
+                      </div>
+                      <Progress value={Number(obra.progress_percentage) || 0} className="h-2" />
+                    </div>
+                  </CardContent>
+                  <CardFooter className="bg-muted/30 border-t py-3 flex-col gap-1.5 items-stretch">
+                    <div className="w-full flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Orçamento</span>
+                      <span className="font-semibold">{formatCurrency(obra.budget_planned)}</span>
+                    </div>
+                    {metrics.breakEvenValue > 0 && (
+                      <div className="w-full flex justify-between items-center text-xs text-muted-foreground">
+                        <span>Ponto de Equilíbrio</span>
+                        <span
+                          className={
+                            metrics.hasReachedBreakEven ? 'text-emerald-600 font-medium' : ''
+                          }
+                        >
+                          {metrics.breakEvenPercentage !== null
+                            ? `${metrics.breakEvenPercentage.toFixed(0)}% cobrindo`
+                            : '—'}
+                        </span>
+                      </div>
+                    )}
+                  </CardFooter>
+                </Card>
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>

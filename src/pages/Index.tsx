@@ -112,6 +112,11 @@ export default function Index() {
   const budgetConsumedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
   const balance = totalRevenue - totalSpent
 
+  // ROI Global da Empresa
+  const globalInvestment = totalSpent > 0 ? totalSpent : totalBudget
+  const globalRoi =
+    globalInvestment > 0 ? ((totalRevenue - globalInvestment) / globalInvestment) * 100 : null
+
   return (
     <div className="space-y-6">
       {hasTableMissing && (
@@ -233,7 +238,7 @@ export default function Index() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -267,6 +272,24 @@ export default function Index() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{formatCurrency(balance)}</div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              ROI Global Consolidado
+            </CardTitle>
+            <TrendingUp
+              className={`h-4 w-4 ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-500' : 'text-red-500'}`}
+            />
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`text-2xl font-bold ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+            >
+              {globalRoi !== null ? `${globalRoi > 0 ? '+' : ''}${globalRoi.toFixed(1)}%` : '—'}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Retorno sobre o total investido</p>
           </CardContent>
         </Card>
       </div>

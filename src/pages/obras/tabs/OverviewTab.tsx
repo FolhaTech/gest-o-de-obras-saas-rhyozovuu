@@ -1,17 +1,25 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/formatters'
-import { Obra, Despesa } from '@/types'
+import { Obra, Despesa, Receita, Diario } from '@/types'
 import { Calendar, User, MapPin, NotebookPen } from 'lucide-react'
 import { useDataFilter } from '@/hooks/use-data'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Diario } from '@/types'
 import { Button } from '@/components/ui/button'
-
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Database, RefreshCw } from 'lucide-react'
+import { calculateWorkFinancialMetrics } from '@/lib/financial-calculator'
+import { WorkFinancialReturnSection } from '@/components/financial/WorkFinancialReturnSection'
 
-export default function OverviewTab({ obra, onAddNote }: { obra: Obra; onAddNote: () => void }) {
+export default function OverviewTab({
+  obra,
+  onAddNote,
+  onNavigateToRevenues,
+}: {
+  obra: Obra
+  onAddNote: () => void
+  onNavigateToRevenues?: () => void
+}) {
   const {
     data: despesas,
     loading: loadingDespesas,
@@ -20,13 +28,21 @@ export default function OverviewTab({ obra, onAddNote }: { obra: Obra; onAddNote
   } = useDataFilter<Despesa>('expenses', 'work_id', obra.id)
 
   const {
+    data: receitas,
+    loading: loadingReceitas,
+    isTableMissing: missingReceitas,
+    refetch: refetchReceitas,
+  } = useDataFilter<Receita>('revenues', 'work_id', obra.id)
+
+  const {
     data: notes,
     loading: loadingNotes,
     isTableMissing: missingNotes,
     refetch: refetchNotes,
   } = useDataFilter<Diario>('work_diaries', 'work_id', obra.id)
 
-  if (loadingDespesas || loadingNotes) return <Skeleton className="h-64 w-full" />
+  if (loadingDespesas || loadingNotes || loadingReceitas)
+    return <Skeleton className="h-64 w-full" />
 
   const latestNotes = notes
     ? [...notes].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3)
@@ -35,7 +51,13 @@ export default function OverviewTab({ obra, onAddNote }: { obra: Obra; onAddNote
   const totalSpent = despesas.reduce((acc, d) => acc + Number(d.value), 0)
   const budgetPercent = Math.min((totalSpent / (Number(obra.budget_planned) || 1)) * 100, 100)
 
-  const hasSubMissing = missingDespesas || missingNotes
+  const metrics = calculateWorkFinancialMetrics({
+    obra,
+    expenses: despesas,
+    revenues: receitas,
+  })
+
+  const hasSubMissing = missingDespesas || missingNotes || missingReceitas
 
   return (
     <div className="space-y-6">
@@ -46,15 +68,16 @@ export default function OverviewTab({ obra, onAddNote }: { obra: Obra; onAddNote
             Tabelas adicionais não configuradas
           </AlertTitle>
           <AlertDescription className="text-amber-800 text-sm mt-1">
-            Algumas tabelas de apoio (<code className="font-mono">expenses, work_diaries</code>)
-            ainda não foram criadas no Supabase. Execute o script SQL para integrar despesas e
-            diários.
+            Algumas tabelas de apoio (
+            <code className="font-mono">expenses, revenues, work_diaries</code>) ainda não foram
+            criadas no Supabase. Execute o script SQL para integrar despesas, receitas e diários.
             <div className="mt-3">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   refetchDespesas()
+                  refetchReceitas()
                   refetchNotes()
                 }}
                 className="gap-2 border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
@@ -65,6 +88,13 @@ export default function OverviewTab({ obra, onAddNote }: { obra: Obra; onAddNote
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Seção Principal de Indicadores de Retorno Financeiro por Obra */}
+      <WorkFinancialReturnSection
+        obra={obra}
+        metrics={metrics}
+        onNavigateToRevenues={onNavigateToRevenues}
+      />
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-6">

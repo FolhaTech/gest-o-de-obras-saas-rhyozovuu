@@ -385,7 +385,11 @@ export default function ObraDetail() {
         </TabsList>
 
         <TabsContent value="visao-geral" className="mt-0">
-          <OverviewTab obra={obra} onAddNote={() => setActiveTab('notas')} />
+          <OverviewTab
+            obra={obra}
+            onAddNote={() => setActiveTab('notas')}
+            onNavigateToRevenues={() => setActiveTab('receitas')}
+          />
         </TabsContent>
         <TabsContent value="notas" className="mt-0">
           <NotesTab obraId={obra.id} />
@@ -402,7 +406,7 @@ export default function ObraDetail() {
           )}
         </TabsContent>
         <TabsContent value="receitas" className="mt-0">
-          <RevenuesTab obraId={obra.id} />
+          <RevenuesTab obraId={obra.id} obra={obra} />
         </TabsContent>
         <TabsContent value="cronograma" className="mt-0">
           <ScheduleTab obraId={obra.id} />
