@@ -9,7 +9,8 @@ import {
   WifiOff,
   Building2,
   AlertTriangle,
-  FileCode,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import {
   Card,
@@ -38,8 +39,10 @@ import { useData, isMissingTableError, isNetworkOrFetchError } from '@/hooks/use
 import { Obra, Despesa, Receita } from '@/types'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { WorkRoiBadge } from '@/components/financial/WorkRoiBadge'
 import { calculateWorkFinancialMetrics } from '@/lib/financial-calculator'
+import { createSampleWork } from '@/lib/sample-work'
 
 export default function ObrasList() {
   const {
@@ -69,8 +72,10 @@ export default function ObrasList() {
     await Promise.allSettled([refetchObras(), refetchExpenses(), refetchRevenues()])
   }
 
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [creatingSample, setCreatingSample] = useState(false)
   const { toast } = useToast()
   const [formData, setFormData] = useState({
     name: '',
@@ -140,6 +145,34 @@ export default function ObrasList() {
       })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleCreateSampleWork = async () => {
+    setCreatingSample(true)
+    try {
+      const result = await createSampleWork(user?.id)
+      if (result.success) {
+        toast({
+          title: 'Obra de exemplo criada com sucesso!',
+          description: `"${result.workName}" foi criada com despesas, receitas e etapas para simulação financeira.`,
+        })
+        await refetch()
+      } else {
+        toast({
+          title: 'Erro ao criar obra de exemplo',
+          description: result.error || 'Ocorreu um problema ao cadastrar os dados.',
+          variant: 'destructive',
+        })
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro inesperado',
+        description: err?.message || 'Falha ao processar solicitação de teste.',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingSample(false)
     }
   }
 
@@ -226,7 +259,7 @@ export default function ObrasList() {
           <h1 className="text-3xl font-bold tracking-tight">Obras</h1>
           <p className="text-muted-foreground">Gerencie todos os seus projetos de construção.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -236,9 +269,29 @@ export default function ObrasList() {
           >
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCreateSampleWork}
+            disabled={creatingSample || isTableMissing}
+            className="gap-2 border border-primary/20 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary font-medium"
+            title="Insere uma obra de demonstração completa com etapas, despesas e receitas para testar o sistema"
+          >
+            {creatingSample ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Criando Exemplo...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Criar Obra de Exemplo
+              </>
+            )}
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button size="sm" className="gap-2">
                 <Plus className="h-4 w-4" /> Nova Obra
               </Button>
             </DialogTrigger>
@@ -386,12 +439,25 @@ export default function ObrasList() {
             </div>
             <CardTitle className="text-lg">Nenhuma obra cadastrada</CardTitle>
             <CardDescription className="max-w-sm mx-auto mt-1">
-              Comece criando seu primeiro projeto de construção para gerenciar etapas, materiais e
-              finanças.
+              Comece criando seu primeiro projeto de construção ou gere uma obra de demonstração
+              completa para testar o sistema.
             </CardDescription>
-            <div className="pt-4">
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
               <Button onClick={() => setOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" /> Cadastrar Primeira Obra
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCreateSampleWork}
+                disabled={creatingSample}
+                className="gap-2 border-primary/30 text-primary hover:bg-primary/10"
+              >
+                {creatingSample ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {creatingSample ? 'Criando...' : 'Criar Obra de Exemplo'}
               </Button>
             </div>
           </CardHeader>
