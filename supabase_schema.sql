@@ -1003,6 +1003,8 @@ END $$;
 --     updated_at = NOW()
 -- WHERE email = 'raphaella@arantesarimura.adv.br';
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 DO $$
 DECLARE
   v_user_id UUID;
@@ -1011,49 +1013,52 @@ DECLARE
   v_full_name TEXT := 'Raphaella';
   v_role TEXT := 'engineer';
 BEGIN
-  -- 1. Insere o usuário na tabela de autenticação auth.users ou atualiza senha caso já exista
-  INSERT INTO auth.users (
-    instance_id,
-    id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    confirmation_token,
-    confirmation_sent_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    gen_random_uuid(),
-    'authenticated',
-    'authenticated',
-    v_email,
-    crypt(v_password, gen_salt('bf')),
-    NOW(),
-    '',
-    NULL,
-    '{"provider": "email", "providers": ["email"]}'::jsonb,
-    jsonb_build_object('full_name', v_full_name),
-    NOW(),
-    NOW()
-  )
-  ON CONFLICT (email) DO UPDATE
-  SET
-    encrypted_password = crypt(v_password, gen_salt('bf')),
-    email_confirmed_at = COALESCE(auth.users.email_confirmed_at, NOW()),
-    confirmation_token = '',
-    confirmation_sent_at = NULL,
-    raw_app_meta_data = '{"provider": "email", "providers": ["email"]}'::jsonb,
-    raw_user_meta_data = COALESCE(auth.users.raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('full_name', v_full_name),
-    updated_at = NOW()
-  RETURNING id INTO v_user_id;
+  -- 1. Localiza o usuário existente pelo e-mail
+  SELECT id INTO v_user_id FROM auth.users WHERE email = v_email;
 
-  -- 2. Garante que exista o perfil em public.profiles caso a trigger não tenha disparado
+  -- 2. Se não existir, insere em auth.users; senão, atualiza senha e confirmação
+  IF v_user_id IS NULL THEN
+    INSERT INTO auth.users (
+      instance_id,
+      id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      confirmation_token,
+      confirmation_sent_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      '00000000-0000-0000-0000-000000000000',
+      gen_random_uuid(),
+      'authenticated',
+      'authenticated',
+      v_email,
+      crypt(v_password, gen_salt('bf')),
+      NOW(),
+      '',
+      NULL,
+      '{"provider": "email", "providers": ["email"]}'::jsonb,
+      jsonb_build_object('full_name', v_full_name),
+      NOW(),
+      NOW()
+    )
+    RETURNING id INTO v_user_id;
+  ELSE
+    UPDATE auth.users
+    SET
+      encrypted_password = crypt(v_password, gen_salt('bf')),
+      email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+      updated_at = NOW()
+    WHERE id = v_user_id;
+  END IF;
+
+  -- 3. Garante que exista o perfil em public.profiles caso a trigger não tenha disparado
   INSERT INTO public.profiles (
     id,
     full_name,
