@@ -192,3 +192,39 @@ export interface ConsumptionTracking {
   quantity_actual: number
   date: string
 }
+
+export interface AirbnbProperty {
+  id: string
+  work_id?: string | null
+  name: string
+  address: string
+  daily_rate: number
+  status?: string
+  notes?: string | null
+  created_at?: string
+  work?: { name: string; address?: string | null; status?: string } | null
+}
+
+export interface AirbnbRental {
+  id: string
+  property_id: string
+  guest_name?: string | null
+  guests_count: number
+  check_in: string
+  check_out: string
+  total_value: number
+  notes?: string | null
+  created_at?: string
+}
+
+export interface AirbnbTransaction {
+  id: string
+  property_id: string
+  rental_id?: string | null
+  type: 'revenue' | 'expense'
+  category: string
+  description: string
+  value: number
+  date: string
+  created_at?: string
+}
