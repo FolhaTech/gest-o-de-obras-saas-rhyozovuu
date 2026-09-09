@@ -992,6 +992,92 @@ BEGIN
 END $$;
 
 -- ==============================================================================
+-- ETAPA 10: CRIAÇÃO MANUAL DE USUÁRIO (SUPABASE AUTH & PROFILES)
+-- ==============================================================================
+-- Script idempotente e seguro para inserção direta de usuário com e-mail confirmado.
+-- Caso o usuário já exista, sua senha e status de confirmação serão atualizados.
+--
+-- Para alterar a senha posteriormente via SQL Editor, execute:
+-- UPDATE auth.users
+-- SET encrypted_password = crypt('nova_senha', gen_salt('bf')),
+--     updated_at = NOW()
+-- WHERE email = 'raphaella@arantesarimura.adv.br';
+
+DO $$
+DECLARE
+  v_user_id UUID;
+  v_email TEXT := 'raphaella@arantesarimura.adv.br';
+  v_password TEXT := 'Supor241115te';
+  v_full_name TEXT := 'Raphaella';
+  v_role TEXT := 'engineer';
+BEGIN
+  -- 1. Insere o usuário na tabela de autenticação auth.users ou atualiza senha caso já exista
+  INSERT INTO auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    confirmation_token,
+    confirmation_sent_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    gen_random_uuid(),
+    'authenticated',
+    'authenticated',
+    v_email,
+    crypt(v_password, gen_salt('bf')),
+    NOW(),
+    '',
+    NULL,
+    '{"provider": "email", "providers": ["email"]}'::jsonb,
+    jsonb_build_object('full_name', v_full_name),
+    NOW(),
+    NOW()
+  )
+  ON CONFLICT (email) DO UPDATE
+  SET
+    encrypted_password = crypt(v_password, gen_salt('bf')),
+    email_confirmed_at = COALESCE(auth.users.email_confirmed_at, NOW()),
+    confirmation_token = '',
+    confirmation_sent_at = NULL,
+    raw_app_meta_data = '{"provider": "email", "providers": ["email"]}'::jsonb,
+    raw_user_meta_data = COALESCE(auth.users.raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('full_name', v_full_name),
+    updated_at = NOW()
+  RETURNING id INTO v_user_id;
+
+  -- 2. Garante que exista o perfil em public.profiles caso a trigger não tenha disparado
+  INSERT INTO public.profiles (
+    id,
+    full_name,
+    email,
+    role,
+    avatar_url,
+    created_at
+  )
+  SELECT 
+    v_user_id,
+    v_full_name,
+    v_email,
+    v_role,
+    NULL,
+    NOW()
+  ON CONFLICT (id) DO UPDATE
+  SET
+    full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name),
+    email = EXCLUDED.email;
+
+  RAISE NOTICE 'Usuário % (ID: %) criado/atualizado com sucesso!', v_email, v_user_id;
+END $$;
+
+-- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA
 -- O banco de dados agora está 100% estruturado, seguro e funcional.
 -- ==============================================================================
