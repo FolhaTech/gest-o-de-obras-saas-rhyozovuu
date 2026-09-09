@@ -21,6 +21,7 @@ import {
   BarChart3,
   Settings,
   HardHat,
+  Building2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useEffect, useState } from 'react'
@@ -34,6 +35,7 @@ const items = [
   { title: 'Equipes', url: '/equipes', icon: Users },
   { title: 'Materiais', url: '/materiais', icon: Package },
   { title: 'Despesas', url: '/despesas', icon: Receipt },
+  { title: 'Airbnb', url: '/airbnb', icon: Building2 },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ]
