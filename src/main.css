@@ -99,6 +99,14 @@
     animation: slide-in-right 0.3s ease-out;
   }
 
+  /* Suporte a entalhe de celulares (notch / safe area) */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;

@@ -7,6 +7,7 @@ import { Search, Bell, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
 import { Badge } from '@/components/ui/badge'
+import { InstallAppButton } from '@/components/InstallAppButton'
 
 export default function Layout() {
   const { user, profile, role, signOut } = useAuth()
@@ -19,7 +20,7 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-4 md:px-6 shadow-sm z-10">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-3 sm:px-4 md:px-6 shadow-sm z-10 sticky top-0">
           <SidebarTrigger className="-ml-1" />
           <div className="flex-1 max-w-xl hidden md:flex items-center relative">
             <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
@@ -33,11 +34,12 @@ export default function Layout() {
               className="pl-9 bg-muted/50 border-none w-full"
             />
           </div>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-2 sm:gap-4">
+            <InstallAppButton variant="header" />
             {role === 'prestador' && (
               <Badge
                 variant="secondary"
-                className="hidden sm:inline-flex text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                className="hidden md:inline-flex text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
               >
                 Acesso Prestador
               </Badge>
@@ -68,7 +70,7 @@ export default function Layout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-8 animate-fade-in">
+        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-8 animate-fade-in pb-safe">
           <Outlet />
         </main>
       </SidebarInset>

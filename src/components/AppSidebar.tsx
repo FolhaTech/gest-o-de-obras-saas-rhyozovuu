@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import {
   Home,
@@ -27,6 +28,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { InstallAppButton } from '@/components/InstallAppButton'
 
 interface MenuItem {
   title: string
@@ -49,6 +51,7 @@ const allMenuItems: MenuItem[] = [
 export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   const userName =
     profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
@@ -89,7 +92,14 @@ export function AppSidebar() {
                       pathname === item.url || (item.url !== '/' && pathname.startsWith(item.url))
                     }
                   >
-                    <Link to={item.url}>
+                    <Link
+                      to={item.url}
+                      onClick={() => {
+                        if (isMobile) {
+                          setOpenMobile(false)
+                        }
+                      }}
+                    >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -100,7 +110,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t">
+      <SidebarFooter className="p-4 border-t space-y-3">
+        <InstallAppButton variant="sidebar" />
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
             <AvatarImage src={profile?.avatar_url || ''} alt={userName} />

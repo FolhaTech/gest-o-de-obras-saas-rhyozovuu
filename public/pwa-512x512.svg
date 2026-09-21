@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="highlightGrad512" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="dropShadow512" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad512)"/>
+  <rect width="504" height="504" x="4" y="4" rx="111" fill="none" stroke="#27272a" stroke-width="4"/>
+
+  <g filter="url(#dropShadow512)" transform="translate(0, 8)">
+    <path d="M 120 286 C 120 180 200 110 256 110 C 312 110 392 180 392 286 Z" fill="#c2410c" opacity="0.3"/>
+    <path d="M 124 280 C 124 176 200 114 256 114 C 312 114 388 176 388 280 Z" fill="url(#orangeGrad512)"/>
+    <path d="M 134 270 C 134 186 200 126 256 126 C 286 126 332 144 360 180 C 320 152 278 144 246 144 C 188 144 148 198 134 270 Z" fill="url(#highlightGrad512)"/>
+    <path d="M 240 114 C 240 114 244 110 256 110 C 268 110 272 114 272 114 L 274 278 C 274 278 266 282 256 282 C 246 282 238 278 238 278 Z" fill="#fb923c"/>
+    <path d="M 252 112 L 260 112 L 262 280 L 254 280 Z" fill="#ffffff" opacity="0.4"/>
+    <path d="M 188 170 C 196 210 200 248 202 278" stroke="#ea580c" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M 324 170 C 316 210 312 248 310 278" stroke="#ea580c" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M 88 290 C 88 278 106 272 128 272 L 384 272 C 406 272 424 278 424 290 C 424 304 402 314 368 318 C 324 322 188 322 144 318 C 110 314 88 304 88 290 Z" fill="url(#orangeGrad512)"/>
+    <path d="M 96 288 C 112 280 180 276 256 276 C 332 276 400 280 416 288 C 392 298 330 304 256 304 C 182 304 120 298 96 288 Z" fill="#ffffff" opacity="0.25"/>
+    <path d="M 104 294 C 140 308 200 314 256 314 C 312 314 372 308 408 294 C 388 310 326 322 256 322 C 186 322 124 310 104 294 Z" fill="#9a3412"/>
+  </g>
+
+  <line x1="196" y1="376" x2="316" y2="376" stroke="#f97316" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
+  <circle cx="170" cy="376" r="4" fill="#fb923c" opacity="0.85"/>
+  <circle cx="342" cy="376" r="4" fill="#fb923c" opacity="0.85"/>
+
+  <text x="256" y="420" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="28" letter-spacing="6" fill="#f4f4f5">GESTÃO DE OBRAS</text>
+</svg>

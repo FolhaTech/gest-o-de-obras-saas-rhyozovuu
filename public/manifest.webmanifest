@@ -1,0 +1,96 @@
+{
+  "id": "/",
+  "name": "Gestão de Obras",
+  "short_name": "Obras",
+  "description": "Sistema completo para gestão de obras, diário de obra, controle financeiro, materiais e equipes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#09090b",
+  "theme_color": "#f97316",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Obras",
+      "short_name": "Obras",
+      "description": "Lista de projetos e obras",
+      "url": "/obras",
+      "icons": [
+        {
+          "src": "/pwa-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Diário de Obra",
+      "short_name": "Diário",
+      "description": "Registros e acompanhamento diário",
+      "url": "/diario-obra",
+      "icons": [
+        {
+          "src": "/pwa-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Materiais",
+      "short_name": "Materiais",
+      "description": "Estoque e consumo de materiais",
+      "url": "/materiais",
+      "icons": [
+        {
+          "src": "/pwa-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Despesas",
+      "short_name": "Despesas",
+      "description": "Lançamento e controle de despesas",
+      "url": "/despesas",
+      "icons": [
+        {
+          "src": "/pwa-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
