@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
@@ -6,43 +5,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Search, Bell, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { supabase } from '@/lib/supabase/client'
+import { getRoleLabel } from '@/lib/roles'
+import { Badge } from '@/components/ui/badge'
 
 export default function Layout() {
-  const { user, signOut } = useAuth()
-  const [profile, setProfile] = useState<{
-    full_name: string
-    role: string
-    avatar_url: string | null
-  } | null>(null)
-
-  useEffect(() => {
-    let isMounted = true
-    const loadProfile = async () => {
-      if (!user?.id) return
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle()
-
-        if (!error && data && isMounted) {
-          setProfile(data)
-        }
-      } catch (err) {
-        console.warn('[Layout] Could not load profile:', err)
-      }
-    }
-    loadProfile()
-    return () => {
-      isMounted = false
-    }
-  }, [user?.id])
+  const { user, profile, role, signOut } = useAuth()
 
   const userName =
     profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
-  const userRole = profile?.role || 'Admin'
+  const roleLabel = getRoleLabel(role)
 
   return (
     <SidebarProvider>
@@ -54,19 +25,34 @@ export default function Layout() {
             <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar obras, materiais..."
+              placeholder={
+                role === 'prestador'
+                  ? 'Buscar em obras, materiais...'
+                  : 'Buscar obras, materiais...'
+              }
               className="pl-9 bg-muted/50 border-none w-full"
             />
           </div>
           <div className="ml-auto flex items-center gap-4">
-            <button className="relative p-2 text-muted-foreground hover:text-foreground transition-colors">
+            {role === 'prestador' && (
+              <Badge
+                variant="secondary"
+                className="hidden sm:inline-flex text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              >
+                Acesso Prestador
+              </Badge>
+            )}
+            <button
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              title="Notificações"
+            >
               <Bell className="h-5 w-5" />
               <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"></span>
             </button>
             <div className="flex items-center gap-3 border-l pl-4">
               <div className="flex flex-col items-end hidden sm:flex">
                 <span className="text-sm font-medium leading-none">{userName}</span>
-                <span className="text-xs text-muted-foreground capitalize">{userRole}</span>
+                <span className="text-xs text-muted-foreground">{roleLabel}</span>
               </div>
               <Avatar className="h-8 w-8">
                 <AvatarImage src={profile?.avatar_url || ''} alt={userName} />

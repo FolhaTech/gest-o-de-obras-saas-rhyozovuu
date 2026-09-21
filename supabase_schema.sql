@@ -914,6 +914,13 @@ BEGIN
   UPDATE public.profiles
   SET role = 'admin'
   WHERE LOWER(email) IN ('igor.arimura.arquitetura@hotmail.com', 'tiago.izaias@folhatech.com.br');
+
+  -- Normalização de papéis existentes no sistema:
+  -- Converte legados 'engineer' e 'manager' para 'gestor'
+  UPDATE public.profiles
+  SET role = 'gestor'
+  WHERE LOWER(role) IN ('engineer', 'manager')
+    AND LOWER(email) NOT IN ('igor.arimura.arquitetura@hotmail.com', 'tiago.izaias@folhatech.com.br');
 END $$;
 
 -- ==============================================================================
@@ -1081,6 +1088,41 @@ BEGIN
 
   RAISE NOTICE 'Usuário % (ID: %) criado/atualizado com sucesso!', v_email, v_user_id;
 END $$;
+
+-- ==============================================================================
+-- ETAPA 11: CONTROLE DE PAPÉIS DO SISTEMA (ADMIN, GESTOR, PRESTADOR)
+-- ==============================================================================
+-- Suporte aos papéis:
+-- - admin: acesso a tudo
+-- - gestor: acesso a tudo
+-- - prestador: acesso restrito a Obras, Materiais e Diário de Obras
+-- Idempotente: garante validação de papéis permitidos e atualização de usuários existentes.
+
+-- 11.1. Adicionar ou atualizar restrição de verificação de role na tabela public.profiles
+DO $$
+BEGIN
+  -- Remove constraint antiga se existir
+  ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+  
+  -- Adiciona check constraint para aceitar os papéis permitidos (com retrocompatibilidade legada)
+  ALTER TABLE public.profiles
+    ADD CONSTRAINT profiles_role_check
+    CHECK (role IN ('admin', 'gestor', 'prestador', 'engineer', 'manager'));
+EXCEPTION
+  WHEN others THEN
+    -- Caso a alteração não possa ser aplicada de imediato, segue em frente com segurança
+    NULL;
+END $$;
+
+-- 11.2. Atualização idempotente do usuário Igor como admin
+UPDATE public.profiles
+SET role = 'admin'
+WHERE LOWER(email) IN ('igor.arimura.arquitetura@hotmail.com', 'tiago.izaias@folhatech.com.br');
+
+-- 11.3. Script de conveniência para promoção/rebaixamento direto via SQL:
+-- UPDATE public.profiles SET role = 'prestador' WHERE LOWER(email) = 'teste@obras.com';
+-- UPDATE public.profiles SET role = 'gestor' WHERE LOWER(email) = 'raphaella@arantesarimura.adv.br';
+-- UPDATE public.profiles SET role = 'admin' WHERE LOWER(email) = 'igor.arimura.arquitetura@hotmail.com';
 
 -- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA

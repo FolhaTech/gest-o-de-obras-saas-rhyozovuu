@@ -24,11 +24,17 @@ import {
   Building2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { getRoleLabel } from '@/lib/roles'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 
-const items = [
+interface MenuItem {
+  title: string
+  url: string
+  icon: any
+}
+
+const allMenuItems: MenuItem[] = [
   { title: 'Dashboard', url: '/', icon: Home },
   { title: 'Obras', url: '/obras', icon: Briefcase },
   { title: 'Diário de Obra', url: '/diario-obra', icon: BookOpen },
@@ -42,40 +48,15 @@ const items = [
 
 export function AppSidebar() {
   const { pathname } = useLocation()
-  const { user } = useAuth()
-  const [profile, setProfile] = useState<{
-    full_name: string
-    role: string
-    avatar_url: string | null
-  } | null>(null)
-
-  useEffect(() => {
-    let isMounted = true
-    const loadProfile = async () => {
-      if (!user?.id) return
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle()
-
-        if (!error && data && isMounted) {
-          setProfile(data)
-        }
-      } catch (err) {
-        console.warn('[AppSidebar] Could not load profile:', err)
-      }
-    }
-    loadProfile()
-    return () => {
-      isMounted = false
-    }
-  }, [user?.id])
+  const { user, profile, role, canAccess } = useAuth()
 
   const userName =
     profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário'
-  const userRole = profile?.role || 'Admin'
+  const roleLabel = getRoleLabel(role)
+
+  // Filtra itens do menu conforme a regra de papéis:
+  // Prestador tem acesso SOMENTE a Obras, Diário de Obra e Materiais
+  const visibleItems = allMenuItems.filter((item) => canAccess(item.url))
 
   return (
     <Sidebar>
@@ -87,14 +68,29 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="flex items-center justify-between">
+            <span>Menu Principal</span>
+            {role === 'prestador' && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 uppercase font-semibold text-primary border-primary/40"
+              >
+                Prestador
+              </Badge>
+            )}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={
+                      pathname === item.url || (item.url !== '/' && pathname.startsWith(item.url))
+                    }
+                  >
                     <Link to={item.url}>
-                      <item.icon />
+                      <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -110,9 +106,11 @@ export function AppSidebar() {
             <AvatarImage src={profile?.avatar_url || ''} alt={userName} />
             <AvatarFallback>{userName.substring(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col overflow-hidden min-w-0 flex-1">
             <span className="text-sm font-medium truncate">{userName}</span>
-            <span className="text-xs text-muted-foreground capitalize truncate">{userRole}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground truncate">{roleLabel}</span>
+            </div>
           </div>
         </div>
       </SidebarFooter>

@@ -2,13 +2,17 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/types'
+import { AppRole, normalizeRole, canAccessPath } from '@/lib/roles'
 
-type Profile = Database['public']['Tables']['profiles']['Row']
+export type Profile = Database['public']['Tables']['profiles']['Row']
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   profile: Profile | null
+  role: AppRole
+  canAccess: (pathname: string) => boolean
+  refreshProfile: () => Promise<void>
   signUp: (email: string, password: string) => Promise<{ data: any; error: any }>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<{ error: any }>
@@ -112,12 +116,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error }
   }
 
+  const refreshProfile = async () => {
+    if (user?.id) {
+      await fetchProfile(user.id)
+    }
+  }
+
+  const role: AppRole = normalizeRole(profile?.role || (user?.user_metadata?.role as string))
+  const canAccess = (pathname: string) => canAccessPath(role, pathname)
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
         profile,
+        role,
+        canAccess,
+        refreshProfile,
         signUp,
         signIn,
         signOut,

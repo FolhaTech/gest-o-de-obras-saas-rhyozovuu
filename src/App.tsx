@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AuthProvider } from '@/hooks/use-auth'
+import { AuthProvider, useAuth } from '@/hooks/use-auth'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { RoleRoute } from '@/components/RoleRoute'
 
 import Layout from './components/Layout'
 import Index from './pages/Index'
@@ -20,7 +21,21 @@ import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
 import AirbnbPage from './pages/Airbnb'
+import AccessDenied from './pages/AccessDenied'
 import NotFound from './pages/NotFound'
+
+/**
+ * Redireciona a rota raiz ("/") se o usuário for 'prestador':
+ * prestadores são encaminhados diretamente para /obras (pois não têm dashboard financeiro/indicadores).
+ * Admin e Gestor acessam a tela principal (Index).
+ */
+function HomeRoute() {
+  const { role } = useAuth()
+  if (role === 'prestador') {
+    return <Navigate to="/obras" replace />
+  }
+  return <Index />
+}
 
 const App = () => (
   <AuthProvider>
@@ -33,20 +48,32 @@ const App = () => (
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              <Route path="/" element={<Index />} />
+              {/* Rota inicial adaptativa: Dashboard para admin/gestor, /obras para prestador */}
+              <Route path="/" element={<HomeRoute />} />
+
+              {/* Seções permitidas para TODOS (inclusive prestador): Obras, Diário de Obra, Materiais */}
               <Route path="/obras" element={<ObrasList />} />
               <Route path="/obras/:id" element={<ObraDetail />} />
               <Route path="/diario-obra" element={<DiarioObraList />} />
-              <Route path="/equipes" element={<EquipesList />} />
               <Route path="/materiais" element={<MateriaisList />} />
-              <Route path="/despesas" element={<DespesasList />} />
-              <Route path="/airbnb" element={<AirbnbPage />} />
-              <Route path="/relatorios" element={<RelatoriosList />} />
-              <Route path="/configuracoes" element={<ConfiguracoesList />} />
+
+              {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
+              <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
+                <Route path="/equipes" element={<EquipesList />} />
+                <Route path="/despesas" element={<DespesasList />} />
+                <Route path="/airbnb" element={<AirbnbPage />} />
+                <Route path="/relatorios" element={<RelatoriosList />} />
+                <Route path="/configuracoes" element={<ConfiguracoesList />} />
+              </Route>
+
+              {/* Tela amigável de Acesso Restrito direta */}
+              <Route path="/acesso-restrito" element={<AccessDenied />} />
             </Route>
           </Route>
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </TooltipProvider>
