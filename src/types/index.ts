@@ -228,3 +228,34 @@ export interface AirbnbTransaction {
   date: string
   created_at?: string
 }
+
+export type PlannerTaskStatus = 'pending' | 'in_progress' | 'completed'
+export type PlannerTaskPriority = 'low' | 'medium' | 'high'
+
+export interface PlannerAttachment {
+  id: string
+  task_id: string
+  file_url: string
+  file_name: string
+  file_type: 'image' | 'video'
+  created_at?: string
+}
+
+export interface PlannerTask {
+  id: string
+  work_id: string | null
+  title: string
+  description: string | null
+  status: PlannerTaskStatus
+  priority: PlannerTaskPriority
+  start_date: string | null
+  due_date: string | null
+  assignee_id: string | null
+  created_by: string | null
+  created_at?: string
+  updated_at?: string
+  // Relações em consultas
+  works?: { id: string; name: string } | null
+  team_members?: { id: string; name: string; role?: string | null; phone?: string | null } | null
+  attachments?: PlannerAttachment[]
+}

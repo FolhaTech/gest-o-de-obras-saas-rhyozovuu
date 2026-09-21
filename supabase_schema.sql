@@ -1125,6 +1125,104 @@ WHERE LOWER(email) IN ('igor.arimura.arquitetura@hotmail.com', 'tiago.izaias@fol
 -- UPDATE public.profiles SET role = 'admin' WHERE LOWER(email) = 'igor.arimura.arquitetura@hotmail.com';
 
 -- ==============================================================================
+-- ETAPA 12: MÓDULO PLANNER (TAREFAS, RESPONSÁVEIS, FOTOS E VÍDEOS)
+-- ==============================================================================
+-- 12.1. Tabela: planner_tasks (Tarefas do Planner vinculadas a obras e responsáveis)
+CREATE TABLE IF NOT EXISTS public.planner_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id UUID REFERENCES public.works(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+  priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+  start_date DATE,
+  due_date DATE,
+  assignee_id UUID REFERENCES public.team_members(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 12.2. Tabela: planner_task_attachments (Fotos e vídeos anexados às tarefas)
+CREATE TABLE IF NOT EXISTS public.planner_task_attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID NOT NULL REFERENCES public.planner_tasks(id) ON DELETE CASCADE,
+  file_url TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL CHECK (file_type IN ('image', 'video')),
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 12.3. Índices de performance para o módulo Planner
+CREATE INDEX IF NOT EXISTS idx_planner_tasks_work_id ON public.planner_tasks(work_id);
+CREATE INDEX IF NOT EXISTS idx_planner_tasks_assignee_id ON public.planner_tasks(assignee_id);
+CREATE INDEX IF NOT EXISTS idx_planner_tasks_status ON public.planner_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_planner_tasks_due_date ON public.planner_tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_planner_task_attachments_task_id ON public.planner_task_attachments(task_id);
+
+-- 12.4. Trigger para atualizar updated_at automaticamente
+CREATE OR REPLACE FUNCTION public.handle_planner_task_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = TIMEZONE('utc'::text, NOW());
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS on_planner_task_update ON public.planner_tasks;
+CREATE TRIGGER on_planner_task_update
+  BEFORE UPDATE ON public.planner_tasks
+  FOR EACH ROW EXECUTE FUNCTION public.handle_planner_task_updated_at();
+
+-- 12.5. Habilitação de RLS e Políticas para tabelas do Planner
+DO $$
+DECLARE
+  t TEXT;
+  planner_tables TEXT[] := ARRAY['planner_tasks', 'planner_task_attachments'];
+BEGIN
+  FOREACH t IN ARRAY planner_tables
+  LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Allow authenticated full access" ON public.%I;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Allow auth all on %s" ON public.%I;', t, t);
+    EXECUTE format(
+      'CREATE POLICY "Allow authenticated full access" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true);',
+      t
+    );
+    EXECUTE format('DROP POLICY IF EXISTS "Allow anon full access" ON public.%I;', t);
+    EXECUTE format(
+      'CREATE POLICY "Allow anon full access" ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true);',
+      t
+    );
+  END LOOP;
+END $$;
+
+-- 12.6. Bucket de Storage para anexos do Planner (fotos e vídeos)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('planner-attachments', 'planner-attachments', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Allow public read planner storage objects" ON storage.objects;
+  CREATE POLICY "Allow public read planner storage objects" ON storage.objects
+    FOR SELECT TO public
+    USING (bucket_id = 'planner-attachments');
+
+  DROP POLICY IF EXISTS "Allow authenticated upload planner storage objects" ON storage.objects;
+  CREATE POLICY "Allow authenticated upload planner storage objects" ON storage.objects
+    FOR ALL TO authenticated
+    USING (bucket_id = 'planner-attachments')
+    WITH CHECK (bucket_id = 'planner-attachments');
+
+  DROP POLICY IF EXISTS "Allow anon upload planner storage objects" ON storage.objects;
+  CREATE POLICY "Allow anon upload planner storage objects" ON storage.objects
+    FOR ALL TO anon
+    USING (bucket_id = 'planner-attachments')
+    WITH CHECK (bucket_id = 'planner-attachments');
+END $$;
+
+-- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA
 -- O banco de dados agora está 100% estruturado, seguro e funcional.
 -- ==============================================================================

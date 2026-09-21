@@ -21,6 +21,7 @@ import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
 import AirbnbPage from './pages/Airbnb'
+import PlannerPage from './pages/planner/PlannerPage'
 import AccessDenied from './pages/AccessDenied'
 import NotFound from './pages/NotFound'
 
@@ -62,6 +63,7 @@ const App = () => (
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
+                <Route path="/planner" element={<PlannerPage />} />
                 <Route path="/equipes" element={<EquipesList />} />
                 <Route path="/despesas" element={<DespesasList />} />
                 <Route path="/airbnb" element={<AirbnbPage />} />

@@ -23,6 +23,7 @@ import {
   Settings,
   HardHat,
   Building2,
+  CalendarDays,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
@@ -38,6 +39,7 @@ interface MenuItem {
 
 const allMenuItems: MenuItem[] = [
   { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'Planner', url: '/planner', icon: CalendarDays },
   { title: 'Obras', url: '/obras', icon: Briefcase },
   { title: 'Diário de Obra', url: '/diario-obra', icon: BookOpen },
   { title: 'Equipes', url: '/equipes', icon: Users },
