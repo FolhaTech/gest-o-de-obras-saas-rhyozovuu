@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ShieldAlert, Briefcase, BookOpen, Package, ArrowLeft } from 'lucide-react'
+import { ShieldAlert, CalendarDays, Briefcase, BookOpen, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -36,6 +36,10 @@ export default function AccessDenied() {
             </p>
             <ul className="list-disc list-inside space-y-1 pl-1">
               <li>
+                <strong className="text-foreground">Planner:</strong> Gestão e acompanhamento de
+                tarefas
+              </li>
+              <li>
                 <strong className="text-foreground">Obras:</strong> Acompanhamento e detalhes de
                 projetos
               </li>
@@ -54,8 +58,13 @@ export default function AccessDenied() {
             configurações, solicite ao Administrador ou Gestor do sistema.
           </p>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+        <CardFooter className="flex flex-col sm:flex-row flex-wrap gap-2 justify-center pt-2">
           <Button asChild variant="default" className="w-full sm:w-auto gap-2">
+            <Link to="/planner">
+              <CalendarDays className="h-4 w-4" /> Ir para Planner
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full sm:w-auto gap-2">
             <Link to="/obras">
               <Briefcase className="h-4 w-4" /> Ir para Obras
             </Link>

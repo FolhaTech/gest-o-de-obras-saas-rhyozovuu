@@ -72,7 +72,7 @@ export default function UsersTab() {
             <strong>Gestor:</strong> Acesso total a todas as áreas operacionais e financeiras.
           </li>
           <li>
-            <strong>Prestador:</strong> Acesso exclusivo a Obras, Materiais e Diário de Obras (as
+            <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
             demais áreas ficam bloqueadas).
           </li>
         </ul>
@@ -126,7 +126,9 @@ export default function UsersTab() {
                       <SelectContent>
                         <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
                         <SelectItem value="gestor">Gestor (Acesso Total)</SelectItem>
-                        <SelectItem value="prestador">Prestador (Obras/Mat./Diário)</SelectItem>
+                        <SelectItem value="prestador">
+                          Prestador (Planner/Obras/Mat./Diário)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>

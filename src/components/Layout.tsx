@@ -28,7 +28,7 @@ export default function Layout() {
               type="search"
               placeholder={
                 role === 'prestador'
-                  ? 'Buscar em obras, materiais...'
+                  ? 'Buscar em planner, obras, materiais...'
                   : 'Buscar obras, materiais...'
               }
               className="pl-9 bg-muted/50 border-none w-full"

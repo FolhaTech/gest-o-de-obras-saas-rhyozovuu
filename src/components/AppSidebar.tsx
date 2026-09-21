@@ -60,7 +60,7 @@ export function AppSidebar() {
   const roleLabel = getRoleLabel(role)
 
   // Filtra itens do menu conforme a regra de papéis:
-  // Prestador tem acesso SOMENTE a Obras, Diário de Obra e Materiais
+  // Prestador tem acesso a Planner, Obras, Diário de Obra e Materiais
   const visibleItems = allMenuItems.filter((item) => canAccess(item.url))
 
   return (

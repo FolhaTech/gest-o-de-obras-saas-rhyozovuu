@@ -55,7 +55,8 @@ const App = () => (
               {/* Rota inicial adaptativa: Dashboard para admin/gestor, /obras para prestador */}
               <Route path="/" element={<HomeRoute />} />
 
-              {/* Seções permitidas para TODOS (inclusive prestador): Obras, Diário de Obra, Materiais */}
+              {/* Seções permitidas para TODOS (inclusive prestador): Planner, Obras, Diário de Obra, Materiais */}
+              <Route path="/planner" element={<PlannerPage />} />
               <Route path="/obras" element={<ObrasList />} />
               <Route path="/obras/:id" element={<ObraDetail />} />
               <Route path="/diario-obra" element={<DiarioObraList />} />
@@ -63,7 +64,6 @@ const App = () => (
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
-                <Route path="/planner" element={<PlannerPage />} />
                 <Route path="/equipes" element={<EquipesList />} />
                 <Route path="/despesas" element={<DespesasList />} />
                 <Route path="/airbnb" element={<AirbnbPage />} />

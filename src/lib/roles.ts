@@ -44,7 +44,7 @@ export function getRoleLabel(role: AppRole | string | null | undefined): string 
 
 /**
  * Rotas permitidas para cada papel.
- * Prestador: SOMENTE Obras (/obras, /obras/:id), Materiais (/materiais), Diário de Obra (/diario-obra).
+ * Prestador: Obras (/obras, /obras/:id), Planner (/planner), Materiais (/materiais), Diário de Obra (/diario-obra).
  * Admin e Gestor: Acesso irrestrito a todas as rotas.
  */
 export function canAccessPath(
@@ -61,6 +61,8 @@ export function canAccessPath(
 
   // Rotas permitidas para o Prestador
   if (
+    cleanPath === '/planner' ||
+    cleanPath.startsWith('/planner/') ||
     cleanPath === '/obras' ||
     cleanPath.startsWith('/obras/') ||
     cleanPath === '/materiais' ||
