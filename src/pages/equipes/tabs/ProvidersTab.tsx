@@ -76,7 +76,7 @@ export default function ProvidersTab() {
     }
   }
 
-  const FormContent = () => (
+  const renderFormFields = () => (
     <>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -84,28 +84,34 @@ export default function ProvidersTab() {
           <Input
             required
             value={formData.name || ''}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder="Ex: Empreiteira Silva, João Eletricista"
           />
         </div>
         <div className="space-y-2">
           <Label>Tipo de Serviço</Label>
           <Input
             value={formData.service_type || ''}
-            onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, service_type: e.target.value }))}
+            placeholder="Ex: Elétrica, Hidráulica, Pintura"
           />
         </div>
         <div className="space-y-2">
           <Label>Contato / Telefone</Label>
           <Input
             value={formData.contact_phone || ''}
-            onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, contact_phone: e.target.value }))}
+            placeholder="(00) 00000-0000"
           />
         </div>
         <div className="space-y-2">
           <Label>Responsável</Label>
           <Input
             value={formData.responsible_person || ''}
-            onChange={(e) => setFormData({ ...formData, responsible_person: e.target.value })}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, responsible_person: e.target.value }))
+            }
+            placeholder="Nome do encarregado ou mestre"
           />
         </div>
         <div className="space-y-2">
@@ -113,7 +119,8 @@ export default function ProvidersTab() {
           <Input
             type="email"
             value={formData.email || ''}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+            placeholder="contato@empresa.com"
           />
         </div>
         <div className="space-y-2">
@@ -121,21 +128,23 @@ export default function ProvidersTab() {
           <Input
             value={formData.team_level || ''}
             placeholder="Ex: Alto, Médio"
-            onChange={(e) => setFormData({ ...formData, team_level: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, team_level: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
           <Label>Qualidade</Label>
           <Input
             value={formData.quality_rating || ''}
-            onChange={(e) => setFormData({ ...formData, quality_rating: e.target.value })}
+            placeholder="Ex: 5 estrelas, Excelente"
+            onChange={(e) => setFormData((prev) => ({ ...prev, quality_rating: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
           <Label>Prazo</Label>
           <Input
             value={formData.deadline_rating || ''}
-            onChange={(e) => setFormData({ ...formData, deadline_rating: e.target.value })}
+            placeholder="Ex: Pontual, Cumpre prazos"
+            onChange={(e) => setFormData((prev) => ({ ...prev, deadline_rating: e.target.value }))}
           />
         </div>
       </div>
@@ -143,7 +152,8 @@ export default function ProvidersTab() {
         <Label>Observações</Label>
         <Input
           value={formData.observations || ''}
-          onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
+          placeholder="Notas adicionais sobre o prestador..."
+          onChange={(e) => setFormData((prev) => ({ ...prev, observations: e.target.value }))}
         />
       </div>
     </>
@@ -165,7 +175,7 @@ export default function ProvidersTab() {
               <DialogTitle>Adicionar Prestador</DialogTitle>
             </DialogHeader>
             <form onSubmit={(e) => handleSave(e, false)} className="space-y-4 mt-4">
-              <FormContent />
+              {renderFormFields()}
               <Button type="submit" className="w-full">
                 Salvar
               </Button>
@@ -235,7 +245,7 @@ export default function ProvidersTab() {
             <DialogTitle>Editar Prestador</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => handleSave(e, true)} className="space-y-4 mt-4">
-            <FormContent />
+            {renderFormFields()}
             <Button type="submit" className="w-full">
               Atualizar
             </Button>

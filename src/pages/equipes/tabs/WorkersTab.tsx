@@ -98,111 +98,6 @@ export default function WorkersTab() {
 
   if (loading) return <Skeleton className="h-64 w-full" />
 
-  const FormContent = () => (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Nome</Label>
-          <Input
-            required
-            value={formData.name || ''}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Função</Label>
-          <Input
-            required
-            value={formData.role || ''}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Telefone</Label>
-          <Input
-            value={formData.phone || ''}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Chave PIX</Label>
-          <Input
-            value={formData.pix_key || ''}
-            onChange={(e) => setFormData({ ...formData, pix_key: e.target.value })}
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Data de Admissão</Label>
-          <Input
-            type="date"
-            value={formData.admission_date || ''}
-            onChange={(e) => setFormData({ ...formData, admission_date: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Equipe / Tipo</Label>
-          <Select
-            value={formData.type}
-            onValueChange={(val) => setFormData({ ...formData, type: val })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="internal">Própria</SelectItem>
-              <SelectItem value="outsourced">Terceirizada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label>Tipo Pagamento</Label>
-          <Select
-            value={formData.payment_type || 'daily'}
-            onValueChange={(val) => setFormData({ ...formData, payment_type: val })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="daily">Diária</SelectItem>
-              <SelectItem value="monthly">Mensal</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Valor (R$)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={formData.daily_cost || ''}
-            onChange={(e) => setFormData({ ...formData, daily_cost: Number(e.target.value) })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Status</Label>
-          <Select
-            value={formData.status}
-            onValueChange={(val) => setFormData({ ...formData, status: val })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Ativo</SelectItem>
-              <SelectItem value="inactive">Inativo</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </>
-  )
-
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -221,7 +116,124 @@ export default function WorkersTab() {
               <DialogTitle>Adicionar Funcionário</DialogTitle>
             </DialogHeader>
             <form onSubmit={(e) => handleSave(e, false)} className="space-y-4 mt-4">
-              <FormContent />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="worker-name">Nome</Label>
+                  <Input
+                    id="worker-name"
+                    required
+                    value={formData.name || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nome completo do colaborador"
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="worker-role">Função</Label>
+                  <Input
+                    id="worker-role"
+                    required
+                    value={formData.role || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
+                    placeholder="Ex: Pedreiro, Eletricista"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="worker-phone">Telefone</Label>
+                  <Input
+                    id="worker-phone"
+                    value={formData.phone || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="worker-pix">Chave PIX</Label>
+                  <Input
+                    id="worker-pix"
+                    value={formData.pix_key || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pix_key: e.target.value }))}
+                    placeholder="CPF, telefone, e-mail ou aleatória"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="worker-admission">Data de Admissão</Label>
+                  <Input
+                    id="worker-admission"
+                    type="date"
+                    value={formData.admission_date || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, admission_date: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Equipe / Tipo</Label>
+                  <Select
+                    value={formData.type || 'internal'}
+                    onValueChange={(val) => setFormData((prev) => ({ ...prev, type: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Própria</SelectItem>
+                      <SelectItem value="outsourced">Terceirizada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo Pagamento</Label>
+                  <Select
+                    value={formData.payment_type || 'daily'}
+                    onValueChange={(val) => setFormData((prev) => ({ ...prev, payment_type: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Diária</SelectItem>
+                      <SelectItem value="monthly">Mensal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="worker-cost">Valor (R$)</Label>
+                  <Input
+                    id="worker-cost"
+                    type="number"
+                    step="0.01"
+                    value={formData.daily_cost === undefined ? '' : formData.daily_cost}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        daily_cost: e.target.value === '' ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={formData.status || 'active'}
+                    onValueChange={(val) => setFormData((prev) => ({ ...prev, status: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Ativo</SelectItem>
+                      <SelectItem value="inactive">Inativo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <Button type="submit" className="w-full">
                 Salvar
               </Button>

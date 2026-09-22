@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/formatters'
 import { Equipe, AttendanceRecord, AttendanceExtra } from '@/types'
 import { useToast } from '@/hooks/use-toast'
@@ -64,31 +64,133 @@ export default function AttendanceTab() {
     }
   }
 
-  const togglePresence = async (workerId: string, currentStatus: boolean) => {
+  const [savingAttendanceId, setSavingAttendanceId] = useState<string | null>(null)
+
+  const setPresenceStatus = async (workerId: string, newStatus: boolean) => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd')
-    const newStatus = !currentStatus
+    setSavingAttendanceId(workerId)
+
+    // Check if a record already exists in local state
+    const existingRecord = records.find((r) => r.worker_id === workerId && r.date === dateStr)
 
     setRecords((prev) => {
-      const exists = prev.find((r) => r.worker_id === workerId && r.date === dateStr)
-      if (exists) return prev.map((r) => (r.id === exists.id ? { ...r, is_present: newStatus } : r))
-      return [...prev, { id: 'temp', worker_id: workerId, date: dateStr, is_present: newStatus }]
+      if (existingRecord) {
+        return prev.map((r) => (r.id === existingRecord.id ? { ...r, is_present: newStatus } : r))
+      }
+      return [
+        ...prev,
+        {
+          id: `temp-${workerId}-${dateStr}`,
+          worker_id: workerId,
+          date: dateStr,
+          is_present: newStatus,
+          created_at: new Date().toISOString(),
+        },
+      ]
     })
 
-    const { error } = await supabase
-      .from('attendance_records')
-      .upsert(
-        { worker_id: workerId, date: dateStr, is_present: newStatus },
-        { onConflict: 'worker_id,date' },
-      )
+    let error: any = null
 
-    if (error) {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' })
-      fetchData() // revert
-    } else {
-      toast({
-        title: newStatus ? 'Presença confirmada' : 'Falta registrada',
-        description: 'Registro salvo com sucesso.',
-      })
+    try {
+      // Strategy 1: If we have an existing record ID that is not a temp ID, update by id directly
+      if (existingRecord && !existingRecord.id.startsWith('temp')) {
+        const res = await supabase
+          .from('attendance_records')
+          .update({ is_present: newStatus })
+          .eq('id', existingRecord.id)
+          .select()
+        error = res.error
+        if (!error && res.data && res.data[0]) {
+          setRecords((prev) =>
+            prev.map((r) => (r.id === existingRecord.id ? (res.data[0] as AttendanceRecord) : r)),
+          )
+        }
+      } else {
+        // Try upsert with onConflict: 'worker_id,date'
+        const upsertRes = await supabase
+          .from('attendance_records')
+          .upsert(
+            { worker_id: workerId, date: dateStr, is_present: newStatus },
+            { onConflict: 'worker_id,date' },
+          )
+          .select()
+
+        if (upsertRes.error) {
+          console.warn(
+            '[AttendanceTab] Upsert onConflict failed, trying fallback select + update/insert:',
+            upsertRes.error.message,
+          )
+          // Fallback: Check if record exists in database by query
+          const { data: dbRecords } = await supabase
+            .from('attendance_records')
+            .select('id')
+            .eq('worker_id', workerId)
+            .eq('date', dateStr)
+            .limit(1)
+
+          if (dbRecords && dbRecords.length > 0) {
+            const updateRes = await supabase
+              .from('attendance_records')
+              .update({ is_present: newStatus })
+              .eq('id', dbRecords[0].id)
+              .select()
+            error = updateRes.error
+            if (!error && updateRes.data && updateRes.data[0]) {
+              setRecords((prev) =>
+                prev.map((r) =>
+                  r.worker_id === workerId && r.date === dateStr
+                    ? (updateRes.data[0] as AttendanceRecord)
+                    : r,
+                ),
+              )
+            }
+          } else {
+            const insertRes = await supabase
+              .from('attendance_records')
+              .insert([{ worker_id: workerId, date: dateStr, is_present: newStatus }])
+              .select()
+            error = insertRes.error
+            if (!error && insertRes.data && insertRes.data[0]) {
+              setRecords((prev) =>
+                prev.map((r) =>
+                  r.worker_id === workerId && r.date === dateStr
+                    ? (insertRes.data[0] as AttendanceRecord)
+                    : r,
+                ),
+              )
+            }
+          }
+        } else {
+          if (upsertRes.data && upsertRes.data[0]) {
+            setRecords((prev) =>
+              prev.map((r) =>
+                r.worker_id === workerId && r.date === dateStr
+                  ? (upsertRes.data[0] as AttendanceRecord)
+                  : r,
+              ),
+            )
+          }
+        }
+      }
+
+      if (error) {
+        console.error('[AttendanceTab] Error saving attendance:', error)
+        toast({
+          title: 'Erro ao salvar',
+          description: error.message || 'Falha ao registrar presença/falta.',
+          variant: 'destructive',
+        })
+        fetchData() // revert
+      } else {
+        toast({
+          title: newStatus ? 'Presença confirmada' : 'Falta registrada',
+          description: newStatus
+            ? 'Colaborador marcado como Presente.'
+            : 'Colaborador marcado como Ausente.',
+        })
+      }
+    } finally {
+      setSavingAttendanceId(null)
     }
   }
 
@@ -226,24 +328,48 @@ export default function AttendanceTab() {
                       <div className="text-xs text-muted-foreground">{worker.role}</div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
-                        variant={isPresentToday ? 'default' : 'outline'}
-                        className={cn(
-                          'w-full h-10 text-sm font-bold transition-all duration-200',
-                          isPresentToday
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'text-muted-foreground',
-                        )}
-                        onClick={() => togglePresence(worker.id, isPresentToday)}
-                      >
-                        {isPresentToday ? (
-                          <>
-                            <Check className="mr-2 h-4 w-4" /> Presente
-                          </>
-                        ) : (
-                          'Ausente'
-                        )}
-                      </Button>
+                      <div className="inline-flex rounded-md border p-1 bg-muted/40 gap-1 w-full max-w-[200px]">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isPresentToday ? 'default' : 'ghost'}
+                          className={cn(
+                            'flex-1 h-8 text-xs font-semibold transition-all',
+                            isPresentToday
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )}
+                          disabled={savingAttendanceId === worker.id}
+                          onClick={() => setPresenceStatus(worker.id, true)}
+                        >
+                          {savingAttendanceId === worker.id && isPresentToday ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Presente
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={!isPresentToday ? 'destructive' : 'ghost'}
+                          className={cn(
+                            'flex-1 h-8 text-xs font-semibold transition-all',
+                            !isPresentToday
+                              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )}
+                          disabled={savingAttendanceId === worker.id}
+                          onClick={() => setPresenceStatus(worker.id, false)}
+                        >
+                          {savingAttendanceId === worker.id && !isPresentToday ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <X className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Ausente
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-center font-bold">{totalDays}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
@@ -318,24 +444,46 @@ export default function AttendanceTab() {
                     </div>
                   </div>
 
-                  <Button
-                    variant={isPresentToday ? 'default' : 'outline'}
-                    className={cn(
-                      'w-full h-14 text-lg font-bold transition-all duration-200 shadow-sm',
-                      isPresentToday
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : 'text-muted-foreground bg-muted/30',
-                    )}
-                    onClick={() => togglePresence(worker.id, isPresentToday)}
-                  >
-                    {isPresentToday ? (
-                      <>
-                        <Check className="mr-2 h-5 w-5" /> PRESENTE
-                      </>
-                    ) : (
-                      'AUSENTE'
-                    )}
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={isPresentToday ? 'default' : 'outline'}
+                      className={cn(
+                        'h-12 text-sm font-bold transition-all shadow-sm',
+                        isPresentToday
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'text-muted-foreground bg-muted/20 border-dashed',
+                      )}
+                      disabled={savingAttendanceId === worker.id}
+                      onClick={() => setPresenceStatus(worker.id, true)}
+                    >
+                      {savingAttendanceId === worker.id && isPresentToday ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="mr-2 h-4 w-4" />
+                      )}
+                      PRESENTE
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={!isPresentToday ? 'destructive' : 'outline'}
+                      className={cn(
+                        'h-12 text-sm font-bold transition-all shadow-sm',
+                        !isPresentToday
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : 'text-muted-foreground bg-muted/20 border-dashed',
+                      )}
+                      disabled={savingAttendanceId === worker.id}
+                      onClick={() => setPresenceStatus(worker.id, false)}
+                    >
+                      {savingAttendanceId === worker.id && !isPresentToday ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <X className="mr-2 h-4 w-4" />
+                      )}
+                      AUSENTE
+                    </Button>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
                     <div className="space-y-1">

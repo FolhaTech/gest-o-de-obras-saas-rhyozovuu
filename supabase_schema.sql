@@ -352,7 +352,8 @@ CREATE TABLE public.attendance_records (
   worker_id UUID REFERENCES public.team_members(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   is_present BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  CONSTRAINT attendance_records_worker_date_key UNIQUE (worker_id, date)
 );
 
 -- 3.23. TABELA: attendance_extras (Horas Extras e Valores Adicionais Semanais)
@@ -362,7 +363,8 @@ CREATE TABLE public.attendance_extras (
   week_start_date DATE NOT NULL,
   extra_value NUMERIC DEFAULT 0,
   notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  CONSTRAINT attendance_extras_worker_week_key UNIQUE (worker_id, week_start_date)
 );
 
 -- 3.24. TABELA: expenses (Despesas e Lançamentos Financeiros)
@@ -453,9 +455,11 @@ CREATE INDEX IF NOT EXISTS idx_team_member_documents_member_id ON public.team_me
 
 CREATE INDEX IF NOT EXISTS idx_attendance_records_worker_id ON public.attendance_records(worker_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_records_date ON public.attendance_records(date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_records_worker_date ON public.attendance_records(worker_id, date);
 
 CREATE INDEX IF NOT EXISTS idx_attendance_extras_worker_id ON public.attendance_extras(worker_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_extras_week_start_date ON public.attendance_extras(week_start_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_extras_worker_week ON public.attendance_extras(worker_id, week_start_date);
 
 CREATE INDEX IF NOT EXISTS idx_service_providers_work_id ON public.service_providers(work_id);
 

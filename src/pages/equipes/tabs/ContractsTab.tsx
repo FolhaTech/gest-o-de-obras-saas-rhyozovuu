@@ -101,13 +101,13 @@ export default function ContractsTab() {
     }
   }
 
-  const FormContent = () => (
+  const renderFormFields = () => (
     <>
       <div className="space-y-2">
         <Label>Prestador de Serviço</Label>
         <Select
-          value={formData.provider_id}
-          onValueChange={(val) => setFormData({ ...formData, provider_id: val })}
+          value={formData.provider_id || ''}
+          onValueChange={(val) => setFormData((prev) => ({ ...prev, provider_id: val }))}
         >
           <SelectTrigger>
             <SelectValue placeholder="Selecione..." />
@@ -126,7 +126,10 @@ export default function ContractsTab() {
         <Input
           required
           value={formData.service_description || ''}
-          onChange={(e) => setFormData({ ...formData, service_description: e.target.value })}
+          placeholder="Ex: Execução de alvenaria e reboco"
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, service_description: e.target.value }))
+          }
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -134,7 +137,8 @@ export default function ContractsTab() {
           <Label>Unidade / Ref</Label>
           <Input
             value={formData.unit || ''}
-            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+            placeholder="Ex: m², vb, un"
+            onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
@@ -142,8 +146,13 @@ export default function ContractsTab() {
           <Input
             type="number"
             step="0.01"
-            value={formData.total_value || ''}
-            onChange={(e) => setFormData({ ...formData, total_value: Number(e.target.value) })}
+            value={formData.total_value === undefined ? '' : formData.total_value}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                total_value: e.target.value === '' ? 0 : Number(e.target.value),
+              }))
+            }
           />
         </div>
         <div className="space-y-2">
@@ -151,9 +160,12 @@ export default function ContractsTab() {
           <Input
             type="number"
             step="0.01"
-            value={formData.executed_quantity || ''}
+            value={formData.executed_quantity === undefined ? '' : formData.executed_quantity}
             onChange={(e) =>
-              setFormData({ ...formData, executed_quantity: Number(e.target.value) })
+              setFormData((prev) => ({
+                ...prev,
+                executed_quantity: e.target.value === '' ? 0 : Number(e.target.value),
+              }))
             }
           />
         </div>
@@ -162,7 +174,7 @@ export default function ContractsTab() {
           <Input
             type="date"
             value={formData.target_date || ''}
-            onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, target_date: e.target.value }))}
           />
         </div>
       </div>
@@ -171,7 +183,9 @@ export default function ContractsTab() {
           <Label>Status</Label>
           <Select
             value={formData.is_completed ? 'true' : 'false'}
-            onValueChange={(val) => setFormData({ ...formData, is_completed: val === 'true' })}
+            onValueChange={(val) =>
+              setFormData((prev) => ({ ...prev, is_completed: val === 'true' }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -187,7 +201,8 @@ export default function ContractsTab() {
         <Label>Notas / Pagamentos</Label>
         <Input
           value={formData.notes || ''}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          placeholder="Condições de pagamento, parcelas..."
+          onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
         />
       </div>
     </>
@@ -209,7 +224,7 @@ export default function ContractsTab() {
               <DialogTitle>Adicionar Serviço Contratado</DialogTitle>
             </DialogHeader>
             <form onSubmit={(e) => handleSave(e, false)} className="space-y-4 mt-4">
-              <FormContent />
+              {renderFormFields()}
               <Button type="submit" className="w-full">
                 Salvar
               </Button>
@@ -298,7 +313,7 @@ export default function ContractsTab() {
             <DialogTitle>Editar Contrato</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => handleSave(e, true)} className="space-y-4 mt-4">
-            <FormContent />
+            {renderFormFields()}
             <Button type="submit" className="w-full">
               Atualizar
             </Button>
