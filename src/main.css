@@ -101,10 +101,13 @@
 
   /* Suporte a entalhe de celulares (notch / safe area) */
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 1rem);
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
   }
   .pt-safe {
-    padding-top: env(safe-area-inset-top, 0);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .header-pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   @keyframes fade-in {

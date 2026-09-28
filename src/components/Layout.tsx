@@ -20,7 +20,7 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-3 sm:px-4 md:px-6 shadow-sm z-10 sticky top-0">
+        <header className="sticky top-0 z-20 flex min-h-16 shrink-0 items-center gap-2 border-b bg-card/95 backdrop-blur-md px-3 sm:px-4 md:px-6 shadow-sm header-pt-safe">
           <SidebarTrigger className="-ml-1" />
           <div className="flex-1 max-w-xl hidden md:flex items-center relative">
             <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
@@ -70,7 +70,7 @@ export default function Layout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-8 animate-fade-in pb-safe">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-8 pt-5 sm:pt-6 md:pt-8 animate-fade-in pb-safe">
           <Outlet />
         </main>
       </SidebarInset>
