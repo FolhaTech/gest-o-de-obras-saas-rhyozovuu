@@ -769,6 +769,7 @@ export type Database = {
           created_at: string | null
           daily_cost: number | null
           fixed_salary: number | null
+          group_id: string | null
           id: string
           name: string
           participates_in_averages: boolean | null
@@ -786,6 +787,7 @@ export type Database = {
           created_at?: string | null
           daily_cost?: number | null
           fixed_salary?: number | null
+          group_id?: string | null
           id?: string
           name: string
           participates_in_averages?: boolean | null
@@ -803,6 +805,7 @@ export type Database = {
           created_at?: string | null
           daily_cost?: number | null
           fixed_salary?: number | null
+          group_id?: string | null
           id?: string
           name?: string
           participates_in_averages?: boolean | null
@@ -822,7 +825,35 @@ export type Database = {
             referencedRelation: 'works'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'team_members_group_id_fkey'
+            columns: ['group_id']
+            isOneToOne: false
+            referencedRelation: 'worker_groups'
+            referencedColumns: ['id']
+          },
         ]
+      }
+      worker_groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       work_diaries: {
         Row: {

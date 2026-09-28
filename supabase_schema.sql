@@ -1227,6 +1227,80 @@ BEGIN
 END $$;
 
 -- ==============================================================================
+-- ETAPA 13: MÓDULO DE GRUPOS DE FUNCIONÁRIOS (EQUIPES / WORKER GROUPS)
+-- IMPORTANTE: Execute esta etapa no SQL Editor do Supabase se estiver atualizando
+-- um banco já em produção. Ela é 100% idempotente e segura para rodar repetidas vezes.
+-- ==============================================================================
+-- 13.1. Tabela: worker_groups (Grupos de funcionários, ex: Alvenaria, Elétrica, Hidráulica)
+CREATE TABLE IF NOT EXISTS public.worker_groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 13.2. Coluna group_id na tabela team_members (com FK referenciando worker_groups e ON DELETE SET NULL)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'team_members' 
+      AND column_name = 'group_id'
+  ) THEN
+    ALTER TABLE public.team_members 
+      ADD COLUMN group_id UUID REFERENCES public.worker_groups(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- 13.3. Coluna group_id na tabela workers (caso exista uma tabela legada ou alternativa chamada 'workers')
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'workers'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = 'workers' 
+        AND column_name = 'group_id'
+    ) THEN
+      ALTER TABLE public.workers 
+        ADD COLUMN group_id UUID REFERENCES public.worker_groups(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
+
+-- 13.4. Índices para performance de busca por grupo
+CREATE INDEX IF NOT EXISTS idx_worker_groups_name ON public.worker_groups(name);
+CREATE INDEX IF NOT EXISTS idx_team_members_group_id ON public.team_members(group_id);
+
+-- 13.5. Row Level Security (RLS) para worker_groups (usuários autenticados podem tudo, anon leitura/tudo conforme padrão)
+ALTER TABLE public.worker_groups ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Allow authenticated full access" ON public.worker_groups;
+  DROP POLICY IF EXISTS "Allow auth all on worker_groups" ON public.worker_groups;
+  CREATE POLICY "Allow authenticated full access" ON public.worker_groups 
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Allow anon full access" ON public.worker_groups;
+  CREATE POLICY "Allow anon full access" ON public.worker_groups 
+    FOR ALL TO anon USING (true) WITH CHECK (true);
+END $$;
+
+-- 13.6. Grupos padrão / seeds iniciais de exemplo (idempotente)
+INSERT INTO public.worker_groups (name, description)
+VALUES 
+  ('Alvenaria', 'Equipe de alvenaria e estruturas'),
+  ('Elétrica', 'Instalações elétricas e cabeamento'),
+  ('Hidráulica', 'Tubulações, esgoto e hidráulica predial'),
+  ('Pintura e Acabamento', 'Serviços de pintura, gesso e revestimento')
+ON CONFLICT (name) DO NOTHING;
+
+-- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA
 -- O banco de dados agora está 100% estruturado, seguro e funcional.
 -- ==============================================================================

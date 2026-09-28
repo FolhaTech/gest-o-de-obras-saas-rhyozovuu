@@ -73,6 +73,13 @@ export interface Despesa {
   works?: { name: string }
 }
 
+export interface WorkerGroup {
+  id: string
+  name: string
+  description?: string | null
+  created_at?: string | null
+}
+
 export interface Equipe {
   id: string
   name: string
@@ -81,12 +88,14 @@ export interface Equipe {
   type: string | null
   daily_cost: number | null
   work_id: string | null
+  group_id?: string | null
   status: string | null
   admission_date?: string | null
   pix_key?: string | null
   payment_type?: string | null
   created_at?: string | null
   works?: { name: string }
+  worker_groups?: { id: string; name: string } | null
 }
 
 export interface TeamMemberDocument {

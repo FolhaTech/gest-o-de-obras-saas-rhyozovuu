@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Equipe, TeamMemberDocument } from '@/types'
+import { Equipe, TeamMemberDocument, WorkerGroup } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 import {
   FileText,
@@ -51,6 +51,9 @@ export default function WorkerDetailSheet({
 }: WorkerDetailSheetProps) {
   const { toast } = useToast()
 
+  // Groups State
+  const [groups, setGroups] = useState<WorkerGroup[]>([])
+
   // Cadastro State
   const [formData, setFormData] = useState<Partial<Equipe>>({})
   const [saving, setSaving] = useState(false)
@@ -67,6 +70,7 @@ export default function WorkerDetailSheet({
         name: worker.name,
         role: worker.role || '',
         phone: worker.phone || '',
+        group_id: worker.group_id || 'none',
         type: worker.type || 'internal',
         daily_cost: worker.daily_cost || 0,
         status: worker.status || 'active',
@@ -76,8 +80,23 @@ export default function WorkerDetailSheet({
       })
       loadDocs()
       loadTimeline()
+      loadGroups()
     }
   }, [open, worker])
+
+  const loadGroups = async () => {
+    try {
+      const { data } = await supabase
+        .from('worker_groups')
+        .select('*')
+        .order('name', { ascending: true })
+      if (data) {
+        setGroups(data as WorkerGroup[])
+      }
+    } catch {
+      // Ignora se tabela ainda não existir
+    }
+  }
 
   const loadDocs = async () => {
     setLoadingDocs(true)
@@ -161,10 +180,14 @@ export default function WorkerDetailSheet({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    const payload = {
+    const resolvedGroupId =
+      !formData.group_id || formData.group_id === 'none' ? null : formData.group_id
+
+    const payload: any = {
       name: formData.name,
       role: formData.role,
       phone: formData.phone || null,
+      group_id: resolvedGroupId,
       type: formData.type,
       daily_cost: Number(formData.daily_cost),
       status: formData.status,
@@ -173,7 +196,14 @@ export default function WorkerDetailSheet({
       admission_date: formData.admission_date || null,
     }
 
-    const { error } = await supabase.from('team_members').update(payload).eq('id', worker.id)
+    let { error } = await supabase.from('team_members').update(payload).eq('id', worker.id)
+
+    // Se falhar porque a coluna group_id ainda não existe no Supabase, tenta novamente sem ela
+    if (error && String(error.message || '').includes('group_id')) {
+      delete payload.group_id
+      const retry = await supabase.from('team_members').update(payload).eq('id', worker.id)
+      error = retry.error
+    }
 
     setSaving(false)
     if (!error) {
@@ -322,7 +352,7 @@ export default function WorkerDetailSheet({
                   <div className="space-y-2">
                     <Label>Equipe / Tipo</Label>
                     <Select
-                      value={formData.type}
+                      value={formData.type || 'internal'}
                       onValueChange={(val) => setFormData({ ...formData, type: val })}
                     >
                       <SelectTrigger>
@@ -334,6 +364,25 @@ export default function WorkerDetailSheet({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Grupo</Label>
+                  <Select
+                    value={formData.group_id || 'none'}
+                    onValueChange={(val) => setFormData({ ...formData, group_id: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um grupo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem grupo</SelectItem>
+                      {groups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
