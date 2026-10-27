@@ -1301,6 +1301,34 @@ VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- ==============================================================================
+-- ETAPA 14: CORREÇÃO DE RLS EM public.profiles PARA LISTAGEM DE USUÁRIOS
+-- Necessária para a tela de Configurações (src/pages/configuracoes/tabs/UsersTab.tsx)
+-- listar todos os usuários cadastrados e permitir a gestão de papéis/permissões,
+-- permitindo que qualquer usuário autenticado leia todos os perfis.
+-- Idempotente: remove quaisquer políticas antigas de SELECT antes de criar a nova.
+-- ==============================================================================
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  -- Remove políticas antigas de SELECT ou restritivas se existirem
+  DROP POLICY IF EXISTS "profiles_select_all_authenticated" ON public.profiles;
+  DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+  DROP POLICY IF EXISTS "Allow individual read access" ON public.profiles;
+  DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
+  DROP POLICY IF EXISTS "Profiles are viewable by authenticated users" ON public.profiles;
+  DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
+  DROP POLICY IF EXISTS "Users can read all profiles" ON public.profiles;
+
+  -- Cria a política de SELECT permitindo que qualquer usuário autenticado leia todos os perfis
+  CREATE POLICY "profiles_select_all_authenticated" 
+    ON public.profiles 
+    FOR SELECT 
+    TO authenticated 
+    USING (true);
+END $$;
+
+-- ==============================================================================
 -- FIM DO SCRIPT DE SCHEMA
 -- O banco de dados agora está 100% estruturado, seguro e funcional.
 -- ==============================================================================
