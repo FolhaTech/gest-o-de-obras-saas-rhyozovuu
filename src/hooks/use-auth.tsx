@@ -95,7 +95,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error && data?.user) {
+      // Registra o último login do usuário em public.profiles (last_login_at).
+      // Tolerante a falha: nunca bloqueia o login se o update falhar.
+      try {
+        await supabase
+          .from('profiles')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', data.user.id)
+      } catch (err) {
+        console.warn('[useAuth] Could not update last_login_at:', err)
+      }
+    }
     return { error }
   }
 

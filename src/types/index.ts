@@ -107,6 +107,16 @@ export interface TeamMemberDocument {
   created_at: string
 }
 
+export interface UserProfile {
+  id: string
+  full_name: string
+  email?: string | null
+  role?: string | null
+  avatar_url?: string | null
+  last_login_at?: string | null
+  created_at?: string | null
+}
+
 export interface ServiceProvider {
   id: string
   work_id?: string | null

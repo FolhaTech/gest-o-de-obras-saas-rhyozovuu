@@ -20,13 +20,28 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { normalizeRole } from '@/lib/roles'
-import { ShieldCheck, HardHat, UserCheck, Shield } from 'lucide-react'
+import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History } from 'lucide-react'
 
 interface Profile {
   id: string
   full_name: string
   email?: string | null
   role: string | null
+  last_login_at?: string | null
+  created_at?: string | null
+}
+
+function formatLastLogin(value?: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 export default function UsersTab() {
@@ -84,6 +99,7 @@ export default function UsersTab() {
             <TableRow>
               <TableHead>Nome / E-mail</TableHead>
               <TableHead>Papel Atual</TableHead>
+              <TableHead>Último login</TableHead>
               <TableHead>Alterar Nível de Acesso</TableHead>
             </TableRow>
           </TableHeader>
@@ -113,6 +129,19 @@ export default function UsersTab() {
                       <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 gap-1">
                         <HardHat className="h-3 w-3" /> Prestador
                       </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {formatLastLogin(p.last_login_at) ? (
+                      <span className="flex items-center gap-1.5 text-sm text-foreground">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                        {formatLastLogin(p.last_login_at)}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground italic">
+                        <History className="h-3.5 w-3.5" />
+                        Nunca entrou
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
