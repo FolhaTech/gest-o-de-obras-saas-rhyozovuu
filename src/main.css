@@ -130,3 +130,63 @@
     }
   }
 }
+
+/* ============================================================
+   Impressão (Manual do Sistema → "Baixar PDF" via window.print)
+   - Esconde sidebar, header e botões (só o conteúdo do manual)
+   - Cada capítulo começa em nova página
+   ============================================================ */
+@media print {
+  /* Sidebar (componente shadcn/ui) some por completo */
+  [data-slot='sidebar'],
+  aside[data-sidebar='sidebar'],
+  .manual-header .manual-actions {
+    display: none !important;
+  }
+
+  header {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* Zera o layout em grade/fixo do wrapper do sidebar para ocupar a folha inteira */
+  .manual-root,
+  .manual-root * {
+    overflow: visible !important;
+  }
+
+  .manual-root {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 0.5cm !important;
+  }
+
+  /* Capítulos: sempre nova página na impressão */
+  .manual-chapter {
+    break-before: page;
+    color: #000 !important;
+  }
+
+  /* Evita que um passo, dica ou tabela quebre no meio */
+  .manual-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Cores dos blocos de destaque preservadas no papel */
+  .manual-callout,
+  .manual-cover,
+  .manual-footer {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

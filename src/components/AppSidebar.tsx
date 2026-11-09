@@ -24,6 +24,7 @@ import {
   HardHat,
   Building2,
   CalendarDays,
+  BookOpenCheck,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
@@ -48,6 +49,7 @@ const allMenuItems: MenuItem[] = [
   { title: 'Airbnb', url: '/airbnb', icon: Building2 },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
+  { title: 'Manual do Sistema', url: '/manual', icon: BookOpenCheck },
 ]
 
 export function AppSidebar() {

@@ -59,6 +59,11 @@ export function canAccessPath(
   // Normalização do pathname para validação de prefixos
   const cleanPath = pathname.split('?')[0].split('#')[0]
 
+  // Manual do Sistema: acessível a qualquer papel logado
+  if (cleanPath === '/manual' || cleanPath.startsWith('/manual/')) {
+    return true
+  }
+
   // Rotas permitidas para o Prestador
   if (
     cleanPath === '/planner' ||

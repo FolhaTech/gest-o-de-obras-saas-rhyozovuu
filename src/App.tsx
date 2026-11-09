@@ -20,6 +20,7 @@ import MateriaisList from './pages/materiais/List'
 import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
+import ManualPage from './pages/manual/ManualPage'
 import AirbnbPage from './pages/Airbnb'
 import PlannerPage from './pages/planner/PlannerPage'
 import AccessDenied from './pages/AccessDenied'
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/obras/:id" element={<ObraDetail />} />
               <Route path="/diario-obra" element={<DiarioObraList />} />
               <Route path="/materiais" element={<MateriaisList />} />
+              <Route path="/manual" element={<ManualPage />} />
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
