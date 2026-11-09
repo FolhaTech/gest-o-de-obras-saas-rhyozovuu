@@ -67,8 +67,11 @@ const App = () => (
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
                 <Route path="/equipes" element={<EquipesList />} />
-                <Route path="/despesas" element={<DespesasList />} />
-                <Route path="/airbnb" element={<AirbnbPage />} />
+                {/* Páginas 100% financeiras: só o Administrador (o Gestor não vê valores) */}
+                <Route element={<RoleRoute allowedRoles={['admin']} />}>
+                  <Route path="/despesas" element={<DespesasList />} />
+                  <Route path="/airbnb" element={<AirbnbPage />} />
+                </Route>
                 <Route path="/relatorios" element={<RelatoriosList />} />
                 <Route path="/configuracoes" element={<ConfiguracoesList />} />
               </Route>

@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Equipe, TeamMemberDocument, WorkerGroup } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/formatters'
+import { useAuth } from '@/hooks/use-auth'
 import {
   FileText,
   Download,
@@ -50,6 +51,7 @@ export default function WorkerDetailSheet({
   onUpdated,
 }: WorkerDetailSheetProps) {
   const { toast } = useToast()
+  const { canSeeValues } = useAuth() // pagamento só para o administrador
 
   // Groups State
   const [groups, setGroups] = useState<WorkerGroup[]>([])
@@ -159,7 +161,7 @@ export default function WorkerDetailSheet({
         date: e.week_start_date,
         type: 'extra',
         title: 'Pagamento/Extra',
-        description: `Valor: ${formatCurrency(e.extra_value || 0)}. ${e.notes || ''}`,
+        description: `${canSeeValues ? `Valor: ${formatCurrency(e.extra_value || 0)}. ` : ''}${e.notes || ''}`,
       })
     })
 
@@ -385,6 +387,7 @@ export default function WorkerDetailSheet({
                   </Select>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
+                  {canSeeValues && (
                   <div className="space-y-2">
                     <Label>Tipo Pagamento</Label>
                     <Select
@@ -400,6 +403,8 @@ export default function WorkerDetailSheet({
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
+                  {canSeeValues && (
                   <div className="space-y-2">
                     <Label>Valor (R$)</Label>
                     <Input
@@ -411,6 +416,7 @@ export default function WorkerDetailSheet({
                       }
                     />
                   </div>
+                  )}
                   <div className="space-y-2">
                     <Label>Status</Label>
                     <Select

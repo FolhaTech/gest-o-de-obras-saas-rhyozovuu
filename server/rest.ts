@@ -18,6 +18,7 @@ import {
 } from './http.js'
 import { ident, toApiError, withCaller, type Caller } from './db.js'
 import { getCatalog, type Catalog, type ForeignKey, type TableInfo } from './catalog.js'
+import { assertNoValueQuery, maskRows, stripPayload, tierOf, type Tier } from './mask.js'
 
 const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', 'columns', 'apikey'])
 
@@ -430,6 +431,8 @@ async function handleRestOnce(
     }
 
     const sp = route.searchParams
+    const tier = await tierOf(caller)
+    assertNoValueQuery(sp, tier)
     const prefs = parsePrefer(header(req, 'prefer'))
     const wantObject = header(req, 'accept').includes('application/vnd.pgrst.object+json')
     const returnRep = prefs.return === 'representation'
@@ -459,6 +462,7 @@ async function handleRestOnce(
         }
         return { rows: r.rows[0].body as unknown[], total }
       })
+      const masked = maskRows(rows, tier)
       const start = offset ?? 0
       const range = rows.length ? `${start}-${start + rows.length - 1}` : '*'
       const headers: Record<string, string> = {}
@@ -466,13 +470,13 @@ async function handleRestOnce(
       if (method === 'HEAD') return sendEmpty(res, 200, headers)
       if (wantObject) {
         if (rows.length !== 1) throw singleError(rows.length)
-        return sendJson(res, 200, rows[0], headers)
+        return sendJson(res, 200, masked[0], headers)
       }
-      return sendJson(res, 200, rows, headers)
+      return sendJson(res, 200, masked, headers)
     }
 
     if (method === 'POST') {
-      const body = await readBody()
+      const body = stripPayload(await readBody(), tier)
       const rows = Array.isArray(body) ? body : [body]
       if (!rows.every(isPlainObject)) {
         throw new ApiError(400, 'PGRST102', 'Corpo inválido: esperado objeto ou lista de objetos')
@@ -497,11 +501,11 @@ async function handleRestOnce(
           sql += ` ON CONFLICT ${target.length ? `(${target.map(ident).join(', ')}) ` : ''}DO NOTHING`
         }
       }
-      return await runMutation(res, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 201, 'RETURNING *')
+      return await runMutation(res, tier, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 201, 'RETURNING *')
     }
 
     if (method === 'PATCH') {
-      const body = await readBody()
+      const body = stripPayload(await readBody(), tier)
       if (!isPlainObject(body)) throw new ApiError(400, 'PGRST102', 'Corpo inválido: esperado objeto')
       const cols = Object.keys(body)
       checkColumns(table, cols)
@@ -514,7 +518,7 @@ async function handleRestOnce(
       const sql = `UPDATE ${T} t SET ${sets} FROM json_populate_record(null::${T}, ${p.add(JSON.stringify(body))}::json) r${
         conds.length ? ` WHERE ${conds.join(' AND ')}` : ''
       }`
-      return await runMutation(res, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 200, 'RETURNING t.*')
+      return await runMutation(res, tier, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 200, 'RETURNING t.*')
     }
 
     if (method === 'DELETE') {
@@ -523,7 +527,7 @@ async function handleRestOnce(
         throw new ApiError(400, '21000', 'DELETE requires a WHERE clause', null, 'Informe ao menos um filtro (ex.: id=eq.<uuid>).')
       }
       const sql = `DELETE FROM ${T} t${conds.length ? ` WHERE ${conds.join(' AND ')}` : ''}`
-      return await runMutation(res, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 200, 'RETURNING t.*')
+      return await runMutation(res, tier, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 200, 'RETURNING t.*')
     }
 
     throw new ApiError(405, 'PGRST117', `Método ${method} não suportado`)
@@ -545,6 +549,7 @@ function singleError(n: number) {
 
 async function runMutation(
   res: Res,
+  tier: Tier,
   caller: Caller,
   cat: Catalog,
   table: TableInfo,
@@ -570,5 +575,6 @@ async function runMutation(
     if (wantObject && out.length !== 1) throw singleError(out.length) // desfaz a transação
     return out
   })
-  return sendJson(res, okStatus, wantObject ? rows[0] : rows)
+  const masked = maskRows(rows, tier)
+  return sendJson(res, okStatus, wantObject ? masked[0] : masked)
 }

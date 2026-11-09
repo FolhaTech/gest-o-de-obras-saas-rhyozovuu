@@ -72,7 +72,7 @@ export default function ObrasList() {
     await Promise.allSettled([refetchObras(), refetchExpenses(), refetchRevenues()])
   }
 
-  const { user } = useAuth()
+  const { user, canSeeValues } = useAuth()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [creatingSample, setCreatingSample] = useState(false)
@@ -365,6 +365,7 @@ export default function ObrasList() {
                       onChange={(e) => setFormData({ ...formData, totalArea: e.target.value })}
                     />
                   </div>
+                  {canSeeValues && (
                   <div className="space-y-2">
                     <Label>Orçamento Planejado (R$)</Label>
                     <Input
@@ -376,6 +377,8 @@ export default function ObrasList() {
                       onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                     />
                   </div>
+                  )}
+                  {canSeeValues && (
                   <div className="space-y-2">
                     <Label>Valor Contratado (R$)</Label>
                     <Input
@@ -389,6 +392,7 @@ export default function ObrasList() {
                       }
                     />
                   </div>
+                  )}
                 </div>
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? 'Criando...' : 'Criar Obra'}
@@ -481,10 +485,12 @@ export default function ObrasList() {
                       <Badge variant="outline" className={getStatusColor(obra.status)}>
                         {translateStatus(obra.status)}
                       </Badge>
-                      <WorkRoiBadge
-                        roiPercentage={metrics.roiPercentage}
-                        status={metrics.roiStatus}
-                      />
+                      {canSeeValues && (
+                        <WorkRoiBadge
+                          roiPercentage={metrics.roiPercentage}
+                          status={metrics.roiStatus}
+                        />
+                      )}
                     </div>
                     <CardTitle className="text-xl group-hover:text-primary transition-colors">
                       {obra.name}
@@ -510,6 +516,7 @@ export default function ObrasList() {
                       <Progress value={Number(obra.progress_percentage) || 0} className="h-2" />
                     </div>
                   </CardContent>
+                  {canSeeValues && (
                   <CardFooter className="bg-muted/30 border-t py-3 flex-col gap-1.5 items-stretch">
                     <div className="w-full flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">Orçamento</span>
@@ -530,6 +537,7 @@ export default function ObrasList() {
                       </div>
                     )}
                   </CardFooter>
+                  )}
                 </Card>
               </Link>
             )

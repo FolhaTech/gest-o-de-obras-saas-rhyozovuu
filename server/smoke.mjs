@@ -1,5 +1,7 @@
 // Teste de fumaça da API compatível com Supabase (node server/smoke.mjs). Usa o supabase-js de verdade.
-// Cria e remove os próprios registros; o usuário de teste (smoke-*@example.com) fica no banco.
+// Cria e remove os próprios registros, inclusive o usuário de teste (smoke-*@example.com).
+// Suba a API local assim:  ALLOW_SIGNUP=true ROLE_CACHE_MS=0 pnpm dev:api
+// (o cadastro aberto vem FECHADO por padrão; o teste usa signUp; ROLE_CACHE_MS=0 desliga o cache de papel).
 import { existsSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 import pg from 'pg'
@@ -33,7 +35,11 @@ const ok = (name, cond, extra = '') => {
 
 // --- anon ---
 let r = await sb.from('works').select('id,name').limit(2)
-ok('anon lê works (policy anon)', !r.error && r.data.length > 0, r.error?.message)
+ok('anon NÃO lê works (sem acesso público)', !r.error && r.data.length === 0, r.error?.message)
+r = await sb.from('materials').select('id,unit_price').limit(2)
+ok('anon NÃO lê materials (preços)', !r.error && r.data.length === 0)
+r = await sb.from('airbnb_properties').select('id').limit(1)
+ok('anon NÃO lê airbnb_properties', !r.error && r.data.length === 0)
 r = await sb.from('profiles').select('id')
 ok('anon NÃO lê profiles (RLS)', !r.error && r.data.length === 0)
 r = await sb.from('team_members').insert({ name: 'x' })
@@ -223,6 +229,16 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const allocAdmin = await allocSel()
   const av = [allocAdmin.data?.[0]?.work_extra_material_values].flat()[0]
   ok('admin lê os itens alocados com os valores (embed)', !allocAdmin.error && allocAdmin.data.length === 1 && Number(av?.total_cost) === 6, allocAdmin.error?.message)
+  // admin cria usuário (o cadastro aberto vem fechado) com o papel escolhido
+  const nuEmail = `smoke-nu-${Date.now()}@example.com`
+  const cu = await sb.functions.invoke('create-user', { body: { email: nuEmail, password: 'segredo123', fullName: 'Novo Smoke', role: 'gestor' } })
+  const nuProf = (await db.query('select role from public.profiles where email = $1', [nuEmail])).rows[0]
+  ok('admin cria usuário com o papel escolhido', !cu.error && nuProf?.role === 'gestor', cu.error?.message)
+  const cuDup = await sb.functions.invoke('create-user', { body: { email: nuEmail, password: 'segredo123', role: 'gestor' } })
+  ok('e-mail repetido é recusado ao criar usuário', !!cuDup.error)
+  const nuLogin = await mk0().auth.signInWithPassword({ email: nuEmail, password: 'segredo123' })
+  ok('usuário criado pelo admin consegue entrar', !nuLogin.error && !!nuLogin.data.session, nuLogin.error?.message)
+  await db.query('delete from auth.users where email = $1', [nuEmail])
   await db.query("update public.profiles set role = 'prestador', team_member_id = $2 where id = $1", [smokeUserId, mA.id])
   const allocPrest = await allocSel()
   const pv = [allocPrest.data?.[0]?.work_extra_material_values].flat().filter(Boolean)
@@ -262,10 +278,30 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador não se promove a admin', !!selfRole.error, selfRole.error?.message)
   const selfLink = await sb.from('profiles').update({ team_member_id: mB.id }).eq('id', smokeUserId)
   ok('prestador não troca o próprio vínculo', !!selfLink.error, selfLink.error?.message)
-  // Gestor (colaborador) também só vê os cards em que é a Pessoa Responsável
+  // Gestor: mesmas permissões do admin (todos os cards do Planner), mas sem nenhum valor (R$)
   await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
   const asGestor = await sb.from('planner_tasks').select('id,assignee_id')
-  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === mA.id), `${asGestor.data?.length} de ${allTasks}`)
+  ok('gestor vê todos os cards do Planner (como o admin)', !asGestor.error && asGestor.data.length === allTasks && asGestor.data.some((t) => t.assignee_id === mB.id), `${asGestor.data?.length} de ${allTasks}`)
+  // obra de teste própria (nunca mexe em obra real): criada e removida aqui
+  const wid = (await db.query("insert into public.works (name, contracted_value, budget_planned) values ('smoke-obra-valores', 777, 888) returning id")).rows[0].id
+  const gWorks = await sb.from('works').select('*').eq('id', wid)
+  const valueKeys = ['contracted_value', 'budget_planned', 'entry_value', 'payment_method', 'installments']
+  ok('gestor lê as obras SEM as colunas de valor', !gWorks.error && gWorks.data.length > 0 && gWorks.data.every((w) => w.name && valueKeys.every((k) => !(k in w))), gWorks.error?.message)
+  const gEmb = await sb.from('materials').select('name, unit_price').limit(2)
+  ok('gestor lê materiais sem o preço', !gEmb.error && gEmb.data.length > 0 && gEmb.data.every((m) => !('unit_price' in m)))
+  const gFilter = await sb.from('works').select('id').gt('contracted_value', 1000)
+  ok('gestor não descobre valor por filtro', gFilter.error?.code === '42501', gFilter.error?.code)
+  const gOrder = await sb.from('works').select('id').order('budget_planned')
+  ok('gestor não descobre valor por ordenação', gOrder.error?.code === '42501', gOrder.error?.code)
+  const gRev = await sb.from('revenues').select('id')
+  const gExp = await sb.from('expenses').select('id')
+  ok('gestor não enxerga receitas nem despesas', !gRev.error && !gExp.error && gRev.data.length === 0 && gExp.data.length === 0)
+  const gUpd = await sb.from('works').update({ notes: 'gestor edita', contracted_value: 1 }).eq('id', wid).select('id, notes')
+  const kept = (await db.query('select contracted_value::int v from public.works where id = $1', [wid])).rows[0].v
+  ok('gestor edita a obra sem alterar o valor contratado', !gUpd.error && gUpd.data.length === 1 && kept === 777, `valor=${kept}`)
+  await db.query('delete from public.works where id = $1', [wid])
+  const gCreate = await sb.functions.invoke('create-user', { body: { email: `smoke-x-${Date.now()}@example.com`, password: 'segredo123', role: 'prestador' } })
+  ok('gestor não cria usuário', !!gCreate.error)
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
@@ -281,6 +317,8 @@ ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.
 
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
 await db.query('delete from public.planner_tasks where not (id = any($1::uuid[]))', [preTasks])
+// remove o usuário de teste (e o perfil/dados dele em cascata); se algo ainda o referenciar, ele fica
+await db.query('delete from auth.users where id = $1', [smokeUserId]).catch((e) => console.log('usuário de teste mantido:', e.message))
 await db.end()
 console.log(failed ? `\n${failed} FALHA(S)` : '\nTudo certo')
 process.exit(failed ? 1 : 0)

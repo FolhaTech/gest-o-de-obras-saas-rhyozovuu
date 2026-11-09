@@ -92,12 +92,12 @@ const total = (l: Pick<Loss, 'quantity' | 'unit_cost'>) => Number(l.quantity) * 
 /**
  * Controle de perdas de materiais. Com obraId, mostra e registra só as perdas dessa obra;
  * sem obraId (página Materiais), mostra todas e permite escolher a obra.
- * O Prestador registra e vê as perdas, mas não vê valores em dinheiro.
+ * Gestor e Prestador registram e veem as perdas, mas não veem valores em dinheiro.
  */
 export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
   const { toast } = useToast()
-  const { user, role } = useAuth()
-  const showMoney = role !== 'prestador'
+  const { user, role, canSeeValues } = useAuth()
+  const showMoney = canSeeValues // valores (R$) só para o administrador
 
   const [losses, setLosses] = useState<Loss[]>([])
   const [catalog, setCatalog] = useState<CatalogItem[]>([])

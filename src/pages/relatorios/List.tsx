@@ -2,9 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Download, FileText, PieChart } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function RelatoriosList() {
   const { toast } = useToast()
+  const { canSeeValues } = useAuth() // relatório financeiro só para o administrador
 
   const handleExport = (type: string) => {
     toast({
@@ -20,6 +22,7 @@ export default function RelatoriosList() {
         <p className="text-muted-foreground">Extraia e analise os dados da sua operação.</p>
       </div>
       <div className="grid gap-6 md:grid-cols-2">
+        {canSeeValues && (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2 text-primary mb-2">
@@ -36,6 +39,7 @@ export default function RelatoriosList() {
             </Button>
           </CardContent>
         </Card>
+        )}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2 text-primary mb-2">

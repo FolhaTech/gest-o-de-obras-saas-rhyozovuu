@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { normalizeRole } from '@/lib/roles'
-import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History, KeyRound } from 'lucide-react'
+import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History, KeyRound, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +73,37 @@ export default function UsersTab() {
   const closePwdDialog = () => {
     setPwdTarget(null)
     setNewPassword('')
+  }
+
+  // Criação de usuário (o cadastro aberto está desligado: só o administrador cria contas)
+  const emptyNewUser = { email: '', fullName: '', password: '', role: 'prestador' }
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newUser, setNewUser] = useState(emptyNewUser)
+  const [creating, setCreating] = useState(false)
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreating(true)
+    const { error } = await supabase.functions.invoke('create-user', { body: newUser })
+    setCreating(false)
+    if (error) {
+      let msg = error.message
+      try {
+        const body = await (error as any).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch {
+        /* mantém a mensagem padrão */
+      }
+      toast({ title: 'Erro ao criar usuário', description: msg, variant: 'destructive' })
+      return
+    }
+    toast({
+      title: 'Usuário criado',
+      description: `${newUser.email} já pode entrar. Informe a senha por um canal seguro.`,
+    })
+    setCreateOpen(false)
+    setNewUser(emptyNewUser)
+    refetch()
   }
 
   // Vínculo usuário -> membro da equipe: define quais tarefas do Planner o Prestador enxerga
@@ -159,8 +190,9 @@ export default function UsersTab() {
             equipes; vê todos os cards do Planner.
           </li>
           <li>
-            <strong>Gestor:</strong> Acesso total a todas as áreas operacionais e financeiras. No
-            Planner vê somente os cards em que é a Pessoa Responsável (membro da equipe vinculado).
+            <strong>Gestor:</strong> Mesmas permissões do Admin (inclusive todos os cards do
+            Planner), porém sem nenhum indicador de valores: não vê receitas, despesas, orçamentos,
+            preços, custos, ROI nem pagamentos.
           </li>
           <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
@@ -169,6 +201,14 @@ export default function UsersTab() {
           </li>
         </ul>
       </div>
+
+      {myRole === 'admin' && (
+        <div className="flex justify-end">
+          <Button type="button" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+            <UserPlus className="h-4 w-4" /> Novo usuário
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-md border bg-card">
         <Table>
@@ -233,7 +273,7 @@ export default function UsersTab() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
-                        <SelectItem value="gestor">Gestor (Acesso Total)</SelectItem>
+                        <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
                         <SelectItem value="prestador">
                           Prestador (Planner/Obras/Mat./Diário)
                         </SelectItem>
@@ -283,6 +323,72 @@ export default function UsersTab() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo usuário</DialogTitle>
+            <DialogDescription>
+              O usuário entra já confirmado, com o papel escolhido. Informe a senha à pessoa por um
+              canal seguro.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="nu-email">E-mail</Label>
+              <Input
+                id="nu-email"
+                type="email"
+                required
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nu-name">Nome</Label>
+              <Input
+                id="nu-name"
+                value={newUser.fullName}
+                onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nu-pass">Senha</Label>
+              <Input
+                id="nu-pass"
+                type="text"
+                autoComplete="off"
+                minLength={6}
+                maxLength={72}
+                required
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Papel</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
+                  <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
+                  <SelectItem value="prestador">Prestador (Planner/Obras/Mat./Diário)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" disabled={creating} onClick={() => setCreateOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? 'Criando...' : 'Criar usuário'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!pwdTarget} onOpenChange={(open) => !open && closePwdDialog()}>
         <DialogContent>
