@@ -38,6 +38,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/02_schema.sql # tabelas, triggers, RL
 psql "$ADMIN_URL/gestao_obras" -f db/azure/03_grants.sql
 psql "$ADMIN_URL/gestao_obras" -f db/azure/04_planner_progress.sql  # só em bancos criados antes da coluna de progresso
 psql "$ADMIN_URL/gestao_obras" -f db/azure/05_cronograma_planner_sync.sql  # Cronograma <-> Planner (gatilhos); teste: node db/azure/test-cronograma-sync.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/06_work_rented_materials.sql  # materiais locados por obra
 ```
 
 ## Desenvolvimento local
