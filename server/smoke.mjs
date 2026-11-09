@@ -1,6 +1,22 @@
 // Teste de fumaça da API compatível com Supabase (node server/smoke.mjs). Usa o supabase-js de verdade.
 // Cria e remove os próprios registros; o usuário de teste (smoke-*@example.com) fica no banco.
+import { existsSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
+import pg from 'pg'
+
+// O papel do usuário é lido do banco a cada requisição; o teste o altera direto no banco
+// (cadastro aberto sempre entra como prestador).
+if (existsSync('.env.local')) process.loadEnvFile('.env.local')
+const dbUrl = new URL(process.env.DATABASE_URL)
+const db = new pg.Client({
+  host: dbUrl.hostname,
+  port: Number(dbUrl.port || 5432),
+  user: decodeURIComponent(dbUrl.username),
+  password: decodeURIComponent(dbUrl.password),
+  database: dbUrl.pathname.slice(1),
+  ssl: { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED !== 'false' },
+})
+await db.connect()
 
 const API = process.env.API_URL ?? 'http://localhost:3001'
 const anon = process.env.VITE_SUPABASE_ANON_KEY ?? 'anon'
@@ -32,6 +48,8 @@ let { data: me } = await sb.auth.getUser()
 ok('getUser', me.user?.email === email)
 const prof = await sb.from('profiles').select('role').eq('id', s.data.user.id).maybeSingle()
 ok('cadastro aberto entra como prestador (ignora role=admin do cliente)', prof.data?.role === 'prestador', JSON.stringify(prof.data))
+const smokeUserId = s.data.user.id
+await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
 const bad = await createClient(API, anon, { auth: { persistSession: false } }).auth.signInWithPassword({ email, password: 'errada' })
 ok('senha errada rejeitada', !!bad.error, bad.error?.message)
 await sb.auth.signOut()
@@ -171,9 +189,40 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   await sb.storage.from('work-photos').remove([bigName])
 }
 
+// --- permissões do Prestador (via API, com RLS) ---
+{
+  const members = await db.query(`select assignee_id id, count(*)::int n from planner_tasks where assignee_id is not null group by 1 order by n desc limit 2`)
+  const [mA, mB] = members.rows
+  const allTasks = (await sb.from('planner_tasks').select('id')).data.length
+  const allStages = (await sb.from('work_stages').select('id')).data.length
+  await db.query("update public.profiles set role = 'prestador', team_member_id = $2 where id = $1", [smokeUserId, mA.id])
+  const mine = await sb.from('planner_tasks').select('id,assignee_id')
+  ok('prestador vê só as tarefas atribuídas a ele', !mine.error && mine.data.length > 0 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === mA.id), `${mine.data?.length} de ${allTasks}`)
+  const others = await sb.from('planner_tasks').select('id').eq('assignee_id', mB.id)
+  ok('prestador não enxerga tarefas de outro membro', !others.error && others.data.length === 0)
+  const forOther = await sb.from('planner_tasks').insert({ title: 'smoke-outro', assignee_id: mB.id })
+  ok('prestador não cria tarefa para outro membro', forOther.error?.code === '42501', forOther.error?.code)
+  const stagesSeen = await sb.from('work_stages').select('id')
+  ok('prestador vê as etapas do cronograma de todos', !stagesSeen.error && stagesSeen.data.length === allStages, `${stagesSeen.data?.length} etapas`)
+  const stIns = await sb.from('work_stages').insert({ work_id: work.id, name: 'smoke-prestador' })
+  ok('prestador não cria etapa no cronograma', stIns.error?.code === '42501', stIns.error?.code)
+  const anyStage = stagesSeen.data[0].id
+  const stUpd = await sb.from('work_stages').update({ name: 'hack' }).eq('id', anyStage).select()
+  ok('prestador não altera etapa', !stUpd.error && stUpd.data.length === 0)
+  const stDel = await sb.from('work_stages').delete().eq('id', anyStage).select()
+  ok('prestador não exclui etapa', !stDel.error && stDel.data.length === 0)
+  const selfRole = await sb.from('profiles').update({ role: 'admin' }).eq('id', smokeUserId)
+  ok('prestador não se promove a admin', !!selfRole.error, selfRole.error?.message)
+  const selfLink = await sb.from('profiles').update({ team_member_id: mB.id }).eq('id', smokeUserId)
+  ok('prestador não troca o próprio vínculo', !!selfLink.error, selfLink.error?.message)
+  const anonTasks = await mk0().from('planner_tasks').select('id')
+  ok('sem login não lê tarefas do Planner', !anonTasks.error && anonTasks.data.length === 0)
+}
+
 // --- functions ---
 const fn = await sb.functions.invoke('generate-composition', { body: { serviceName: 'Teste', unit: 'm2' } })
 ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.materials), fn.error?.message)
 
+await db.end()
 console.log(failed ? `\n${failed} FALHA(S)` : '\nTudo certo')
 process.exit(failed ? 1 : 0)

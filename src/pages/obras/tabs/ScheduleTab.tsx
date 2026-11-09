@@ -44,6 +44,7 @@ import {
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function ScheduleTab({ obraId }: { obraId: string }) {
   const {
@@ -55,6 +56,9 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
 
   const { toast } = useToast()
+  // Prestador acompanha o cronograma de todos, mas não altera nada (o banco também bloqueia).
+  const { role } = useAuth()
+  const canEdit = role !== 'prestador'
   const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
 
   const EMPTY_FORM = {
@@ -112,14 +116,18 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
     [stages],
   )
 
-  const addButton = (
+  const addButton = canEdit ? (
     <Button size="sm" className="gap-2" onClick={() => setAddOpen(true)}>
       <Plus className="h-4 w-4" /> Adicionar ao Cronograma
     </Button>
+  ) : (
+    <span className="text-xs text-muted-foreground">
+      Somente leitura: você acompanha o cronograma de todos, sem alterar.
+    </span>
   )
 
   const undatedHint =
-    undatedCount > 0 ? (
+    canEdit && undatedCount > 0 ? (
       <span className="text-xs text-muted-foreground">
         {undatedCount} etapa(s) sem datas não aparecem no gráfico — defina início e fim em
         &quot;Etapas do Projeto&quot;.
