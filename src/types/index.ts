@@ -248,7 +248,7 @@ export interface AirbnbTransaction {
   created_at?: string
 }
 
-export type PlannerTaskStatus = 'pending' | 'in_progress' | 'completed'
+export type PlannerTaskStatus = 'pending' | 'in_progress' | 'delayed' | 'completed'
 export type PlannerTaskPriority = 'low' | 'medium' | 'high'
 
 export interface PlannerAttachment {

@@ -14,7 +14,7 @@ export function statusFromProgress(
   current: PlannerTaskStatus,
 ): PlannerTaskStatus {
   if (progress >= 100) return 'completed'
-  if (progress > 0) return 'in_progress'
+  if (progress > 0) return current === 'delayed' ? 'delayed' : 'in_progress'
   return current === 'completed' ? 'pending' : current
 }
 
@@ -31,21 +31,35 @@ const pad = (n: number) => String(n).padStart(2, '0')
 export const localISODate = (d: Date = new Date()) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-/** Atrasada = prazo anterior a hoje e tarefa ainda não concluída. */
+/**
+ * Em atraso = marcada como "Em atraso" ou com prazo anterior a hoje; nunca se já concluída.
+ */
 export function isTaskOverdue(
   task: Pick<PlannerTask, 'status' | 'due_date'>,
   today: string = localISODate(),
 ): boolean {
-  return task.status !== 'completed' && !!task.due_date && task.due_date.slice(0, 10) < today
+  if (task.status === 'completed') return false
+  if (task.status === 'delayed') return true
+  return !!task.due_date && task.due_date.slice(0, 10) < today
 }
 
-/** Dias de atraso (0 se a tarefa não está atrasada). */
+/** Dias desde o prazo vencido (0 se o prazo não passou ou não há prazo). */
 export function daysOverdue(
   task: Pick<PlannerTask, 'status' | 'due_date'>,
   now: Date = new Date(),
 ): number {
-  if (!isTaskOverdue(task, localISODate(now))) return 0
+  if (task.status === 'completed' || !task.due_date) return 0
+  if (task.due_date.slice(0, 10) >= localISODate(now)) return 0
   const due = new Date(`${task.due_date!.slice(0, 10)}T00:00:00`)
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   return Math.max(1, Math.round((today.getTime() - due.getTime()) / 86_400_000))
+}
+
+/** Texto do selo: "Em atraso" (+ "há N dia(s)" quando o prazo já passou). */
+export function overdueLabel(
+  task: Pick<PlannerTask, 'status' | 'due_date'>,
+  now: Date = new Date(),
+): string {
+  const d = daysOverdue(task, now)
+  return d > 0 ? `Em atraso há ${d} dia(s)` : 'Em atraso'
 }

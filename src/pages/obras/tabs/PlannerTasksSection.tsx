@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  AlertTriangle,
   Calendar,
   CalendarDays,
   CheckCircle2,
@@ -36,6 +37,7 @@ import {
 const STATUS_LABEL: Record<PlannerTaskStatus, string> = {
   pending: 'Pendente',
   in_progress: 'Em Andamento',
+  delayed: 'Em Atraso',
   completed: 'Concluída',
 }
 
@@ -56,6 +58,7 @@ const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; className: s
 
 function StatusIcon({ status }: { status: PlannerTaskStatus }) {
   if (status === 'completed') return <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+  if (status === 'delayed') return <AlertTriangle className="h-5 w-5 text-rose-500" />
   if (status === 'in_progress') return <Play className="h-5 w-5 text-blue-500" />
   return <CircleDashed className="h-5 w-5 text-muted-foreground" />
 }
@@ -306,6 +309,7 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
                   <SelectContent>
                     <SelectItem value="pending">Pendente</SelectItem>
                     <SelectItem value="in_progress">Em Andamento</SelectItem>
+                    <SelectItem value="delayed">Em Atraso</SelectItem>
                     <SelectItem value="completed">Concluída</SelectItem>
                   </SelectContent>
                 </Select>

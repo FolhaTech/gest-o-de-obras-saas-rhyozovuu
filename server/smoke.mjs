@@ -104,6 +104,13 @@ await sb.from('work_stages').delete().eq('id', stg.data?.id)
 const gone = await sb.from('planner_tasks').select('id').eq('stage_id', stg.data?.id)
 ok('excluir etapa remove a tarefa espelho', !gone.error && gone.data.length === 0)
 
+// --- status "Em atraso" no Planner ---
+const dly = await sb.from('planner_tasks').insert({ title: 'smoke-atraso', status: 'delayed', work_id: work.id }).select('id,status').single()
+ok('tarefa aceita o status delayed (Em Atraso)', !dly.error && dly.data.status === 'delayed', dly.error?.message)
+const dbad = await sb.from('planner_tasks').update({ status: 'qualquer' }).eq('id', dly.data?.id)
+ok('status inválido continua rejeitado', dbad.error?.code === '23514', dbad.error?.code)
+await sb.from('planner_tasks').delete().eq('id', dly.data?.id)
+
 // --- proteção contra apagar/atualizar tudo sem filtro ---
 const nodel = await sb.from('action_types').delete() // tabela vazia: o teste nunca apaga dados reais
 ok('DELETE sem filtro é recusado', nodel.error?.code === '21000', nodel.error?.code)

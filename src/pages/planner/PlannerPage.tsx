@@ -68,6 +68,7 @@ import {
   clampProgress,
   daysOverdue,
   isTaskOverdue,
+  overdueLabel,
   progressFromStatus,
   statusFromProgress,
   taskProgress,
@@ -94,6 +95,13 @@ const STATUS_COLUMNS: {
     icon: Play,
     color: 'text-blue-600',
     bg: 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300',
+  },
+  {
+    key: 'delayed',
+    label: 'Em Atraso',
+    icon: AlertTriangle,
+    color: 'text-rose-600',
+    bg: 'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-300',
   },
   {
     key: 'completed',
@@ -721,7 +729,7 @@ export default function PlannerPage() {
               <p className="text-xs text-muted-foreground font-medium uppercase">Em Atraso</p>
               <h3 className="text-2xl font-bold mt-1 text-rose-600">{counts.overdue}</h3>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                {overdueOnly ? 'Filtro ativo' : 'Prazo vencido'}
+                {overdueOnly ? 'Filtro ativo' : 'Prazo vencido ou marcada'}
               </p>
             </div>
             <div className="p-2.5 rounded-full bg-rose-500/10 text-rose-600">
@@ -766,6 +774,7 @@ export default function PlannerPage() {
                   <SelectItem value="all">Todos os Status</SelectItem>
                   <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="in_progress">Em Andamento</SelectItem>
+                  <SelectItem value="delayed">Em Atraso</SelectItem>
                   <SelectItem value="completed">Concluída</SelectItem>
                 </SelectContent>
               </Select>
@@ -849,7 +858,7 @@ export default function PlannerPage() {
         </div>
       ) : viewMode === 'kanban' ? (
         /* Visualização Kanban */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {STATUS_COLUMNS.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.key)
             const ColIcon = col.icon
@@ -977,6 +986,7 @@ export default function PlannerPage() {
                   <SelectContent>
                     <SelectItem value="pending">Pendente</SelectItem>
                     <SelectItem value="in_progress">Em Andamento</SelectItem>
+                    <SelectItem value="delayed">Em Atraso</SelectItem>
                     <SelectItem value="completed">Concluída</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1273,7 +1283,7 @@ export default function PlannerPage() {
                 )}
                 {isTaskOverdue(previewTask) && (
                   <Badge variant="outline" className="gap-1 border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                    <AlertTriangle className="h-3 w-3" /> Atrasada há {daysOverdue(previewTask)} dia(s)
+                    <AlertTriangle className="h-3 w-3" /> {overdueLabel(previewTask)}
                   </Badge>
                 )}
               </div>
@@ -1612,12 +1622,12 @@ function TaskCard({
               className={`flex items-center gap-1 text-[11px] shrink-0 ${
                 overdue ? 'text-rose-600 font-semibold' : 'text-muted-foreground'
               }`}
-              title={overdue ? `Atrasada há ${daysOverdue(task)} dia(s)` : undefined}
+              title={overdue ? overdueLabel(task) : undefined}
             >
               {overdue ? <AlertTriangle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
               <span>
                 {formatDate(task.due_date)}
-                {overdue ? ` · ${daysOverdue(task)}d` : ''}
+                {overdue && daysOverdue(task) > 0 ? ` · ${daysOverdue(task)}d` : ''}
               </span>
             </div>
           )}
@@ -1776,7 +1786,7 @@ function TaskListItem({
                   )}
                   <span>
                     Prazo: {formatDate(task.due_date)}
-                    {overdue ? ` · atrasada há ${daysOverdue(task)} dia(s)` : ''}
+                    {overdue ? ` · ${overdueLabel(task).toLowerCase()}` : ''}
                   </span>
                 </div>
               )}
@@ -1812,6 +1822,7 @@ function TaskListItem({
             <SelectContent>
               <SelectItem value="pending">Pendente</SelectItem>
               <SelectItem value="in_progress">Em Andamento</SelectItem>
+              <SelectItem value="delayed">Em Atraso</SelectItem>
               <SelectItem value="completed">Concluída</SelectItem>
             </SelectContent>
           </Select>
