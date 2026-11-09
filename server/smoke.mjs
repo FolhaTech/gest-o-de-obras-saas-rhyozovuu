@@ -103,6 +103,12 @@ await sb.from('work_stages').delete().eq('id', stg.data?.id)
 const gone = await sb.from('planner_tasks').select('id').eq('stage_id', stg.data?.id)
 ok('excluir etapa remove a tarefa espelho', !gone.error && gone.data.length === 0)
 
+// --- proteção contra apagar/atualizar tudo sem filtro ---
+const nodel = await sb.from('action_types').delete() // tabela vazia: o teste nunca apaga dados reais
+ok('DELETE sem filtro é recusado', nodel.error?.code === '21000', nodel.error?.code)
+const noupd = await sb.from('action_types').update({ name: 'x' })
+ok('UPDATE sem filtro é recusado', noupd.error?.code === '21000', noupd.error?.code)
+
 // --- storage ---
 const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], { type: 'image/png' })
 const path = `smoke/${Date.now()}.png`

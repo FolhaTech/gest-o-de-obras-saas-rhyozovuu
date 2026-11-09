@@ -2,7 +2,8 @@
 -- Cada etapa do cronograma tem UMA tarefa espelho no Planner (planner_tasks.stage_id) e vice-versa:
 --   etapa criada/alterada  -> tarefa criada/atualizada
 --   tarefa espelho alterada -> etapa atualizada (nome, datas, progresso, status, responsável)
---   tarefa espelho excluída -> etapa excluída;  etapa excluída -> tarefa excluída (FK em cascata)
+--   etapa excluída -> tarefa excluída (FK em cascata)
+--   tarefa espelho excluída no Planner -> a etapa CONTINUA no cronograma (a tarefa volta se a etapa for editada)
 -- Os gatilhos usam pg_trigger_depth() para não gerar "eco" (um lado não reescreve o outro em loop).
 -- Idempotente.
 
@@ -123,26 +124,9 @@ CREATE TRIGGER trg_sync_planner_to_stage
   FOR EACH ROW WHEN (NEW.stage_id IS NOT NULL)
   EXECUTE FUNCTION public.sync_planner_to_stage();
 
-CREATE OR REPLACE FUNCTION public.sync_planner_task_delete()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF pg_trigger_depth() > 1 THEN
-    RETURN OLD;
-  END IF;
-  DELETE FROM public.work_stages WHERE id = OLD.stage_id;
-  RETURN OLD;
-END;
-$$;
-
+-- Versões anteriores excluíam a etapa ao excluir a tarefa espelho (apagava dados do cronograma por engano).
 DROP TRIGGER IF EXISTS trg_sync_planner_task_delete ON public.planner_tasks;
-CREATE TRIGGER trg_sync_planner_task_delete
-  AFTER DELETE ON public.planner_tasks
-  FOR EACH ROW WHEN (OLD.stage_id IS NOT NULL)
-  EXECUTE FUNCTION public.sync_planner_task_delete();
+DROP FUNCTION IF EXISTS public.sync_planner_task_delete();
 
 -- Etapas que já existiam ganham a tarefa espelho (não mexe nas etapas).
 INSERT INTO public.planner_tasks

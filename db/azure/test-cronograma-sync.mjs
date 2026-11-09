@@ -87,7 +87,9 @@ try {
   ok('tarefa avulsa não gera etapa', before === Number((await one('select count(*) n from work_stages')).n))
 
   await c.query('delete from planner_tasks where id = $1', [taskId])
-  ok('excluir tarefa espelho exclui a etapa', !(await one('select id from work_stages where id = $1', [st.id])))
+  ok('excluir a tarefa espelho NÃO exclui a etapa do cronograma', !!(await one('select id from work_stages where id = $1', [st.id])))
+  await c.query(`update work_stages set name = 'ETAPA VOLTOU' where id = $1`, [st.id])
+  ok('editar a etapa recria a tarefa espelho', !!(await one('select id from planner_tasks where stage_id = $1', [st.id])))
 
   const st2 = await one(`insert into work_stages (work_id, name) values ($1, 'ETAPA 2') returning id`, [work])
   ok('etapa sem datas também gera tarefa', !!(await one('select id from planner_tasks where stage_id = $1', [st2.id])))
