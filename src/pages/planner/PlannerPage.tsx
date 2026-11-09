@@ -62,6 +62,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
+import { Slider } from '@/components/ui/slider'
+import {
+  clampProgress,
+  progressFromStatus,
+  statusFromProgress,
+  taskProgress,
+} from '@/lib/planner-progress'
 
 const STATUS_COLUMNS: {
   key: PlannerTaskStatus
@@ -137,6 +144,7 @@ export default function PlannerPage() {
   const [formDescription, setFormDescription] = useState('')
   const [formStatus, setFormStatus] = useState<PlannerTaskStatus>('pending')
   const [formPriority, setFormPriority] = useState<PlannerTaskPriority>('medium')
+  const [formProgress, setFormProgress] = useState(0)
   const [formWorkId, setFormWorkId] = useState<string>('none')
   const [formAssigneeId, setFormAssigneeId] = useState<string>('none')
   const [formStartDate, setFormStartDate] = useState('')
@@ -243,6 +251,7 @@ export default function PlannerPage() {
     setFormDescription('')
     setFormStatus('pending')
     setFormPriority('medium')
+    setFormProgress(0)
     setFormWorkId('none')
     setFormAssigneeId('none')
     setFormStartDate('')
@@ -257,6 +266,7 @@ export default function PlannerPage() {
   const handleOpenCreate = (defaultStatus: PlannerTaskStatus = 'pending') => {
     resetForm()
     setFormStatus(defaultStatus)
+    setFormProgress(progressFromStatus(defaultStatus, 0))
     setDialogOpen(true)
   }
 
@@ -267,6 +277,7 @@ export default function PlannerPage() {
     setFormDescription(task.description || '')
     setFormStatus(task.status)
     setFormPriority(task.priority)
+    setFormProgress(taskProgress(task))
     setFormWorkId(task.work_id || 'none')
     setFormAssigneeId(task.assignee_id || 'none')
     setFormStartDate(task.start_date || '')
@@ -384,6 +395,7 @@ export default function PlannerPage() {
         description: formDescription.trim() || null,
         status: formStatus,
         priority: formPriority,
+        progress_percentage: formProgress,
         work_id: formWorkId === 'none' ? null : formWorkId,
         assignee_id: formAssigneeId === 'none' ? null : formAssigneeId,
         start_date: formStartDate || null,
@@ -438,16 +450,22 @@ export default function PlannerPage() {
   // Atualização rápida de status (ex: arrastar ou clique)
   const handleQuickStatusChange = async (taskId: string, newStatus: PlannerTaskStatus) => {
     try {
+      const current = tasks.find((t) => t.id === taskId)
+      const newProgress = progressFromStatus(newStatus, current ? taskProgress(current) : 0)
       const { error } = await supabase
         .from('planner_tasks' as any)
-        .update({ status: newStatus })
+        .update({ status: newStatus, progress_percentage: newProgress })
         .eq('id', taskId)
 
       if (error) throw error
 
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)))
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, status: newStatus, progress_percentage: newProgress } : t,
+        ),
+      )
       if (previewTask && previewTask.id === taskId) {
-        setPreviewTask({ ...previewTask, status: newStatus })
+        setPreviewTask({ ...previewTask, status: newStatus, progress_percentage: newProgress })
       }
       toast({
         title: `Status alterado para ${STATUS_COLUMNS.find((c) => c.key === newStatus)?.label}`,
@@ -875,7 +893,10 @@ export default function PlannerPage() {
                 <Label>Status</Label>
                 <Select
                   value={formStatus}
-                  onValueChange={(val: PlannerTaskStatus) => setFormStatus(val)}
+                  onValueChange={(val: PlannerTaskStatus) => {
+                    setFormStatus(val)
+                    setFormProgress(progressFromStatus(val, formProgress))
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -904,6 +925,43 @@ export default function PlannerPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Porcentagem de conclusão (espelhada nas Etapas do Projeto da obra) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="task-progress">Progresso da tarefa</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="task-progress"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={formProgress}
+                    onChange={(e) => {
+                      const p = clampProgress(e.target.value)
+                      setFormProgress(p)
+                      setFormStatus((cur) => statusFromProgress(p, cur))
+                    }}
+                    className="h-8 w-20 text-right"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+              <Slider
+                min={0}
+                max={100}
+                step={5}
+                value={[formProgress]}
+                onValueChange={([p]) => {
+                  setFormProgress(p)
+                  setFormStatus((cur) => statusFromProgress(p, cur))
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Essa porcentagem aparece na aba &quot;Etapas do Projeto&quot; da obra vinculada.
+              </p>
             </div>
 
             {/* Responsável e Obra */}
@@ -1148,6 +1206,15 @@ export default function PlannerPage() {
               ) : (
                 <p className="text-xs text-muted-foreground italic">Sem descrição detalhada.</p>
               )}
+
+              {/* Progresso */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-xs text-muted-foreground">Progresso</span>
+                  <span className="font-semibold">{taskProgress(previewTask)}%</span>
+                </div>
+                <Progress value={taskProgress(previewTask)} className="h-2" />
+              </div>
 
               {/* Informações de Responsável e Datas */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/20 rounded-lg border text-sm">
@@ -1397,6 +1464,15 @@ function TaskCard({
           <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
         )}
 
+        {/* Progresso */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Progresso</span>
+            <span className="font-semibold text-foreground">{taskProgress(task)}%</span>
+          </div>
+          <Progress value={taskProgress(task)} className="h-1.5" />
+        </div>
+
         {/* Pessoa Responsável e Prazos */}
         <div className="flex items-center justify-between pt-1 border-t text-xs">
           {/* Responsável */}
@@ -1530,6 +1606,11 @@ function TaskListItem({
             {task.description && (
               <p className="text-xs text-muted-foreground line-clamp-1">{task.description}</p>
             )}
+
+            <div className="flex items-center gap-2 max-w-sm pt-1">
+              <Progress value={taskProgress(task)} className="h-1.5 flex-1" />
+              <span className="text-[11px] font-semibold w-9 text-right">{taskProgress(task)}%</span>
+            </div>
 
             {/* Informações de rodapé da linha */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 flex-wrap">

@@ -80,6 +80,17 @@ await sb.from('attendance_records').delete().eq('worker_id', wk.id).eq('date', d
 const del = await sb.from('planner_tasks').delete().eq('id', id)
 ok('delete', !del.error, del.error?.message)
 
+// --- porcentagem das tarefas do Planner ---
+const pr = await sb.from('planner_tasks').insert({ title: 'smoke-progress', work_id: work.id, status: 'in_progress', progress_percentage: 40 }).select('id,progress_percentage').single()
+ok('planner_tasks aceita progress_percentage', !pr.error && pr.data.progress_percentage === 40, pr.error?.message)
+const pu = await sb.from('planner_tasks').update({ progress_percentage: 80 }).eq('id', pr.data?.id).select('progress_percentage').single()
+ok('atualiza o progresso', pu.data?.progress_percentage === 80, pu.error?.message)
+const over = await sb.from('planner_tasks').update({ progress_percentage: 150 }).eq('id', pr.data?.id)
+ok('CHECK rejeita progresso > 100', over.error?.code === '23514', over.error?.code)
+const mir = await sb.from('planner_tasks').select('id,progress_percentage').eq('work_id', work.id).eq('id', pr.data?.id)
+ok('porcentagem aparece na consulta por obra', mir.data?.[0]?.progress_percentage === 80)
+await sb.from('planner_tasks').delete().eq('id', pr.data?.id)
+
 // --- storage ---
 const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], { type: 'image/png' })
 const path = `smoke/${Date.now()}.png`

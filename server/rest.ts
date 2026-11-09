@@ -9,7 +9,7 @@ import {
   ApiError,
   decodeSeg,
   header,
-  readJson,
+  readRawBody,
   sendEmpty,
   sendJson,
   type Req,
@@ -381,12 +381,40 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 
 // ---------- handler ----------
 
+const RETRY = Symbol('retry')
+
+/**
+ * Executa a requisição; se falhar por coluna/tabela/relação desconhecida (o cache do catálogo pode estar
+ * defasado após uma migração), recarrega o catálogo e tenta uma vez de novo.
+ */
 export async function handleRest(req: Req, res: Res, caller: Caller, route: Route) {
   const method = (req.method ?? 'GET').toUpperCase()
   if (method === 'OPTIONS') return sendEmpty(res, 204)
+  let raw: Buffer | null = null
+  const readBody = async () => {
+    raw ??= await readRawBody(req)
+    if (raw.length === 0) return undefined
+    try {
+      return JSON.parse(raw.toString('utf8'))
+    } catch {
+      throw new ApiError(400, 'PGRST102', 'Corpo da requisição não é um JSON válido')
+    }
+  }
+  const first = await handleRestOnce(req, res, caller, route, method, readBody, false)
+  if (first === RETRY) await handleRestOnce(req, res, caller, route, method, readBody, true)
+}
 
+async function handleRestOnce(
+  req: Req,
+  res: Res,
+  caller: Caller,
+  route: Route,
+  method: string,
+  readBody: () => Promise<any>,
+  retried: boolean,
+): Promise<unknown> {
   try {
-    let cat = await getCatalog()
+    let cat = await getCatalog(retried)
     const segs = route.rest.split('/').filter(Boolean).map(decodeSeg)
     if (segs.length === 0) return sendJson(res, 200, {})
     if (segs[0] === 'rpc') {
@@ -444,7 +472,7 @@ export async function handleRest(req: Req, res: Res, caller: Caller, route: Rout
     }
 
     if (method === 'POST') {
-      const body = await readJson(req)
+      const body = await readBody()
       const rows = Array.isArray(body) ? body : [body]
       if (!rows.every(isPlainObject)) {
         throw new ApiError(400, 'PGRST102', 'Corpo inválido: esperado objeto ou lista de objetos')
@@ -473,7 +501,7 @@ export async function handleRest(req: Req, res: Res, caller: Caller, route: Rout
     }
 
     if (method === 'PATCH') {
-      const body = await readJson(req)
+      const body = await readBody()
       if (!isPlainObject(body)) throw new ApiError(400, 'PGRST102', 'Corpo inválido: esperado objeto')
       const cols = Object.keys(body)
       checkColumns(table, cols)
@@ -495,6 +523,7 @@ export async function handleRest(req: Req, res: Res, caller: Caller, route: Rout
     throw new ApiError(405, 'PGRST117', `Método ${method} não suportado`)
   } catch (e) {
     const err = toApiError(e, caller)
+    if (!retried && ['42703', 'PGRST204', 'PGRST205', 'PGRST200'].includes(err.code)) return RETRY
     return sendJson(res, err.status, err.toJSON())
   }
 }

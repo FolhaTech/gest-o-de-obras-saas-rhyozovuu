@@ -36,6 +36,7 @@ psql "$ADMIN_URL/postgres" -c "CREATE DATABASE gestao_obras"
 psql "$ADMIN_URL/gestao_obras" -f db/azure/01_shim.sql   # schemas auth e storage
 psql "$ADMIN_URL/gestao_obras" -f db/azure/02_schema.sql # tabelas, triggers, RLS (gerado de supabase_schema.sql)
 psql "$ADMIN_URL/gestao_obras" -f db/azure/03_grants.sql
+psql "$ADMIN_URL/gestao_obras" -f db/azure/04_planner_progress.sql  # só em bancos criados antes da coluna de progresso
 ```
 
 ## Desenvolvimento local

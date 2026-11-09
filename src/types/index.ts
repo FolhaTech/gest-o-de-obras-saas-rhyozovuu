@@ -267,6 +267,7 @@ export interface PlannerTask {
   description: string | null
   status: PlannerTaskStatus
   priority: PlannerTaskPriority
+  progress_percentage?: number
   start_date: string | null
   due_date: string | null
   assignee_id: string | null
