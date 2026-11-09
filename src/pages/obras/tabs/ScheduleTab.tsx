@@ -31,6 +31,13 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -59,11 +66,14 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
   // Prestador acompanha o cronograma de todos, mas não altera nada (o banco também bloqueia).
   const { role } = useAuth()
   const canEdit = role !== 'prestador'
-  const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
+  // Responsável = usuário do sistema
+  const { data: users } = useData<{ id: string; full_name: string | null; email: string | null }>(
+    'profiles',
+  )
 
   const EMPTY_FORM = {
     name: '',
-    manager: '',
+    manager_user_id: 'none',
     start_date: '',
     end_date_planned: '',
     progress: 0,
@@ -85,12 +95,14 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
       return
     }
     const progress = Math.min(100, Math.max(0, Math.round(Number(form.progress) || 0)))
+    const chosen = (users || []).find((u) => u.id === form.manager_user_id)
     setSaving(true)
     // A etapa do cronograma gera automaticamente a tarefa espelho no Planner (gatilho no banco).
     const { error } = await supabase.from('work_stages').insert({
       work_id: obraId,
       name: form.name.trim(),
-      manager: form.manager.trim() || null,
+      manager: chosen ? chosen.full_name || chosen.email || null : null,
+      manager_user_id: chosen ? chosen.id : null,
       start_date: form.start_date,
       end_date_planned: form.end_date_planned,
       progress_percentage: progress,
@@ -155,19 +167,24 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="sch-manager">Responsável</Label>
-            <Input
-              id="sch-manager"
-              list="sch-team-members"
-              value={form.manager}
-              onChange={(e) => setForm({ ...form, manager: e.target.value })}
-              placeholder="Escolha um membro da equipe ou digite"
-            />
-            <datalist id="sch-team-members">
-              {(teamMembers || []).map((m) => (
-                <option key={m.id} value={m.name.trim()} />
-              ))}
-            </datalist>
+            <Label>Responsável</Label>
+            <Select
+              value={form.manager_user_id}
+              onValueChange={(v) => setForm({ ...form, manager_user_id: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um usuário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem responsável</SelectItem>
+                {(users || []).map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name || u.email}
+                    {u.full_name && u.email ? ` · ${u.email}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

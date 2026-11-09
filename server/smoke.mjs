@@ -17,6 +17,8 @@ const db = new pg.Client({
   ssl: { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED !== 'false' },
 })
 await db.connect()
+// Cards que já existiam no Planner (o teste mexe em etapas, o que recria cards espelho; ao final remove os novos)
+const preTasks = (await db.query('select id from public.planner_tasks')).rows.map((r) => r.id)
 
 const API = process.env.API_URL ?? 'http://localhost:3001'
 const anon = process.env.VITE_SUPABASE_ANON_KEY ?? 'anon'
@@ -62,8 +64,10 @@ s = ref
 // --- rest autenticado ---
 r = await sb.from('profiles').select('id,email,role')
 ok('authenticated lê profiles', !r.error && r.data.length >= 6, `${r.data?.length} linhas`)
-r = await sb.from('planner_tasks').select('*, works:work_id(id, name), team_members:assignee_id(id, name, role, phone)').order('created_at', { ascending: false })
-ok('embed m2o (works, team_members)', !r.error && r.data.length >= 2 && 'works' in r.data[0], r.error?.message)
+const w0 = (await sb.from('works').select('id').limit(1).single()).data.id
+const emb = await sb.from('planner_tasks').insert({ title: 'smoke-embed', work_id: w0, assignee_id: smokeUserId }).select('id, works:work_id(id, name), team_members:assignee_id(id, name:full_name, email)').single()
+ok('embed m2o (obra e Pessoa Responsável = usuário)', !emb.error && emb.data.works?.id === w0 && emb.data.team_members?.id === smokeUserId && !!emb.data.team_members?.email, emb.error?.message)
+await sb.from('planner_tasks').delete().eq('id', emb.data?.id)
 r = await sb.from('works').select('id,name,work_stages(id,name)').limit(1)
 ok('embed o2m (work_stages)', !r.error && Array.isArray(r.data[0]?.work_stages), r.error?.message)
 r = await sb.from('work_stages').select('id', { count: 'exact', head: true })
@@ -189,19 +193,23 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   await sb.storage.from('work-photos').remove([bigName])
 }
 
-// --- permissões do Prestador (via API, com RLS) ---
+// --- permissões por papel (via API, com RLS) ---
 {
-  const members = await db.query(`select assignee_id id, count(*)::int n from planner_tasks where assignee_id is not null group by 1 order by n desc limit 2`)
-  const [mA, mB] = members.rows
-  const allTasks = (await sb.from('planner_tasks').select('id')).data.length
+  const other = (await db.query('select id from public.profiles where id <> $1 order by email limit 1', [smokeUserId])).rows[0]
+  // cards de teste criados direto no banco: um do usuário do teste e um de outro usuário
+  const mineId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-meu', $1, $2) returning id", [work.id, smokeUserId])).rows[0].id
+  const theirsId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-dele', $1, $2) returning id", [work.id, other.id])).rows[0].id
+  const allTasks = (await sb.from('planner_tasks').select('id')).data.length // admin vê tudo
   const allStages = (await sb.from('work_stages').select('id')).data.length
-  await db.query("update public.profiles set role = 'prestador', team_member_id = $2 where id = $1", [smokeUserId, mA.id])
+  await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
   const mine = await sb.from('planner_tasks').select('id,assignee_id')
-  ok('prestador vê só as tarefas atribuídas a ele', !mine.error && mine.data.length > 0 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === mA.id), `${mine.data?.length} de ${allTasks}`)
-  const others = await sb.from('planner_tasks').select('id').eq('assignee_id', mB.id)
-  ok('prestador não enxerga tarefas de outro membro', !others.error && others.data.length === 0)
-  const forOther = await sb.from('planner_tasks').insert({ title: 'smoke-outro', assignee_id: mB.id })
-  ok('prestador não cria tarefa para outro membro', forOther.error?.code === '42501', forOther.error?.code)
+  ok('prestador vê só os cards em que é a Pessoa Responsável', !mine.error && mine.data.length >= 1 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === smokeUserId), `${mine.data?.length} de ${allTasks}`)
+  const others = await sb.from('planner_tasks').select('id').eq('id', theirsId)
+  ok('prestador não enxerga card de outro usuário', !others.error && others.data.length === 0)
+  const forOther = await sb.from('planner_tasks').insert({ title: 'smoke-outro', assignee_id: other.id })
+  ok('prestador não cria card para outro usuário', forOther.error?.code === '42501', forOther.error?.code)
+  const ownUpd = await sb.from('planner_tasks').update({ progress_percentage: 33 }).eq('id', mineId).select('progress_percentage')
+  ok('prestador altera o próprio card', !ownUpd.error && ownUpd.data.length === 1)
   const stagesSeen = await sb.from('work_stages').select('id')
   ok('prestador vê as etapas do cronograma de todos', !stagesSeen.error && stagesSeen.data.length === allStages, `${stagesSeen.data?.length} etapas`)
   const stIns = await sb.from('work_stages').insert({ work_id: work.id, name: 'smoke-prestador' })
@@ -213,23 +221,23 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador não exclui etapa', !stDel.error && stDel.data.length === 0)
   const selfRole = await sb.from('profiles').update({ role: 'admin' }).eq('id', smokeUserId)
   ok('prestador não se promove a admin', !!selfRole.error, selfRole.error?.message)
-  const selfLink = await sb.from('profiles').update({ team_member_id: mB.id }).eq('id', smokeUserId)
-  ok('prestador não troca o próprio vínculo', !!selfLink.error, selfLink.error?.message)
   // Gestor (colaborador) também só vê os cards em que é a Pessoa Responsável
   await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
   const asGestor = await sb.from('planner_tasks').select('id,assignee_id')
-  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === mA.id), `${asGestor.data?.length} de ${allTasks}`)
+  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === smokeUserId), `${asGestor.data?.length} de ${allTasks}`)
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
   const anonTasks = await mk0().from('planner_tasks').select('id')
-  ok('sem login não lê tarefas do Planner', !anonTasks.error && anonTasks.data.length === 0)
+  ok('sem login não lê cards do Planner', !anonTasks.error && anonTasks.data.length === 0)
+  await db.query('delete from public.planner_tasks where id = any($1)', [[mineId, theirsId]])
 }
 
 // --- functions ---
 const fn = await sb.functions.invoke('generate-composition', { body: { serviceName: 'Teste', unit: 'm2' } })
 ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.materials), fn.error?.message)
 
+await db.query('delete from public.planner_tasks where not (id = any($1::uuid[]))', [preTasks])
 await db.end()
 console.log(failed ? `\n${failed} FALHA(S)` : '\nTudo certo')
 process.exit(failed ? 1 : 0)
