@@ -102,6 +102,12 @@ try {
   const goal2 = (await one("insert into work_goals (work_id, title, reward_description) values ($1, 'Meta de outro', 'Pizza') returning id", [work])).id
   await c.query('insert into work_goal_members (goal_id, user_id) values ($1, $2)', [goal2, admin.id])
   ok('admin vê todas as metas', (await q('select id from work_goals where id in ($1, $2)', [goal, goal2])).length === 2)
+  // o membro da Equipe de cada participante acompanha o vínculo do usuário (gatilhos)
+  const tm = (await one('select id from team_members limit 1')).id
+  await c.query('update profiles set team_member_id = $2 where id = $1', [presta.id, tm])
+  ok('meta guarda o membro vinculado ao usuário', (await one('select member_id from work_goal_members where goal_id = $1 and user_id = $2', [goal, presta.id])).member_id === tm)
+  await c.query('update profiles set team_member_id = null where id = $1', [presta.id])
+  ok('desvincular o usuário limpa o membro da meta', (await one('select member_id from work_goal_members where goal_id = $1 and user_id = $2', [goal, presta.id])).member_id === null)
 
   await as('obras_authenticated', presta.id)
   const mine = await q('select id from work_goals')

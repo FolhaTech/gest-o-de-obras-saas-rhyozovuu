@@ -4,7 +4,10 @@ import { supabase } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/types'
 import { AppRole, normalizeRole, canAccessPath } from '@/lib/roles'
 
-export type Profile = Database['public']['Tables']['profiles']['Row']
+export type Profile = Database['public']['Tables']['profiles']['Row'] & {
+  /** Membro da equipe vinculado ao usuário (definido por um administrador). */
+  team_member_id?: string | null
+}
 
 interface AuthContextType {
   user: User | null

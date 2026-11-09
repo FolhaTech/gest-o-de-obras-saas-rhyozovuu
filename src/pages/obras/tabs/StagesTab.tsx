@@ -42,27 +42,20 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     refetch,
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
   const { toast } = useToast()
-  // Responsável = usuário do sistema
-  const { data: users } = useData<{ id: string; full_name: string | null; email: string | null }>(
-    'profiles',
-  )
-  const userName = (id: string) => {
-    const u = (users || []).find((x) => x.id === id)
-    return u ? u.full_name || u.email || '' : ''
-  }
   // Prestador só visualiza as etapas (o banco também bloqueia alterações).
   const { role } = useAuth()
   const canEdit = role !== 'prestador'
+  // Responsável = pessoa da Equipe
+  const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
 
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({ name: '', manager_user_id: 'none', progress: 0 })
+  const [formData, setFormData] = useState({ name: '', manager: '', progress: 0 })
 
   const [editOpen, setEditOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [editFormData, setEditFormData] = useState({
     name: '',
     manager: '',
-    manager_user_id: 'none',
     progress: 0,
     status: 'pending',
     notes: '',
@@ -90,8 +83,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
       const { error } = await supabase.from('work_stages').insert({
         work_id: obraId,
         name: formData.name,
-        manager: formData.manager_user_id === 'none' ? '' : userName(formData.manager_user_id),
-        manager_user_id: formData.manager_user_id === 'none' ? null : formData.manager_user_id,
+        manager: formData.manager,
         progress_percentage: formData.progress,
         status: status,
       })
@@ -99,7 +91,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
       if (!error) {
         toast({ title: 'Etapa adicionada!', description: 'Ela também aparece no Planner.' })
         setOpen(false)
-        setFormData({ name: '', manager_user_id: 'none', progress: 0 })
+        setFormData({ name: '', manager: '', progress: 0 })
         refetch()
       } else {
         if (isMissingTableError(error)) {
@@ -126,7 +118,6 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     setEditFormData({
       name: stage.name,
       manager: stage.manager || '',
-      manager_user_id: stage.manager_user_id || 'none',
       progress: stage.progress_percentage || 0,
       status: stage.status || 'pending',
       notes: stage.notes || '',
@@ -140,19 +131,11 @@ export default function StagesTab({ obraId }: { obraId: string }) {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editId) return
-    // Responsável antigo em texto (sem usuário) é preservado até alguém escolher um usuário
-    const original = obraStages.find((s) => s.id === editId)
-    const legacyManager = original && !original.manager_user_id ? original.manager || '' : ''
     const { error } = await supabase
       .from('work_stages')
       .update({
         name: editFormData.name,
-        manager:
-          editFormData.manager_user_id !== 'none'
-            ? userName(editFormData.manager_user_id)
-            : legacyManager,
-        manager_user_id:
-          editFormData.manager_user_id === 'none' ? null : editFormData.manager_user_id,
+        manager: editFormData.manager,
         progress_percentage: editFormData.progress,
         status: editFormData.status,
         notes: editFormData.notes,
@@ -192,6 +175,11 @@ export default function StagesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-4">
+      <datalist id="stg-team-members">
+        {(teamMembers || []).map((m) => (
+          <option key={m.id} value={m.name.trim()} />
+        ))}
+      </datalist>
       {isTableMissing && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
           <Database className="h-5 w-5 text-amber-600" />
@@ -259,23 +247,12 @@ export default function StagesTab({ obraId }: { obraId: string }) {
               </div>
               <div className="space-y-2">
                 <Label>Responsável</Label>
-                <Select
-                  value={formData.manager_user_id}
-                  onValueChange={(v) => setFormData({ ...formData, manager_user_id: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um usuário" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem responsável</SelectItem>
-                    {(users || []).map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.full_name || u.email}
-                        {u.full_name && u.email ? ` · ${u.email}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  list="stg-team-members"
+                  value={formData.manager}
+                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
+                  placeholder="Escolha um membro da equipe"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Progresso Atual (%)</Label>
@@ -363,29 +340,12 @@ export default function StagesTab({ obraId }: { obraId: string }) {
             </div>
             <div className="space-y-2">
               <Label>Responsável</Label>
-              <Select
-                value={editFormData.manager_user_id}
-                onValueChange={(v) => setEditFormData({ ...editFormData, manager_user_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um usuário" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem responsável</SelectItem>
-                  {(users || []).map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.full_name || u.email}
-                      {u.full_name && u.email ? ` · ${u.email}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {editFormData.manager_user_id === 'none' && editFormData.manager && (
-                <p className="text-xs text-muted-foreground">
-                  Responsável atual (texto): {editFormData.manager}. Escolha um usuário para
-                  substituí-lo.
-                </p>
-              )}
+              <Input
+                list="stg-team-members"
+                value={editFormData.manager}
+                onChange={(e) => setEditFormData({ ...editFormData, manager: e.target.value })}
+                placeholder="Escolha um membro da equipe"
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
