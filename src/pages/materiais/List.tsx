@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Search, Edit, Trash } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import MaterialLossesPanel from '@/components/materials/MaterialLossesPanel'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -37,6 +38,8 @@ export default function MateriaisList() {
   const { toast } = useToast()
 
   const [tab, setTab] = useState('all')
+  // Estoque (catálogo) ou Controle de Perdas
+  const [view, setView] = useState<'estoque' | 'perdas'>('estoque')
   const [search, setSearch] = useState('')
 
   const [open, setOpen] = useState(false)
@@ -207,6 +210,7 @@ export default function MateriaisList() {
           <h1 className="text-3xl font-bold tracking-tight">Estoque e Materiais</h1>
           <p className="text-muted-foreground">Catálogo de insumos e conversões para KG.</p>
         </div>
+        {view === 'estoque' && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -317,8 +321,33 @@ export default function MateriaisList() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
+      <div className="inline-flex rounded-lg border bg-muted p-1">
+        <Button
+          type="button"
+          size="sm"
+          variant={view === 'estoque' ? 'default' : 'ghost'}
+          className="h-8 text-xs"
+          onClick={() => setView('estoque')}
+        >
+          Estoque
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={view === 'perdas' ? 'default' : 'ghost'}
+          className="h-8 text-xs"
+          onClick={() => setView('perdas')}
+        >
+          Controle de Perdas
+        </Button>
+      </div>
+
+      {view === 'perdas' && <MaterialLossesPanel />}
+
+      {view === 'estoque' && (
       <Tabs value={tab} onValueChange={setTab} className="w-full space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <TabsList>
@@ -425,6 +454,7 @@ export default function MateriaisList() {
           </Table>
         </div>
       </Tabs>
+      )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">

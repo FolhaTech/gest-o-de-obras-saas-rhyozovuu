@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -25,6 +26,7 @@ import OverviewTab from './tabs/OverviewTab'
 import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
 import RentedMaterialsTab from './tabs/RentedMaterialsTab'
+import MaterialLossesPanel from '@/components/materials/MaterialLossesPanel'
 import RevenuesTab from './tabs/RevenuesTab'
 import ScheduleTab from './tabs/ScheduleTab'
 import WorkServicesTab from './tabs/WorkServicesTab'
@@ -36,6 +38,9 @@ import NotesTab from './tabs/NotesTab'
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState('visao-geral')
+  // Prestador não vê o financeiro da obra e não edita/exclui a obra
+  const { role } = useAuth()
+  const isPrestador = role === 'prestador'
   const navigate = useNavigate()
   const { toast } = useToast()
   const {
@@ -258,14 +263,16 @@ export default function ObraDetail() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={openEdit}>
-            <Edit className="h-4 w-4" /> Editar
-          </Button>
-          <Button variant="destructive" size="sm" className="gap-2" onClick={handleDelete}>
-            <Trash className="h-4 w-4" /> Excluir
-          </Button>
-        </div>
+        {!isPrestador && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={openEdit}>
+              <Edit className="h-4 w-4" /> Editar
+            </Button>
+            <Button variant="destructive" size="sm" className="gap-2" onClick={handleDelete}>
+              <Trash className="h-4 w-4" /> Excluir
+            </Button>
+          </div>
+        )}
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -377,11 +384,19 @@ export default function ObraDetail() {
           >
             Materiais Locados
           </TabsTrigger>
+          {!isPrestador && (
+            <TabsTrigger
+              value="receitas"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+            >
+              Receitas
+            </TabsTrigger>
+          )}
           <TabsTrigger
-            value="receitas"
+            value="perdas"
             className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
           >
-            Receitas
+            Perdas de Materiais
           </TabsTrigger>
           <TabsTrigger
             value="cronograma"
@@ -414,6 +429,9 @@ export default function ObraDetail() {
         </TabsContent>
         <TabsContent value="locados" className="mt-0">
           {activeTab === 'locados' && <RentedMaterialsTab obraId={obra.id} />}
+        </TabsContent>
+        <TabsContent value="perdas" className="mt-0">
+          {activeTab === 'perdas' && <MaterialLossesPanel obraId={obra.id} />}
         </TabsContent>
         <TabsContent value="receitas" className="mt-0">
           <RevenuesTab obraId={obra.id} obra={obra} />

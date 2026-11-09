@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useAuth } from '@/hooks/use-auth'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 import { Obra, Despesa, Receita, Diario } from '@/types'
@@ -10,8 +11,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Database, RefreshCw } from 'lucide-react'
 import { calculateWorkFinancialMetrics } from '@/lib/financial-calculator'
 import { WorkFinancialReturnSection } from '@/components/financial/WorkFinancialReturnSection'
+import RewardProgressCard from './RewardProgressCard'
 
-export default function OverviewTab({
+function FullOverview({
   obra,
   onAddNote,
   onNavigateToRevenues,
@@ -98,43 +100,7 @@ export default function OverviewTab({
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalhes do Projeto</CardTitle>
-            </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Endereço</p>
-                  <p className="text-sm">{obra.address || '-'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Engenheiro Responsável
-                  </p>
-                  <p className="text-sm">{obra.manager || '-'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Início</p>
-                  <p className="text-sm">{formatDate(obra.start_date)}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Previsão Fim</p>
-                  <p className="text-sm">{formatDate(obra.end_date_planned)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ProjectDetailsCard obra={obra} />
 
           <Card>
             <CardHeader>
@@ -209,6 +175,58 @@ export default function OverviewTab({
         </div>
 
         <div className="space-y-6">
+          <PhysicalProgressCard obra={obra} />
+          <RewardProgressCard obra={obra} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProjectDetailsCard({ obra }: { obra: Obra }) {
+  return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalhes do Projeto</CardTitle>
+            </CardHeader>
+            <CardContent className="grid sm:grid-cols-2 gap-4">
+              <div className="flex items-start gap-3">
+                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Endereço</p>
+                  <p className="text-sm">{obra.address || '-'}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Engenheiro Responsável
+                  </p>
+                  <p className="text-sm">{obra.manager || '-'}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Início</p>
+                  <p className="text-sm">{formatDate(obra.start_date)}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Previsão Fim</p>
+                  <p className="text-sm">{formatDate(obra.end_date_planned)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+  )
+}
+
+function PhysicalProgressCard({ obra }: { obra: Obra }) {
+  return (
           <Card>
             <CardHeader>
               <CardTitle>Progresso Físico</CardTitle>
@@ -237,8 +255,31 @@ export default function OverviewTab({
               </p>
             </CardContent>
           </Card>
+  )
+}
+
+/**
+ * Prestador: só Detalhes do Projeto e Progresso Físico (sem ROI, ponto de equilíbrio, payback,
+ * resumo financeiro e notas). Equipe interna: visão completa.
+ */
+export default function OverviewTab(props: {
+  obra: Obra
+  onAddNote: () => void
+  onNavigateToRevenues?: () => void
+}) {
+  const { role } = useAuth()
+  if (role === 'prestador') {
+    return (
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="md:col-span-2 space-y-6">
+          <ProjectDetailsCard obra={props.obra} />
+        </div>
+        <div className="space-y-6">
+          <PhysicalProgressCard obra={props.obra} />
+          <RewardProgressCard obra={props.obra} />
         </div>
       </div>
-    </div>
-  )
+    )
+  }
+  return <FullOverview {...props} />
 }
