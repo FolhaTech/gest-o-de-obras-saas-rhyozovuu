@@ -30,6 +30,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Database, RefreshCw, WifiOff } from 'lucide-react'
 import { isMissingTableError } from '@/hooks/use-data'
+import PlannerTasksSection from './PlannerTasksSection'
 
 export default function StagesTab({ obraId }: { obraId: string }) {
   const {
@@ -301,6 +302,10 @@ export default function StagesTab({ obraId }: { obraId: string }) {
           </Card>
         ))
       )}
+
+      <div className="pt-6 border-t">
+        <PlannerTasksSection obraId={obraId} />
+      </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">

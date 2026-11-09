@@ -20,7 +20,19 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { normalizeRole } from '@/lib/roles'
-import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History } from 'lucide-react'
+import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History, KeyRound } from 'lucide-react'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface Profile {
   id: string
@@ -46,8 +58,52 @@ function formatLastLogin(value?: string | null) {
 
 export default function UsersTab() {
   const { data: profiles, loading, refetch } = useData<Profile>('profiles')
-  const { user: currentUser, refreshProfile } = useAuth()
+  const { user: currentUser, refreshProfile, role: myRole } = useAuth()
   const { toast } = useToast()
+
+  // Alteração de senha de outros usuários (somente administradores)
+  const [pwdTarget, setPwdTarget] = useState<Profile | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [savingPwd, setSavingPwd] = useState(false)
+
+  const closePwdDialog = () => {
+    setPwdTarget(null)
+    setNewPassword('')
+  }
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pwdTarget) return
+    if (newPassword.length < 6) {
+      toast({
+        title: 'Senha muito curta',
+        description: 'Use pelo menos 6 caracteres.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setSavingPwd(true)
+    const { error } = await supabase.functions.invoke('set-user-password', {
+      body: { userId: pwdTarget.id, password: newPassword },
+    })
+    setSavingPwd(false)
+    if (error) {
+      let msg = error.message
+      try {
+        const body = await (error as any).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch {
+        /* mantém a mensagem padrão */
+      }
+      toast({ title: 'Erro ao alterar senha', description: msg, variant: 'destructive' })
+      return
+    }
+    toast({
+      title: 'Senha alterada',
+      description: `${pwdTarget.email || pwdTarget.full_name} já pode entrar com a nova senha.`,
+    })
+    closePwdDialog()
+  }
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
@@ -101,6 +157,7 @@ export default function UsersTab() {
               <TableHead>Papel Atual</TableHead>
               <TableHead>Último login</TableHead>
               <TableHead>Alterar Nível de Acesso</TableHead>
+              {myRole === 'admin' && <TableHead>Senha</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -161,12 +218,61 @@ export default function UsersTab() {
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  {myRole === 'admin' && (
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setPwdTarget(p)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> Alterar senha
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               )
             })}
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={!!pwdTarget} onOpenChange={(open) => !open && closePwdDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar senha</DialogTitle>
+            <DialogDescription>
+              Defina uma nova senha para {pwdTarget?.full_name || 'o usuário'}
+              {pwdTarget?.email ? ` (${pwdTarget.email})` : ''}. Informe-a à pessoa por um canal
+              seguro.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSetPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-user-password">Nova senha</Label>
+              <Input
+                id="new-user-password"
+                type="text"
+                autoComplete="off"
+                minLength={6}
+                maxLength={72}
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" disabled={savingPwd} onClick={closePwdDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingPwd}>
+                {savingPwd ? 'Salvando...' : 'Salvar senha'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

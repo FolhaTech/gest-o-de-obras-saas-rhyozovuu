@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/gateway.ts": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/rest/v1/:path*", "destination": "/api/gateway?__svc=rest&__p=:path*" },
+    { "source": "/auth/v1/:path*", "destination": "/api/gateway?__svc=auth&__p=:path*" },
+    { "source": "/storage/v1/:path*", "destination": "/api/gateway?__svc=storage&__p=:path*" },
+    { "source": "/functions/v1/:path*", "destination": "/api/gateway?__svc=functions&__p=:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
