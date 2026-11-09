@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Database,
   Loader2,
+  FileDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,10 +66,13 @@ import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import {
   clampProgress,
+  daysOverdue,
+  isTaskOverdue,
   progressFromStatus,
   statusFromProgress,
   taskProgress,
 } from '@/lib/planner-progress'
+import { exportPlannerTaskPdf } from '@/lib/planner-report'
 
 const STATUS_COLUMNS: {
   key: PlannerTaskStatus
@@ -131,6 +135,8 @@ export default function PlannerPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
   const [workFilter, setWorkFilter] = useState<string>('all')
+  const [overdueOnly, setOverdueOnly] = useState(false)
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
 
   // Modais de Criação / Edição
@@ -505,6 +511,24 @@ export default function PlannerPage() {
     }
   }
 
+  // Relatório em PDF do card
+  const handleExportPdf = async (task: PlannerTask) => {
+    setPdfBusyId(task.id)
+    try {
+      await exportPlannerTaskPdf(task)
+      toast({ title: 'Relatório gerado', description: 'O PDF foi baixado.' })
+    } catch (err: any) {
+      console.error('Erro ao gerar PDF:', err)
+      toast({
+        title: 'Erro ao gerar o PDF',
+        description: err?.message || 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setPdfBusyId(null)
+    }
+  }
+
   // Filtros aplicados
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -535,9 +559,12 @@ export default function PlannerPage() {
         if (workFilter !== 'none' && task.work_id !== workFilter) return false
       }
 
+      // Somente atrasadas
+      if (overdueOnly && !isTaskOverdue(task)) return false
+
       return true
     })
-  }, [tasks, searchQuery, statusFilter, assigneeFilter, workFilter])
+  }, [tasks, searchQuery, statusFilter, assigneeFilter, workFilter, overdueOnly])
 
   // Contadores
   const counts = useMemo(() => {
@@ -546,6 +573,7 @@ export default function PlannerPage() {
       pending: tasks.filter((t) => t.status === 'pending').length,
       inProgress: tasks.filter((t) => t.status === 'in_progress').length,
       completed: tasks.filter((t) => t.status === 'completed').length,
+      overdue: tasks.filter((t) => isTaskOverdue(t)).length,
     }
   }, [tasks])
 
@@ -621,7 +649,7 @@ export default function PlannerPage() {
       </div>
 
       {/* Métricas / Contadores */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="shadow-none border">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -668,6 +696,36 @@ export default function PlannerPage() {
             </div>
             <div className="p-2.5 rounded-full bg-emerald-500/10 text-emerald-600">
               <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          role="button"
+          tabIndex={0}
+          aria-pressed={overdueOnly}
+          title="Clique para filtrar somente as tarefas atrasadas"
+          onClick={() => setOverdueOnly((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setOverdueOnly((v) => !v)
+            }
+          }}
+          className={`shadow-none border cursor-pointer transition-colors hover:bg-rose-500/5 ${
+            overdueOnly ? 'ring-2 ring-rose-500 border-rose-500' : counts.overdue > 0 ? 'border-rose-300' : ''
+          }`}
+        >
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium uppercase">Em Atraso</p>
+              <h3 className="text-2xl font-bold mt-1 text-rose-600">{counts.overdue}</h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {overdueOnly ? 'Filtro ativo' : 'Prazo vencido'}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-full bg-rose-500/10 text-rose-600">
+              <AlertTriangle className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
@@ -767,6 +825,7 @@ export default function PlannerPage() {
               setStatusFilter('all')
               setAssigneeFilter('all')
               setWorkFilter('all')
+              setOverdueOnly(false)
             }}
           >
             Limpar Filtros
@@ -830,6 +889,8 @@ export default function PlannerPage() {
                         onEdit={() => handleOpenEdit(task)}
                         onDelete={() => handleDeleteTask(task)}
                         onView={() => setPreviewTask(task)}
+                        onExportPdf={() => handleExportPdf(task)}
+                        exporting={pdfBusyId === task.id}
                         onStatusChange={(newStatus) => handleQuickStatusChange(task.id, newStatus)}
                       />
                     ))
@@ -849,6 +910,8 @@ export default function PlannerPage() {
               onEdit={() => handleOpenEdit(task)}
               onDelete={() => handleDeleteTask(task)}
               onView={() => setPreviewTask(task)}
+              onExportPdf={() => handleExportPdf(task)}
+              exporting={pdfBusyId === task.id}
               onStatusChange={(newStatus) => handleQuickStatusChange(task.id, newStatus)}
             />
           ))}
@@ -1208,6 +1271,11 @@ export default function PlannerPage() {
                     <CalendarDays className="h-3 w-3" /> Cronograma
                   </Badge>
                 )}
+                {isTaskOverdue(previewTask) && (
+                  <Badge variant="outline" className="gap-1 border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                    <AlertTriangle className="h-3 w-3" /> Atrasada há {daysOverdue(previewTask)} dia(s)
+                  </Badge>
+                )}
               </div>
               <DialogTitle className="text-xl font-bold">{previewTask.title}</DialogTitle>
             </DialogHeader>
@@ -1348,6 +1416,21 @@ export default function PlannerPage() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={pdfBusyId === previewTask.id}
+                  onClick={() => handleExportPdf(previewTask)}
+                  className="gap-1.5"
+                >
+                  {pdfBusyId === previewTask.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5" />
+                  )}{' '}
+                  Baixar PDF
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     const taskToEdit = previewTask
                     setPreviewTask(null)
@@ -1417,19 +1500,28 @@ function TaskCard({
   onEdit,
   onDelete,
   onView,
+  onExportPdf,
+  exporting,
   onStatusChange,
 }: {
   task: PlannerTask
   onEdit: () => void
   onDelete: () => void
   onView: () => void
+  onExportPdf: () => void
+  exporting?: boolean
   onStatusChange: (status: PlannerTaskStatus) => void
 }) {
+  const overdue = isTaskOverdue(task)
   const images = task.attachments?.filter((a) => a.file_type === 'image') || []
   const videos = task.attachments?.filter((a) => a.file_type === 'video') || []
 
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow bg-card border group">
+    <Card
+      className={`shadow-sm hover:shadow-md transition-shadow bg-card border group ${
+        overdue ? 'border-rose-300 dark:border-rose-800' : ''
+      }`}
+    >
       {/* Miniatura do Primeiro Anexo se existir */}
       {images.length > 0 && (
         <div
@@ -1516,9 +1608,17 @@ function TaskCard({
 
           {/* Prazo */}
           {task.due_date && (
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
-              <Calendar className="h-3 w-3" />
-              <span>{formatDate(task.due_date)}</span>
+            <div
+              className={`flex items-center gap-1 text-[11px] shrink-0 ${
+                overdue ? 'text-rose-600 font-semibold' : 'text-muted-foreground'
+              }`}
+              title={overdue ? `Atrasada há ${daysOverdue(task)} dia(s)` : undefined}
+            >
+              {overdue ? <AlertTriangle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
+              <span>
+                {formatDate(task.due_date)}
+                {overdue ? ` · ${daysOverdue(task)}d` : ''}
+              </span>
             </div>
           )}
         </div>
@@ -1539,6 +1639,20 @@ function TaskCard({
           </div>
 
           <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-primary"
+              onClick={onExportPdf}
+              disabled={exporting}
+              title="Baixar relatório em PDF"
+            >
+              {exporting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <FileDown className="h-3 w-3" />
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -1572,14 +1686,19 @@ function TaskListItem({
   onEdit,
   onDelete,
   onView,
+  onExportPdf,
+  exporting,
   onStatusChange,
 }: {
   task: PlannerTask
   onEdit: () => void
   onDelete: () => void
   onView: () => void
+  onExportPdf: () => void
+  exporting?: boolean
   onStatusChange: (status: PlannerTaskStatus) => void
 }) {
+  const overdue = isTaskOverdue(task)
   const images = task.attachments?.filter((a) => a.file_type === 'image') || []
   const videos = task.attachments?.filter((a) => a.file_type === 'video') || []
 
@@ -1649,9 +1768,16 @@ function TaskListItem({
 
               {/* Prazo */}
               {task.due_date && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>Prazo: {formatDate(task.due_date)}</span>
+                <div className={`flex items-center gap-1 ${overdue ? 'text-rose-600 font-semibold' : ''}`}>
+                  {overdue ? (
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                  ) : (
+                    <Calendar className="h-3.5 w-3.5" />
+                  )}
+                  <span>
+                    Prazo: {formatDate(task.due_date)}
+                    {overdue ? ` · atrasada há ${daysOverdue(task)} dia(s)` : ''}
+                  </span>
                 </div>
               )}
 
@@ -1689,6 +1815,21 @@ function TaskListItem({
               <SelectItem value="completed">Concluída</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-primary"
+            onClick={onExportPdf}
+            disabled={exporting}
+            title="Baixar relatório em PDF"
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileDown className="h-3.5 w-3.5" />
+            )}
+          </Button>
 
           <Button
             variant="ghost"

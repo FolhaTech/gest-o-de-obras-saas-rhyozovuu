@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 const API = process.env.API_URL ?? 'http://localhost:3001'
 const anon = process.env.VITE_SUPABASE_ANON_KEY ?? 'anon'
 const sb = createClient(API, anon, { auth: { persistSession: false, autoRefreshToken: false } })
+const mk0 = () => createClient(API, anon, { auth: { persistSession: false, autoRefreshToken: false } })
 
 let failed = 0
 const ok = (name, cond, extra = '') => {
@@ -108,6 +109,19 @@ const nodel = await sb.from('action_types').delete() // tabela vazia: o teste nu
 ok('DELETE sem filtro é recusado', nodel.error?.code === '21000', nodel.error?.code)
 const noupd = await sb.from('action_types').update({ name: 'x' })
 ok('UPDATE sem filtro é recusado', noupd.error?.code === '21000', noupd.error?.code)
+
+// --- materiais locados ---
+const rent = await sb.from('work_rented_materials').insert({ work_id: work.id, name: 'smoke-andaime', quantity: 2, unit: 'un', rental_cost: 15.5, cost_period: 'dia', start_date: '2099-01-01', expected_return_date: '2099-01-10' }).select('id,quantity,rental_cost').single()
+ok('insere material locado', !rent.error && Number(rent.data.rental_cost) === 15.5, rent.error?.message)
+const rbad = await sb.from('work_rented_materials').insert({ work_id: work.id, name: 'smoke-ruim', start_date: '2099-01-10', expected_return_date: '2099-01-01' })
+ok('CHECK rejeita devolução antes do início', rbad.error?.code === '23514', rbad.error?.code)
+const rup = await sb.from('work_rented_materials').update({ returned_date: '2099-01-05' }).eq('id', rent.data?.id).select('returned_date').single()
+ok('registra devolução', rup.data?.returned_date === '2099-01-05', rup.error?.message)
+const rlist = await sb.from('work_rented_materials').select('id').eq('work_id', work.id).eq('name', 'smoke-andaime')
+ok('lista por obra', rlist.data?.length === 1)
+await sb.from('work_rented_materials').delete().eq('id', rent.data?.id)
+const ranon = await mk0().from('work_rented_materials').select('id')
+ok('anon não lê materiais locados', !!ranon.error || ranon.data.length === 0)
 
 // --- storage ---
 const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], { type: 'image/png' })

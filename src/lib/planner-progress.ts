@@ -24,3 +24,28 @@ export function progressFromStatus(status: PlannerTaskStatus, current: number): 
   if (status === 'pending') return 0
   return current >= 100 ? 50 : clampProgress(current)
 }
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** Data local no formato YYYY-MM-DD (evita o desvio de fuso de toISOString). */
+export const localISODate = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+/** Atrasada = prazo anterior a hoje e tarefa ainda não concluída. */
+export function isTaskOverdue(
+  task: Pick<PlannerTask, 'status' | 'due_date'>,
+  today: string = localISODate(),
+): boolean {
+  return task.status !== 'completed' && !!task.due_date && task.due_date.slice(0, 10) < today
+}
+
+/** Dias de atraso (0 se a tarefa não está atrasada). */
+export function daysOverdue(
+  task: Pick<PlannerTask, 'status' | 'due_date'>,
+  now: Date = new Date(),
+): number {
+  if (!isTaskOverdue(task, localISODate(now))) return 0
+  const due = new Date(`${task.due_date!.slice(0, 10)}T00:00:00`)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.max(1, Math.round((today.getTime() - due.getTime()) / 86_400_000))
+}
