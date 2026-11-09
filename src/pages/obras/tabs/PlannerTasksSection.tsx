@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Film,
   Image as ImageIcon,
+  Link2,
   Play,
   RefreshCw,
   User,
@@ -19,7 +20,9 @@ import { PlannerAttachment, PlannerTask, PlannerTaskPriority, PlannerTaskStatus 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -71,15 +74,19 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   const [tasks, setTasks] = useState<PlannerTask[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Tarefas "gerais" do Planner (sem obra) também podem ser exibidas e vinculadas a esta obra.
+  const [showGeneral, setShowGeneral] = useState(false)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error: tasksError } = await supabase
+      let query = supabase
         .from('planner_tasks' as any)
         .select('*, team_members:assignee_id(id, name, role, phone)')
-        .eq('work_id', obraId)
-        .order('created_at', { ascending: false })
+      query = showGeneral
+        ? query.or(`work_id.eq.${obraId},work_id.is.null`)
+        : query.eq('work_id', obraId)
+      const { data, error: tasksError } = await query.order('created_at', { ascending: false })
 
       if (tasksError) throw tasksError
 
@@ -107,11 +114,29 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
     } finally {
       setLoading(false)
     }
-  }, [obraId])
+  }, [obraId, showGeneral])
 
   useEffect(() => {
     fetchTasks()
   }, [fetchTasks])
+
+  const handleLinkToWork = async (taskId: string) => {
+    const { error: linkError } = await supabase
+      .from('planner_tasks' as any)
+      .update({ work_id: obraId })
+      .eq('id', taskId)
+
+    if (linkError) {
+      toast({
+        title: 'Erro ao vincular tarefa',
+        description: formatSupabaseError(linkError),
+        variant: 'destructive',
+      })
+      return
+    }
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, work_id: obraId } : t)))
+    toast({ title: 'Tarefa vinculada a esta obra' })
+  }
 
   const handleStatusChange = async (taskId: string, status: PlannerTaskStatus) => {
     const { error: updateError } = await supabase
@@ -131,13 +156,15 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   }
 
   const summary = useMemo(() => {
-    const total = tasks.length
-    const done = tasks.filter((t) => t.status === 'completed').length
+    // O avanço considera só as tarefas já vinculadas a esta obra.
+    const linked = tasks.filter((t) => t.work_id === obraId)
+    const total = linked.length
+    const done = linked.filter((t) => t.status === 'completed').length
     const progress = total
-      ? Math.round(tasks.reduce((acc, t) => acc + STATUS_PROGRESS[t.status], 0) / total)
+      ? Math.round(linked.reduce((acc, t) => acc + STATUS_PROGRESS[t.status], 0) / total)
       : 0
     return { total, done, progress }
-  }, [tasks])
+  }, [tasks, obraId])
 
   return (
     <div className="space-y-4">
@@ -154,7 +181,13 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 pr-1">
+            <Switch id="planner-show-general" checked={showGeneral} onCheckedChange={setShowGeneral} />
+            <Label htmlFor="planner-show-general" className="text-xs cursor-pointer">
+              Incluir tarefas gerais (sem obra)
+            </Label>
+          </div>
           <Button variant="outline" size="sm" onClick={fetchTasks} className="gap-2">
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
@@ -218,6 +251,22 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
                       <Badge variant="outline" className={`font-normal ${priority.className}`}>
                         {priority.label}
                       </Badge>
+                      {!task.work_id && (
+                        <>
+                          <Badge variant="outline" className="font-normal">
+                            Geral (sem obra)
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs gap-1"
+                            onClick={() => handleLinkToWork(task.id)}
+                          >
+                            <Link2 className="h-3 w-3" /> Vincular a esta obra
+                          </Button>
+                        </>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       {task.due_date && (
