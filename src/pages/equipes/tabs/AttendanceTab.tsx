@@ -47,7 +47,7 @@ export default function AttendanceTab() {
       const endDateStr = format(days[6], 'yyyy-MM-dd')
 
       const [workersRes, recordsRes, extrasRes] = await Promise.all([
-        supabase.from('team_members').select('*').eq('status', 'active').order('name'),
+        supabase.from('team_members').select('*').eq('status', 'active').is('provider_id', null).order('name'),
         supabase
           .from('attendance_records')
           .select('*')

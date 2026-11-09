@@ -72,6 +72,7 @@ export default function WorkersTab() {
   // Lista filtrada por busca e por grupo
   const filteredEquipes = useMemo(() => {
     return equipes.filter((worker) => {
+      if (worker.provider_id) return false // espelho de Prestadores: não é funcionário
       // Filtro de texto (nome ou função)
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase()

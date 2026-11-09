@@ -46,7 +46,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
   const { role } = useAuth()
   const canEdit = role !== 'prestador'
   // Responsável = pessoa da Equipe
-  const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
+  const { data: teamMembers } = useData<{ id: string; name: string; provider_id?: string | null }>('team_members')
 
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({ name: '', manager: '', progress: 0 })
@@ -177,7 +177,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     <div className="space-y-4">
       <datalist id="stg-team-members">
         {(teamMembers || []).map((m) => (
-          <option key={m.id} value={m.name.trim()} />
+          <option key={m.id} value={m.name.trim()} label={m.provider_id ? 'Prestador' : undefined} />
         ))}
       </datalist>
       {isTableMissing && (

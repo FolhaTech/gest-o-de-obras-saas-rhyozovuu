@@ -59,7 +59,7 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
   // Prestador acompanha o cronograma de todos, mas não altera nada (o banco também bloqueia).
   const { role } = useAuth()
   const canEdit = role !== 'prestador'
-  const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
+  const { data: teamMembers } = useData<{ id: string; name: string; provider_id?: string | null }>('team_members')
 
   const EMPTY_FORM = {
     name: '',
@@ -165,7 +165,7 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
             />
             <datalist id="sch-team-members">
               {(teamMembers || []).map((m) => (
-                <option key={m.id} value={m.name.trim()} />
+                <option key={m.id} value={m.name.trim()} label={m.provider_id ? 'Prestador' : undefined} />
               ))}
             </datalist>
           </div>

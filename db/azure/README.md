@@ -47,6 +47,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/11_perdas_metas_financeiro.sql  # per
 psql "$ADMIN_URL/gestao_obras" -f db/azure/12_materiais_alocados_valores.sql  # materiais alocados com valores (R$), valores fechados ao Prestador; teste: node db/azure/test-materiais-valores.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/13_responsavel_equipe.sql  # Pessoa Responsável = membro da Equipe; usuário vinculado ao membro vê só os cards dele; testes: test-permissoes.mjs, test-cronograma-sync.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/14_rls_por_papel.sql  # permissões por papel: sem acesso anônimo, mínimo privilégio, Gestor como Admin sem valores (R$); teste: node db/azure/test-papeis.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/15_prestadores_responsavel.sql  # Prestadores (Equipes) também são opção de Pessoa Responsável (linha espelho em team_members); teste: node db/azure/test-prestadores-responsavel.mjs
 ```
 
 ## Desenvolvimento local
