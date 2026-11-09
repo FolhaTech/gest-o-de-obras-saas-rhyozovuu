@@ -137,13 +137,12 @@
    - Cada capítulo começa em nova página
    ============================================================ */
 @media print {
-  /* Sidebar (componente shadcn/ui) some por completo */
-  [data-slot='sidebar'],
+  /* Sidebar (componente shadcn/ui) some por completo, incluindo o espaçador */
+  div.peer.group,
   aside[data-sidebar='sidebar'],
-  .manual-header .manual-actions {
+  .manual-actions {
     display: none !important;
   }
-
   header {
     display: none !important;
   }
@@ -155,12 +154,6 @@
   main {
     overflow: visible !important;
     padding: 0 !important;
-  }
-
-  /* Zera o layout em grade/fixo do wrapper do sidebar para ocupar a folha inteira */
-  .manual-root,
-  .manual-root * {
-    overflow: visible !important;
   }
 
   .manual-root {
