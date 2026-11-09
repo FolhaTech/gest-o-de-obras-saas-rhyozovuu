@@ -1,11 +1,12 @@
 /**
  * Portes das Edge Functions do Supabase que o app chama (supabase.functions.invoke):
- * generate-composition e parse-receipt. Exigem usuário autenticado.
+ * generate-composition, parse-receipt e set-user-password (só admin). Exigem usuário autenticado.
  * Usam a API da OpenAI se OPENAI_API_KEY estiver definida; caso contrário, devolvem o mesmo
  * conteúdo de demonstração das funções originais.
  */
+import bcrypt from 'bcryptjs'
 import { decodeSeg, readJson, sendEmpty, sendJson, type Req, type Res, type Route } from './http.js'
-import type { Caller } from './db.js'
+import { withAdmin, type Caller } from './db.js'
 
 async function openaiJson(model: string, messages: unknown[]): Promise<any> {
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -71,6 +72,42 @@ async function parseReceipt(body: { image?: string }) {
   ])
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Admin define a senha de outro usuário (a API de e-mail não está ativa, então não há "esqueci a senha"). */
+async function setUserPassword(
+  caller: Caller,
+  body: { userId?: string; password?: string },
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { userId, password } = body
+  if (typeof userId !== 'string' || !UUID_RE.test(userId)) {
+    return { status: 400, body: { error: 'userId inválido' } }
+  }
+  if (typeof password !== 'string' || password.length < 6 || password.length > 72) {
+    return { status: 400, body: { error: 'A senha deve ter de 6 a 72 caracteres' } }
+  }
+  const hash = await bcrypt.hash(password, 10)
+  return withAdmin(async (c) => {
+    const admin = await c.query(
+      "select 1 from public.profiles where id = $1 and lower(role) = 'admin'",
+      [caller.sub],
+    )
+    if (!admin.rowCount) {
+      return { status: 403, body: { error: 'Apenas administradores podem alterar senhas.' } }
+    }
+    const r = await c.query(
+      `update auth.users
+          set encrypted_password = $2,
+              email_confirmed_at = coalesce(email_confirmed_at, now()),
+              updated_at = now()
+        where id = $1 returning email`,
+      [userId, hash],
+    )
+    if (!r.rowCount) return { status: 404, body: { error: 'Usuário não encontrado' } }
+    return { status: 200, body: { success: true, email: r.rows[0].email } }
+  })
+}
+
 export async function handleFunctions(req: Req, res: Res, caller: Caller, route: Route) {
   if ((req.method ?? 'GET').toUpperCase() === 'OPTIONS') return sendEmpty(res, 204)
   if (caller.role !== 'authenticated') return sendJson(res, 401, { error: 'Unauthorized' })
@@ -80,6 +117,10 @@ export async function handleFunctions(req: Req, res: Res, caller: Caller, route:
     const body = (await readJson(req)) ?? {}
     if (name === 'generate-composition') return sendJson(res, 200, await generateComposition(body))
     if (name === 'parse-receipt') return sendJson(res, 200, await parseReceipt(body))
+    if (name === 'set-user-password') {
+      const out = await setUserPassword(caller, body)
+      return sendJson(res, out.status, out.body)
+    }
     return sendJson(res, 404, { error: `Função "${name}" não encontrada` })
   } catch (e) {
     return sendJson(res, 400, { error: (e as Error).message })
