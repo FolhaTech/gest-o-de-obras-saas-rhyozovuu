@@ -42,9 +42,10 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/06_work_rented_materials.sql  # mater
 psql "$ADMIN_URL/gestao_obras" -f db/azure/07_planner_status_delayed.sql  # status Em Atraso nas tarefas
 psql "$ADMIN_URL/gestao_obras" -f db/azure/08_permissoes_prestador.sql  # permissões do Prestador; teste: node db/azure/test-permissoes.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/09_planner_so_vinculados.sql  # só Admin vê todos os cards do Planner
-psql "$ADMIN_URL/gestao_obras" -f db/azure/10_responsavel_usuario.sql  # Pessoa Responsável = usuário do sistema
+psql "$ADMIN_URL/gestao_obras" -f db/azure/10_responsavel_usuario.sql  # Pessoa Responsável = usuário do sistema (substituída pela 13)
 psql "$ADMIN_URL/gestao_obras" -f db/azure/11_perdas_metas_financeiro.sql  # perdas de materiais, metas/premiação e financeiro fechado ao Prestador; teste: node db/azure/test-perdas-metas.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/12_materiais_alocados_valores.sql  # materiais alocados com valores (R$), valores fechados ao Prestador; teste: node db/azure/test-materiais-valores.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/13_responsavel_equipe.sql  # Pessoa Responsável = membro da Equipe; usuário vinculado ao membro vê só os cards dele; testes: test-permissoes.mjs, test-cronograma-sync.mjs
 ```
 
 ## Desenvolvimento local

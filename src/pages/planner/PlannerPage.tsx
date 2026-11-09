@@ -129,11 +129,11 @@ const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; badgeClass: 
 }
 
 export default function PlannerPage() {
-  const { user, role } = useAuth()
+  const { user, role, profile } = useAuth()
   // Só o Admin vê todos os cards. Prestador e Gestor (colaboradores) veem e editam somente os cards em que
   // são a "Pessoa Responsável", isto é, o membro da equipe vinculado ao usuário (o banco garante).
   const isRestricted = role !== 'admin'
-  const myMemberId: string | null = user?.id ?? null // o responsável é o próprio usuário logado
+  const myMemberId: string | null = profile?.team_member_id ?? null
   const canCreate = !isRestricted || !!myMemberId
   const { toast } = useToast()
 
@@ -182,21 +182,16 @@ export default function PlannerPage() {
   // Carrega membros e obras auxiliares
   const loadAuxData = useCallback(async () => {
     try {
-      // Pessoa Responsável = usuário do sistema (perfil)
-      const [worksRes, usersRes] = await Promise.all([
+      const [worksRes, teamRes] = await Promise.all([
         supabase.from('works').select('id, name').order('name'),
-        supabase.from('profiles').select('id, full_name, email').order('full_name'),
+        supabase
+          .from('team_members')
+          .select('id, name, role, phone')
+          .eq('status', 'active')
+          .order('name'),
       ])
       if (worksRes.data) setWorks(worksRes.data as unknown as Obra[])
-      if (usersRes.data) {
-        setTeamMembers(
-          (usersRes.data as any[]).map((p) => ({
-            id: p.id,
-            name: (p.full_name || p.email || '').trim(),
-            role: p.email,
-          })) as unknown as Equipe[],
-        )
-      }
+      if (teamRes.data) setTeamMembers(teamRes.data as unknown as Equipe[])
     } catch (e) {
       console.warn('Erro ao carregar obras/equipes auxiliares:', e)
     }
@@ -211,7 +206,7 @@ export default function PlannerPage() {
         .select(`
           *,
           works:work_id(id, name),
-          team_members:assignee_id(id, name:full_name, email)
+          team_members:assignee_id(id, name, role, phone)
         `)
         .order('created_at', { ascending: false })
 
@@ -288,6 +283,14 @@ export default function PlannerPage() {
 
   // Abrir modal de criação
   const handleOpenCreate = (defaultStatus: PlannerTaskStatus = 'pending') => {
+    if (!canCreate) {
+      toast({
+        title: 'Usuário sem vínculo com a equipe',
+        description: 'Peça a um administrador para vincular você a um membro da equipe em Configurações.',
+        variant: 'destructive',
+      })
+      return
+    }
     resetForm()
     setFormStatus(defaultStatus)
     setFormProgress(progressFromStatus(defaultStatus, 0))
@@ -673,8 +676,16 @@ export default function PlannerPage() {
       </div>
 
       {isRestricted && (
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
-          Você vê somente os cards em que é a Pessoa Responsável.
+        <div
+          className={`rounded-lg border p-3 text-sm ${
+            myMemberId
+              ? 'bg-muted/40 text-muted-foreground'
+              : 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+          }`}
+        >
+          {myMemberId
+            ? 'Você vê somente os cards em que é a Pessoa Responsável.'
+            : 'Seu usuário ainda não está vinculado a um membro da equipe, por isso nenhuma tarefa aparece. Peça a um administrador para vincular em Configurações → Usuários.'}
         </div>
       )}
 
@@ -1077,7 +1088,7 @@ export default function PlannerPage() {
                 <Label>Pessoa Responsável</Label>
                 <Select value={formAssigneeId} onValueChange={setFormAssigneeId} disabled={isRestricted}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um usuário" />
+                    <SelectValue placeholder="Selecione um membro da equipe" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum responsável atribuído</SelectItem>

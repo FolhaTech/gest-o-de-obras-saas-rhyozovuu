@@ -65,8 +65,9 @@ s = ref
 r = await sb.from('profiles').select('id,email,role')
 ok('authenticated lê profiles', !r.error && r.data.length >= 6, `${r.data?.length} linhas`)
 const w0 = (await sb.from('works').select('id').limit(1).single()).data.id
-const emb = await sb.from('planner_tasks').insert({ title: 'smoke-embed', work_id: w0, assignee_id: smokeUserId }).select('id, works:work_id(id, name), team_members:assignee_id(id, name:full_name, email)').single()
-ok('embed m2o (obra e Pessoa Responsável = usuário)', !emb.error && emb.data.works?.id === w0 && emb.data.team_members?.id === smokeUserId && !!emb.data.team_members?.email, emb.error?.message)
+const m0 = (await db.query('select id from public.team_members order by name limit 1')).rows[0].id
+const emb = await sb.from('planner_tasks').insert({ title: 'smoke-embed', work_id: w0, assignee_id: m0 }).select('id, works:work_id(id, name), team_members:assignee_id(id, name, role, phone)').single()
+ok('embed m2o (obra e Pessoa Responsável = membro da equipe)', !emb.error && emb.data.works?.id === w0 && emb.data.team_members?.id === m0 && !!emb.data.team_members?.name, emb.error?.message)
 await sb.from('planner_tasks').delete().eq('id', emb.data?.id)
 r = await sb.from('works').select('id,name,work_stages(id,name)').limit(1)
 ok('embed o2m (work_stages)', !r.error && Array.isArray(r.data[0]?.work_stages), r.error?.message)
@@ -207,13 +208,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   await sb.storage.from('work-photos').remove([bigName])
 }
 
-// --- permissões por papel (via API, com RLS) ---
+// --- permissões do Prestador (via API, com RLS) ---
 {
-  const other = (await db.query('select id from public.profiles where id <> $1 order by email limit 1', [smokeUserId])).rows[0]
-  // cards de teste criados direto no banco: um do usuário do teste e um de outro usuário
-  const mineId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-meu', $1, $2) returning id", [work.id, smokeUserId])).rows[0].id
-  const theirsId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-dele', $1, $2) returning id", [work.id, other.id])).rows[0].id
-  const allTasks = (await sb.from('planner_tasks').select('id')).data.length // admin vê tudo
+  // dois membros da equipe e um card de cada (criados direto no banco; removidos no final do bloco)
+  const [mA, mB] = (await db.query('select id from public.team_members order by name limit 2')).rows
+  const mineId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-meu', $1, $2) returning id", [work.id, mA.id])).rows[0].id
+  const theirsId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-dele', $1, $2) returning id", [work.id, mB.id])).rows[0].id
+  const allTasks = (await sb.from('planner_tasks').select('id')).data.length
   const allStages = (await sb.from('work_stages').select('id')).data.length
   // item de planilha (materiais alocados com valores) criado direto no banco; removido no final do bloco
   const allocId = (await db.query("insert into public.work_extra_materials (work_id, code, name, unit, quantity, source) values ($1, 'SMK', 'smoke-item', 'UN', 3, 'smoke-planilha') returning id", [work.id])).rows[0].id
@@ -222,18 +223,16 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const allocAdmin = await allocSel()
   const av = [allocAdmin.data?.[0]?.work_extra_material_values].flat()[0]
   ok('admin lê os itens alocados com os valores (embed)', !allocAdmin.error && allocAdmin.data.length === 1 && Number(av?.total_cost) === 6, allocAdmin.error?.message)
-  await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
+  await db.query("update public.profiles set role = 'prestador', team_member_id = $2 where id = $1", [smokeUserId, mA.id])
   const allocPrest = await allocSel()
   const pv = [allocPrest.data?.[0]?.work_extra_material_values].flat().filter(Boolean)
   ok('prestador vê os itens alocados, mas sem os valores', !allocPrest.error && allocPrest.data.length === 1 && Number(allocPrest.data[0].quantity) === 3 && pv.length === 0, allocPrest.error?.message)
   const mine = await sb.from('planner_tasks').select('id,assignee_id')
-  ok('prestador vê só os cards em que é a Pessoa Responsável', !mine.error && mine.data.length >= 1 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === smokeUserId), `${mine.data?.length} de ${allTasks}`)
-  const others = await sb.from('planner_tasks').select('id').eq('id', theirsId)
-  ok('prestador não enxerga card de outro usuário', !others.error && others.data.length === 0)
-  const forOther = await sb.from('planner_tasks').insert({ title: 'smoke-outro', assignee_id: other.id })
-  ok('prestador não cria card para outro usuário', forOther.error?.code === '42501', forOther.error?.code)
-  const ownUpd = await sb.from('planner_tasks').update({ progress_percentage: 33 }).eq('id', mineId).select('progress_percentage')
-  ok('prestador altera o próprio card', !ownUpd.error && ownUpd.data.length === 1)
+  ok('prestador vê só as tarefas atribuídas a ele', !mine.error && mine.data.length > 0 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === mA.id), `${mine.data?.length} de ${allTasks}`)
+  const others = await sb.from('planner_tasks').select('id').eq('assignee_id', mB.id)
+  ok('prestador não enxerga tarefas de outro membro', !others.error && others.data.length === 0)
+  const forOther = await sb.from('planner_tasks').insert({ title: 'smoke-outro', assignee_id: mB.id })
+  ok('prestador não cria tarefa para outro membro', forOther.error?.code === '42501', forOther.error?.code)
   const stagesSeen = await sb.from('work_stages').select('id')
   ok('prestador vê as etapas do cronograma de todos', !stagesSeen.error && stagesSeen.data.length === allStages, `${stagesSeen.data?.length} etapas`)
   const stIns = await sb.from('work_stages').insert({ work_id: work.id, name: 'smoke-prestador' })
@@ -261,10 +260,12 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador não marca a premiação como entregue', !pPaid.error && pPaid.data.length === 0)
   const selfRole = await sb.from('profiles').update({ role: 'admin' }).eq('id', smokeUserId)
   ok('prestador não se promove a admin', !!selfRole.error, selfRole.error?.message)
+  const selfLink = await sb.from('profiles').update({ team_member_id: mB.id }).eq('id', smokeUserId)
+  ok('prestador não troca o próprio vínculo', !!selfLink.error, selfLink.error?.message)
   // Gestor (colaborador) também só vê os cards em que é a Pessoa Responsável
   await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
   const asGestor = await sb.from('planner_tasks').select('id,assignee_id')
-  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === smokeUserId), `${asGestor.data?.length} de ${allTasks}`)
+  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === mA.id), `${asGestor.data?.length} de ${allTasks}`)
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)

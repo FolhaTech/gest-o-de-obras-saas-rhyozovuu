@@ -26,8 +26,6 @@ export interface Stage {
   progress_percentage: number
   status: 'pending' | 'in_progress' | 'delayed' | 'completed'
   notes: string
-  /** Usuário responsável pela etapa (espelhado como Pessoa Responsável no Planner). */
-  manager_user_id?: string | null
 }
 
 export interface Diario {
@@ -280,13 +278,6 @@ export interface PlannerTask {
   updated_at?: string
   // Relações em consultas
   works?: { id: string; name: string } | null
-  // Pessoa Responsável: usuário do sistema (perfil). Mantém o nome do campo por compatibilidade.
-  team_members?: {
-    id: string
-    name: string
-    email?: string | null
-    role?: string | null
-    phone?: string | null
-  } | null
+  team_members?: { id: string; name: string; role?: string | null; phone?: string | null } | null
   attachments?: PlannerAttachment[]
 }

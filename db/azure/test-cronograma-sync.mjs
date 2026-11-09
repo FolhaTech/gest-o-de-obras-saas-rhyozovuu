@@ -32,14 +32,12 @@ try {
   // como administrador (só o Admin vê/edita todos os cards do Planner)
   const adminId = (await one("select id from profiles where lower(role) = 'admin' order by email limit 1")).id
   await c.query("select set_config('request.jwt.claim.sub', $1, true)", [adminId])
-  // responsável = usuário do sistema
-  const [uA, uB] = await q("select id, coalesce(nullif(btrim(full_name), ''), email) as nome from profiles order by email limit 2")
   const work = (await one('select id from works limit 1')).id
 
   const st = await one(
-    `insert into work_stages (work_id, name, manager, manager_user_id, start_date, end_date_planned, progress_percentage, status, notes)
-     values ($1, 'ETAPA TESTE', $2, $3, '2026-12-01', '2026-12-20', 25, 'in_progress', 'obs teste') returning id`,
-    [work, uA.nome, uA.id],
+    `insert into work_stages (work_id, name, manager, start_date, end_date_planned, progress_percentage, status, notes)
+     values ($1, 'ETAPA TESTE', 'Francisco', '2026-12-01', '2026-12-20', 25, 'in_progress', 'obs teste') returning id`,
+    [work],
   )
   let t = await one('select * from planner_tasks where stage_id = $1', [st.id])
   ok('etapa criada gera tarefa no Planner', !!t)
@@ -53,7 +51,9 @@ try {
       t.status === 'in_progress' &&
       t.description === 'obs teste',
   )
-  ok('responsável (usuário) da etapa vira Pessoa Responsável do card', t?.assignee_id === uA.id)
+  const fr = (await one("select public.match_team_member('Francisco') id")).id
+  ok('responsável "Francisco" vira membro da equipe (card e etapa)', !!fr && t?.assignee_id === fr)
+  ok('etapa guarda o membro responsável', (await one('select manager_member_id from work_stages where id = $1', [st.id])).manager_member_id === fr)
 
   await c.query(
     `update work_stages set name = 'ETAPA TESTE 2', progress_percentage = 100, status = 'completed' where id = $1`,
@@ -78,9 +78,10 @@ try {
   s = await one('select * from work_stages where id = $1', [st.id])
   ok('concluir tarefa conclui a etapa e define fim realizado', s.status === 'completed' && !!s.end_date_real)
 
-  await c.query('update planner_tasks set assignee_id = $2 where id = $1', [taskId, uB.id])
-  s = await one('select manager, manager_user_id from work_stages where id = $1', [st.id])
-  ok('Pessoa Responsável do card vai para a etapa (usuário e nome)', s.manager_user_id === uB.id && s.manager === uB.nome, s.manager)
+  const m = await one("select id, name from team_members where status = 'active' order by name limit 1")
+  await c.query('update planner_tasks set assignee_id = $2 where id = $1', [taskId, m.id])
+  s = await one('select manager, manager_member_id from work_stages where id = $1', [st.id])
+  ok('responsável do Planner vai para a etapa (nome e membro)', s.manager === m.name.trim() && s.manager_member_id === m.id, s.manager)
 
   await c.query(`update work_stages set notes = 'ultima' where id = $1`, [st.id])
   const t6 = await one('select description from planner_tasks where stage_id = $1', [st.id])

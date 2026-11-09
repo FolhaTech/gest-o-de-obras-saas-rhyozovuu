@@ -35,14 +35,14 @@ interface Goal {
   due_date: string | null
   paid_at: string | null
   notes: string | null
-  work_goal_members: { user_id: string; user: Person | null }[]
+  work_goal_members: { user_id: string; member_id: string | null; user: Person | null }[]
 }
 interface StageRow {
   id: string
   name: string
   status: string | null
   progress_percentage: number | null
-  manager_user_id: string | null
+  manager_member_id: string | null
 }
 
 const personName = (p?: Partial<Person> | null) => (p?.full_name || p?.email || 'Usuário').trim()
@@ -51,11 +51,12 @@ const stageDone = (s: StageRow) => s.status === 'completed' || Number(s.progress
 /**
  * Premiação: a pessoa (ou a equipe da meta) ganha quando cumpre 100% das etapas do projeto atribuídas
  * a ela (Etapas do Projeto) E o Progresso Físico da obra chega a 100%.
+ * A etapa é atribuída a um membro da Equipe; o usuário da meta conta pelo membro vinculado a ele.
  * O indicador é a média das duas condições, então só fecha em 100% quando as duas estão cumpridas.
  */
 function evaluate(goal: Goal, stages: StageRow[], physical: number) {
-  const ids = new Set(goal.work_goal_members.map((m) => m.user_id))
-  const assigned = stages.filter((s) => s.manager_user_id && ids.has(s.manager_user_id))
+  const ids = new Set(goal.work_goal_members.map((m) => m.member_id).filter(Boolean) as string[])
+  const assigned = stages.filter((s) => s.manager_member_id && ids.has(s.manager_member_id))
   const done = assigned.filter(stageDone)
   const stagesPct = assigned.length
     ? assigned.reduce((a, s) => a + (stageDone(s) ? 100 : Number(s.progress_percentage ?? 0)), 0) /
@@ -117,12 +118,12 @@ export default function RewardProgressCard({ obra }: { obra: Obra }) {
     const [goalRes, stageRes, peopleRes] = await Promise.all([
       supabase
         .from('work_goals' as any)
-        .select('*, work_goal_members(user_id, user:user_id(id, full_name, email))')
+        .select('*, work_goal_members(user_id, member_id, user:user_id(id, full_name, email))')
         .eq('work_id', obra.id)
         .order('created_at', { ascending: false }),
       supabase
         .from('work_stages')
-        .select('id, name, status, progress_percentage, manager_user_id')
+        .select('id, name, status, progress_percentage, manager_member_id')
         .eq('work_id', obra.id),
       isAdmin
         ? supabase.from('profiles').select('id, full_name, email').order('full_name')
@@ -317,7 +318,9 @@ export default function RewardProgressCard({ obra }: { obra: Obra }) {
                   <p>
                     Etapas atribuídas:{' '}
                     {ev.assigned.length === 0
-                      ? 'nenhuma atribuída ainda'
+                      ? goal.work_goal_members.some((m) => !m.member_id)
+                        ? 'nenhuma — vincule a pessoa a um membro da Equipe em Configurações'
+                        : 'nenhuma atribuída ainda'
                       : `${ev.done.length} de ${ev.assigned.length} concluídas (${Math.round(ev.stagesPct)}%)`}
                   </p>
                   <p>Progresso Físico da obra: {Math.round(physical)}%</p>
