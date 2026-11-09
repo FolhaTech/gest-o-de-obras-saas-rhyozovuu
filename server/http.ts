@@ -109,6 +109,8 @@ export function parseRoute(req: Req): Route {
   const pathParam = sp.get('__p')
   sp.delete('__svc')
   sp.delete('__p')
+  // A Vercel acrescenta ao destino o parâmetro nomeado do rewrite (:__vp*); ele não é filtro do PostgREST.
+  sp.delete('__vp')
   if (svcParam) {
     return {
       service: svcParam as Service,
