@@ -156,15 +156,16 @@ export default function UsersTab() {
         <ul className="list-disc list-inside space-y-1 mt-1 text-xs sm:text-sm">
           <li>
             <strong>Admin:</strong> Acesso total a todos os módulos, financeiro, configurações e
-            equipes.
+            equipes; vê todos os cards do Planner.
           </li>
           <li>
-            <strong>Gestor:</strong> Acesso total a todas as áreas operacionais e financeiras.
+            <strong>Gestor:</strong> Acesso total a todas as áreas operacionais e financeiras. No
+            Planner vê somente os cards em que é a Pessoa Responsável (membro da equipe vinculado).
           </li>
           <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
-            demais áreas ficam bloqueadas). No Planner vê somente as tarefas do membro da equipe
-            vinculado a ele; no Cronograma vê as etapas de todos, sem alterar.
+            demais áreas ficam bloqueadas). No Planner vê somente os cards em que é a Pessoa Responsável
+            (membro da equipe vinculado); no Cronograma vê as etapas de todos, sem alterar.
           </li>
         </ul>
       </div>

@@ -49,7 +49,7 @@ ok('getUser', me.user?.email === email)
 const prof = await sb.from('profiles').select('role').eq('id', s.data.user.id).maybeSingle()
 ok('cadastro aberto entra como prestador (ignora role=admin do cliente)', prof.data?.role === 'prestador', JSON.stringify(prof.data))
 const smokeUserId = s.data.user.id
-await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
+await db.query("update public.profiles set role = 'admin' where id = $1", [smokeUserId])
 const bad = await createClient(API, anon, { auth: { persistSession: false } }).auth.signInWithPassword({ email, password: 'errada' })
 ok('senha errada rejeitada', !!bad.error, bad.error?.message)
 await sb.auth.signOut()
@@ -215,6 +215,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador não se promove a admin', !!selfRole.error, selfRole.error?.message)
   const selfLink = await sb.from('profiles').update({ team_member_id: mB.id }).eq('id', smokeUserId)
   ok('prestador não troca o próprio vínculo', !!selfLink.error, selfLink.error?.message)
+  // Gestor (colaborador) também só vê os cards em que é a Pessoa Responsável
+  await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
+  const asGestor = await sb.from('planner_tasks').select('id,assignee_id')
+  ok('gestor também vê só os cards em que é a Pessoa Responsável', !asGestor.error && asGestor.data.length === mine.data.length && asGestor.data.every((t) => t.assignee_id === mA.id), `${asGestor.data?.length} de ${allTasks}`)
+  const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
+  ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
+  await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
   const anonTasks = await mk0().from('planner_tasks').select('id')
   ok('sem login não lê tarefas do Planner', !anonTasks.error && anonTasks.data.length === 0)
 }
