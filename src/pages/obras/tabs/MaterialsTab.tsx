@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import AllocatedItemsPanel from './AllocatedItemsPanel'
 
 type ConsolidateItem = {
   materialId: string
@@ -61,6 +62,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
   const [consumeMat, setConsumeMat] = useState('')
   const [consumeWs, setConsumeWs] = useState('')
   const [consumeQty, setConsumeQty] = useState('')
+  const [innerTab, setInnerTab] = useState<string | undefined>(undefined)
   const [openEdit, setOpenEdit] = useState(false)
   const [editingItem, setEditingItem] = useState<ConsolidateItem | null>(null)
   const [editConsumption, setEditConsumption] = useState('')
@@ -86,7 +88,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
         supabase
           .from('work_extra_materials')
           .select(`
-          id, material_id, quantity, consumption_per_m2,
+          id, material_id, quantity, consumption_per_m2, source,
           materials (id, name, unidade_nativa, peso_saco_kg, unit_of_measure, stock_quantity, densidades_insumo (densidade_kg_m3, peso_unitario_kg))
         `)
           .eq('work_id', obraId),
@@ -228,6 +230,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
     })
 
     rawData.extraMaterials.forEach((ex) => {
+      if (ex.source) return
       const mat = Array.isArray(ex.materials) ? ex.materials[0] : ex.materials
       if (!mat) return
       const densInfo = Array.isArray(mat.densidades_insumo)
@@ -339,6 +342,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
     }
   }
 
+  const hasImported = !!rawData?.extraMaterials.some((e) => e.source)
   const selectedMatItem = items.find((i) => i.materialId === consumeMat)
 
   if (loading && !rawData) return <Skeleton className="h-48 w-full" />
@@ -506,11 +510,20 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
         </Dialog>
       </div>
 
-      <Tabs defaultValue="shopping" className="w-full">
+      <Tabs
+        value={innerTab ?? (hasImported ? 'allocated' : 'shopping')}
+        onValueChange={setInnerTab}
+        className="w-full"
+      >
         <TabsList className="mb-4">
+          <TabsTrigger value="allocated">Itens Alocados</TabsTrigger>
           <TabsTrigger value="shopping">Lista de Compras</TabsTrigger>
           <TabsTrigger value="consumption">Acompanhamento de Consumo</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="allocated">
+          <AllocatedItemsPanel obraId={obraId} />
+        </TabsContent>
 
         <TabsContent value="shopping">
           <div className="rounded-md border bg-card overflow-x-auto">

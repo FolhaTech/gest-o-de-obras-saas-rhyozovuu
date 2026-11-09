@@ -215,7 +215,17 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const theirsId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-dele', $1, $2) returning id", [work.id, other.id])).rows[0].id
   const allTasks = (await sb.from('planner_tasks').select('id')).data.length // admin vê tudo
   const allStages = (await sb.from('work_stages').select('id')).data.length
+  // item de planilha (materiais alocados com valores) criado direto no banco; removido no final do bloco
+  const allocId = (await db.query("insert into public.work_extra_materials (work_id, code, name, unit, quantity, source) values ($1, 'SMK', 'smoke-item', 'UN', 3, 'smoke-planilha') returning id", [work.id])).rows[0].id
+  await db.query('insert into public.work_extra_material_values (extra_material_id, unit_price, total_cost) values ($1, 2, 6)', [allocId])
+  const allocSel = () => sb.from('work_extra_materials').select('id, code, name, unit, quantity, materials(name), work_extra_material_values(unit_price, total_cost)').eq('work_id', work.id).not('source', 'is', null).eq('code', 'SMK').order('name', { ascending: true })
+  const allocAdmin = await allocSel()
+  const av = [allocAdmin.data?.[0]?.work_extra_material_values].flat()[0]
+  ok('admin lê os itens alocados com os valores (embed)', !allocAdmin.error && allocAdmin.data.length === 1 && Number(av?.total_cost) === 6, allocAdmin.error?.message)
   await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
+  const allocPrest = await allocSel()
+  const pv = [allocPrest.data?.[0]?.work_extra_material_values].flat().filter(Boolean)
+  ok('prestador vê os itens alocados, mas sem os valores', !allocPrest.error && allocPrest.data.length === 1 && Number(allocPrest.data[0].quantity) === 3 && pv.length === 0, allocPrest.error?.message)
   const mine = await sb.from('planner_tasks').select('id,assignee_id')
   ok('prestador vê só os cards em que é a Pessoa Responsável', !mine.error && mine.data.length >= 1 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === smokeUserId), `${mine.data?.length} de ${allTasks}`)
   const others = await sb.from('planner_tasks').select('id').eq('id', theirsId)
@@ -261,6 +271,7 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const anonTasks = await mk0().from('planner_tasks').select('id')
   ok('sem login não lê cards do Planner', !anonTasks.error && anonTasks.data.length === 0)
   await db.query('delete from public.planner_tasks where id = any($1)', [[mineId, theirsId]])
+  await db.query('delete from public.work_extra_materials where id = $1', [allocId])
 }
 
 // --- functions ---
