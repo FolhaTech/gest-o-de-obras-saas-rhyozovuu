@@ -1,0 +1,266 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  Calendar,
+  CalendarDays,
+  CheckCircle2,
+  CircleDashed,
+  ExternalLink,
+  Film,
+  Image as ImageIcon,
+  Play,
+  RefreshCw,
+  User,
+} from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
+import { useToast } from '@/hooks/use-toast'
+import { formatDate, formatSupabaseError } from '@/lib/formatters'
+import { PlannerAttachment, PlannerTask, PlannerTaskPriority, PlannerTaskStatus } from '@/types'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+const STATUS_LABEL: Record<PlannerTaskStatus, string> = {
+  pending: 'Pendente',
+  in_progress: 'Em Andamento',
+  completed: 'Concluída',
+}
+
+const STATUS_PROGRESS: Record<PlannerTaskStatus, number> = {
+  pending: 0,
+  in_progress: 50,
+  completed: 100,
+}
+
+const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; className: string }> = {
+  low: {
+    label: 'Baixa',
+    className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200',
+  },
+  medium: {
+    label: 'Média',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200',
+  },
+  high: {
+    label: 'Alta',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200',
+  },
+}
+
+function StatusIcon({ status }: { status: PlannerTaskStatus }) {
+  if (status === 'completed') return <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+  if (status === 'in_progress') return <Play className="h-5 w-5 text-blue-500" />
+  return <CircleDashed className="h-5 w-5 text-muted-foreground" />
+}
+
+/**
+ * Lista todas as tarefas do Planner vinculadas à obra selecionada
+ * (planner_tasks.work_id = obraId) dentro da aba "Etapas do Projeto".
+ */
+export default function PlannerTasksSection({ obraId }: { obraId: string }) {
+  const { toast } = useToast()
+  const [tasks, setTasks] = useState<PlannerTask[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error: tasksError } = await supabase
+        .from('planner_tasks' as any)
+        .select('*, team_members:assignee_id(id, name, role, phone)')
+        .eq('work_id', obraId)
+        .order('created_at', { ascending: false })
+
+      if (tasksError) throw tasksError
+
+      const rows = (data ?? []) as any[]
+      const byTask: Record<string, PlannerAttachment[]> = {}
+      if (rows.length > 0) {
+        const { data: atts } = await supabase
+          .from('planner_task_attachments' as any)
+          .select('*')
+          .in(
+            'task_id',
+            rows.map((t) => t.id),
+          )
+        ;((atts ?? []) as any[]).forEach((a) => {
+          ;(byTask[a.task_id] ||= []).push(a)
+        })
+      }
+
+      setTasks(rows.map((t) => ({ ...t, attachments: byTask[t.id] ?? [] })) as PlannerTask[])
+      setError(null)
+    } catch (err: any) {
+      console.warn('[PlannerTasksSection] erro ao carregar tarefas:', err)
+      setError(formatSupabaseError(err))
+      setTasks([])
+    } finally {
+      setLoading(false)
+    }
+  }, [obraId])
+
+  useEffect(() => {
+    fetchTasks()
+  }, [fetchTasks])
+
+  const handleStatusChange = async (taskId: string, status: PlannerTaskStatus) => {
+    const { error: updateError } = await supabase
+      .from('planner_tasks' as any)
+      .update({ status })
+      .eq('id', taskId)
+
+    if (updateError) {
+      toast({
+        title: 'Erro ao alterar status',
+        description: formatSupabaseError(updateError),
+        variant: 'destructive',
+      })
+      return
+    }
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)))
+  }
+
+  const summary = useMemo(() => {
+    const total = tasks.length
+    const done = tasks.filter((t) => t.status === 'completed').length
+    const progress = total
+      ? Math.round(tasks.reduce((acc, t) => acc + STATUS_PROGRESS[t.status], 0) / total)
+      : 0
+    return { total, done, progress }
+  }, [tasks])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" /> Tarefas do Planner
+          </h3>
+          {!loading && !error && (
+            <p className="text-xs text-muted-foreground">
+              {summary.total === 0
+                ? 'Nenhuma tarefa do Planner vinculada a esta obra.'
+                : `${summary.done} de ${summary.total} concluídas • ${summary.progress}% de avanço`}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={fetchTasks} className="gap-2">
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/planner">
+              <ExternalLink className="h-4 w-4" /> Abrir Planner
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {!loading && !error && summary.total > 0 && (
+        <Progress value={summary.progress} className="h-2" />
+      )}
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : error ? (
+        <p className="text-sm text-destructive p-4">
+          Não foi possível carregar as tarefas do Planner: {error}
+        </p>
+      ) : tasks.length === 0 ? (
+        <p className="text-muted-foreground p-4">
+          Nenhuma tarefa do Planner vinculada a esta obra. Crie tarefas no Planner e selecione esta
+          obra no campo &quot;Vincular a uma Obra&quot;.
+        </p>
+      ) : (
+        tasks.map((task) => {
+          const images = task.attachments?.filter((a) => a.file_type === 'image').length ?? 0
+          const videos = task.attachments?.filter((a) => a.file_type === 'video').length ?? 0
+          const priority = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium
+          return (
+            <Card key={task.id} className="overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 md:p-6">
+                <div className="flex items-start gap-3 w-full sm:w-1/3 min-w-0">
+                  <StatusIcon status={task.status} />
+                  <div className="min-w-0">
+                    <h4
+                      className={`font-medium text-base ${
+                        task.status === 'completed' ? 'line-through text-muted-foreground' : ''
+                      }`}
+                    >
+                      {task.title}
+                    </h4>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <User className="h-3 w-3" />
+                      Resp: {task.team_members?.name || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex-1 w-full space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="secondary" className="font-normal">
+                        {STATUS_LABEL[task.status]}
+                      </Badge>
+                      <Badge variant="outline" className={`font-normal ${priority.className}`}>
+                        {priority.label}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {task.due_date && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Prazo: {formatDate(task.due_date)}
+                        </span>
+                      )}
+                      {images > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <ImageIcon className="h-3 w-3 text-emerald-600" /> {images}
+                        </span>
+                      )}
+                      {videos > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <Film className="h-3 w-3 text-blue-600" /> {videos}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Progress value={STATUS_PROGRESS[task.status]} className="h-2" />
+                  {task.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
+                  )}
+                </div>
+
+                <Select
+                  value={task.status}
+                  onValueChange={(val: PlannerTaskStatus) => handleStatusChange(task.id, val)}
+                >
+                  <SelectTrigger className="h-8 text-xs w-full sm:w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="in_progress">Em Andamento</SelectItem>
+                    <SelectItem value="completed">Concluída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </Card>
+          )
+        })
+      )}
+    </div>
+  )
+}
