@@ -129,7 +129,11 @@ const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; badgeClass: 
 }
 
 export default function PlannerPage() {
-  const { user } = useAuth()
+  const { user, role, profile } = useAuth()
+  // Prestador: vê e edita somente as tarefas atribuídas ao membro da equipe vinculado a ele (o banco garante).
+  const isPrestador = role === 'prestador'
+  const myMemberId: string | null = profile?.team_member_id ?? null
+  const canCreate = !isPrestador || !!myMemberId
   const { toast } = useToast()
 
   const [tasks, setTasks] = useState<PlannerTask[]>([])
@@ -278,9 +282,18 @@ export default function PlannerPage() {
 
   // Abrir modal de criação
   const handleOpenCreate = (defaultStatus: PlannerTaskStatus = 'pending') => {
+    if (!canCreate) {
+      toast({
+        title: 'Usuário sem vínculo com a equipe',
+        description: 'Peça a um administrador para vincular você a um membro da equipe em Configurações.',
+        variant: 'destructive',
+      })
+      return
+    }
     resetForm()
     setFormStatus(defaultStatus)
     setFormProgress(progressFromStatus(defaultStatus, 0))
+    if (isPrestador) setFormAssigneeId(myMemberId ?? 'none')
     setDialogOpen(true)
   }
 
@@ -411,7 +424,8 @@ export default function PlannerPage() {
         priority: formPriority,
         progress_percentage: formProgress,
         work_id: formWorkId === 'none' ? null : formWorkId,
-        assignee_id: formAssigneeId === 'none' ? null : formAssigneeId,
+        // prestador só cria/edita tarefas atribuídas a si mesmo
+        assignee_id: isPrestador ? myMemberId : formAssigneeId === 'none' ? null : formAssigneeId,
         start_date: formStartDate || null,
         due_date: formDueDate || null,
         created_by: user?.id || null,
@@ -650,11 +664,29 @@ export default function PlannerPage() {
               Lista
             </Button>
           </div>
-          <Button onClick={() => handleOpenCreate()} className="gap-2 shrink-0">
+          <Button
+            onClick={() => handleOpenCreate()}
+            disabled={!canCreate}
+            className="gap-2 shrink-0"
+          >
             <Plus className="h-4 w-4" /> Nova Tarefa
           </Button>
         </div>
       </div>
+
+      {isPrestador && (
+        <div
+          className={`rounded-lg border p-3 text-sm ${
+            myMemberId
+              ? 'bg-muted/40 text-muted-foreground'
+              : 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+          }`}
+        >
+          {myMemberId
+            ? 'Você vê somente as tarefas atribuídas a você.'
+            : 'Seu usuário ainda não está vinculado a um membro da equipe, por isso nenhuma tarefa aparece. Peça a um administrador para vincular em Configurações → Usuários.'}
+        </div>
+      )}
 
       {/* Métricas / Contadores */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -779,7 +811,8 @@ export default function PlannerPage() {
                 </SelectContent>
               </Select>
 
-              {/* Filtro por Responsável */}
+              {/* Filtro por Responsável (não faz sentido para o prestador) */}
+              {!isPrestador && (
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                 <SelectTrigger className="text-xs sm:text-sm h-9">
                   <SelectValue placeholder="Responsável" />
@@ -794,6 +827,7 @@ export default function PlannerPage() {
                   ))}
                 </SelectContent>
               </Select>
+              )}
 
               {/* Filtro por Obra */}
               <Select value={workFilter} onValueChange={setWorkFilter}>
@@ -1051,7 +1085,7 @@ export default function PlannerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Pessoa Responsável</Label>
-                <Select value={formAssigneeId} onValueChange={setFormAssigneeId}>
+                <Select value={formAssigneeId} onValueChange={setFormAssigneeId} disabled={isPrestador}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um membro da equipe" />
                   </SelectTrigger>

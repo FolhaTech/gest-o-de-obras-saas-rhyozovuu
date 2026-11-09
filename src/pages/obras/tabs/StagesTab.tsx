@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +42,9 @@ export default function StagesTab({ obraId }: { obraId: string }) {
     refetch,
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
   const { toast } = useToast()
+  // Prestador só visualiza as etapas (o banco também bloqueia alterações).
+  const { role } = useAuth()
+  const canEdit = role !== 'prestador'
 
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({ name: '', manager: '', progress: 0 })
@@ -214,6 +218,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
 
       <div className="flex justify-between items-center pb-2">
         <h3 className="text-lg font-semibold">Etapas da Obra</h3>
+        {canEdit && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
@@ -256,6 +261,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {obraStages.length === 0 ? (
@@ -280,6 +286,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
                 </div>
                 <Progress value={stage.progress_percentage} className="h-2" />
               </div>
+              {canEdit && (
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
@@ -298,6 +305,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
                   <Trash className="h-4 w-4" />
                 </Button>
               </div>
+              )}
             </div>
           </Card>
         ))

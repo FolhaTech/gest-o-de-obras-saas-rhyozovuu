@@ -40,6 +40,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/04_planner_progress.sql  # só em ban
 psql "$ADMIN_URL/gestao_obras" -f db/azure/05_cronograma_planner_sync.sql  # Cronograma <-> Planner (gatilhos); teste: node db/azure/test-cronograma-sync.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/06_work_rented_materials.sql  # materiais locados por obra
 psql "$ADMIN_URL/gestao_obras" -f db/azure/07_planner_status_delayed.sql  # status Em Atraso nas tarefas
+psql "$ADMIN_URL/gestao_obras" -f db/azure/08_permissoes_prestador.sql  # permissões do Prestador; teste: node db/azure/test-permissoes.mjs
 ```
 
 ## Desenvolvimento local

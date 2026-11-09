@@ -41,6 +41,7 @@ interface Profile {
   role: string | null
   last_login_at?: string | null
   created_at?: string | null
+  team_member_id?: string | null
 }
 
 function formatLastLogin(value?: string | null) {
@@ -58,6 +59,9 @@ function formatLastLogin(value?: string | null) {
 
 export default function UsersTab() {
   const { data: profiles, loading, refetch } = useData<Profile>('profiles')
+  const { data: members } = useData<{ id: string; name: string; status?: string | null }>(
+    'team_members',
+  )
   const { user: currentUser, refreshProfile, role: myRole } = useAuth()
   const { toast } = useToast()
 
@@ -69,6 +73,21 @@ export default function UsersTab() {
   const closePwdDialog = () => {
     setPwdTarget(null)
     setNewPassword('')
+  }
+
+  // Vínculo usuário -> membro da equipe: define quais tarefas do Planner o Prestador enxerga
+  const handleLinkChange = async (userId: string, memberId: string) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ team_member_id: memberId === 'none' ? null : memberId } as any)
+      .eq('id', userId)
+    if (error) {
+      toast({ title: 'Erro ao vincular', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({ title: memberId === 'none' ? 'Vínculo removido' : 'Usuário vinculado ao membro da equipe' })
+    refetch()
+    if (currentUser?.id === userId) await refreshProfile()
   }
 
   const handleSetPassword = async (e: React.FormEvent) => {
@@ -144,7 +163,8 @@ export default function UsersTab() {
           </li>
           <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
-            demais áreas ficam bloqueadas).
+            demais áreas ficam bloqueadas). No Planner vê somente as tarefas do membro da equipe
+            vinculado a ele; no Cronograma vê as etapas de todos, sem alterar.
           </li>
         </ul>
       </div>
@@ -157,6 +177,7 @@ export default function UsersTab() {
               <TableHead>Papel Atual</TableHead>
               <TableHead>Último login</TableHead>
               <TableHead>Alterar Nível de Acesso</TableHead>
+              <TableHead>Membro da equipe</TableHead>
               {myRole === 'admin' && <TableHead>Senha</TableHead>}
             </TableRow>
           </TableHeader>
@@ -217,6 +238,30 @@ export default function UsersTab() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell>
+                    {myRole === 'admin' ? (
+                      <Select
+                        value={p.team_member_id ?? 'none'}
+                        onValueChange={(val) => handleLinkChange(p.id, val)}
+                      >
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem vínculo</SelectItem>
+                          {(members || []).map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name.trim()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-sm">
+                        {(members || []).find((m) => m.id === p.team_member_id)?.name.trim() || '-'}
+                      </span>
+                    )}
                   </TableCell>
                   {myRole === 'admin' && (
                     <TableCell>
