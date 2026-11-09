@@ -75,9 +75,11 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   const fetchTasks = useCallback(async () => {
     setLoading(true)
     try {
+      // Tarefas espelho de etapas do Cronograma (stage_id) já aparecem na lista de etapas acima.
       let query = supabase
         .from('planner_tasks' as any)
         .select('*, team_members:assignee_id(id, name, role, phone)')
+        .is('stage_id', null)
       query = showGeneral
         ? query.or(`work_id.eq.${obraId},work_id.is.null`)
         : query.eq('work_id', obraId)

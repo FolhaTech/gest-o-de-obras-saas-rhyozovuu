@@ -3,9 +3,9 @@ import type { PlannerTask, PlannerTaskStatus } from '@/types'
 export const clampProgress = (value: unknown): number =>
   Math.min(100, Math.max(0, Math.round(Number(value) || 0)))
 
-/** Porcentagem efetiva da tarefa. Tarefa concluída vale sempre 100%. */
+/** Porcentagem da tarefa (a mesma gravada no banco e exibida no Cronograma). */
 export function taskProgress(task: Pick<PlannerTask, 'status' | 'progress_percentage'>): number {
-  return task.status === 'completed' ? 100 : clampProgress(task.progress_percentage)
+  return clampProgress(task.progress_percentage)
 }
 
 /** Status coerente com a porcentagem escolhida. */
