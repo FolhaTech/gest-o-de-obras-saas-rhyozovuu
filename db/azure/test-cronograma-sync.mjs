@@ -81,6 +81,13 @@ try {
   const t6 = await one('select description from planner_tasks where stage_id = $1', [st.id])
   ok('sem loop e observação sincronizada', t6.description === 'ultima')
 
+  await c.query(`update work_stages set status = 'delayed' where id = $1`, [st.id])
+  ok('etapa Atrasado vira tarefa Em Atraso', (await one('select status from planner_tasks where stage_id = $1', [st.id])).status === 'delayed')
+  await c.query(`update planner_tasks set status = 'in_progress' where id = $1`, [taskId])
+  ok('tarefa Em Andamento tira a etapa do atraso', (await one('select status from work_stages where id = $1', [st.id])).status === 'in_progress')
+  await c.query(`update planner_tasks set status = 'delayed' where id = $1`, [taskId])
+  ok('tarefa Em Atraso marca a etapa como Atrasado', (await one('select status from work_stages where id = $1', [st.id])).status === 'delayed')
+
   const before = Number((await one('select count(*) n from work_stages')).n)
   const plain = await one(`insert into planner_tasks (title, work_id) values ('avulsa', $1) returning id`, [work])
   await c.query('update planner_tasks set progress_percentage = 10 where id = $1', [plain.id])

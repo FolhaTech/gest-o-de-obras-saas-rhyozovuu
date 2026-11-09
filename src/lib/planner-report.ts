@@ -1,10 +1,11 @@
 import type { PlannerTask } from '@/types'
-import { daysOverdue, isTaskOverdue, taskProgress } from '@/lib/planner-progress'
+import { isTaskOverdue, overdueLabel, taskProgress } from '@/lib/planner-progress'
 import { formatDate } from '@/lib/formatters'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pendente',
   in_progress: 'Em andamento',
+  delayed: 'Em atraso',
   completed: 'Concluída',
 }
 const PRIORITY_LABEL: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta' }
@@ -105,9 +106,8 @@ export async function exportPlannerTaskPdf(task: PlannerTask): Promise<void> {
 
   // Situação
   const overdue = isTaskOverdue(task)
-  const late = daysOverdue(task)
   const situation = overdue
-    ? { text: `Atrasada há ${late} dia(s)`, color: RED }
+    ? { text: overdueLabel(task), color: RED }
     : task.status === 'completed'
       ? { text: 'Concluída', color: GREEN }
       : { text: 'No prazo', color: GREEN }
