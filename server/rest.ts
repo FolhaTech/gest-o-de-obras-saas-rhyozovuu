@@ -507,6 +507,9 @@ async function handleRestOnce(
       checkColumns(table, cols)
       if (!cols.length) return sendEmpty(res, 204)
       const conds = buildWhere(p, table, 't', sp)
+      if (!conds.length) {
+        throw new ApiError(400, '21000', 'UPDATE requires a WHERE clause', null, 'Informe ao menos um filtro (ex.: id=eq.<uuid>).')
+      }
       const sets = cols.map((c) => `${ident(c)} = r.${ident(c)}`).join(', ')
       const sql = `UPDATE ${T} t SET ${sets} FROM json_populate_record(null::${T}, ${p.add(JSON.stringify(body))}::json) r${
         conds.length ? ` WHERE ${conds.join(' AND ')}` : ''
@@ -516,6 +519,9 @@ async function handleRestOnce(
 
     if (method === 'DELETE') {
       const conds = buildWhere(p, table, 't', sp)
+      if (!conds.length) {
+        throw new ApiError(400, '21000', 'DELETE requires a WHERE clause', null, 'Informe ao menos um filtro (ex.: id=eq.<uuid>).')
+      }
       const sql = `DELETE FROM ${T} t${conds.length ? ` WHERE ${conds.join(' AND ')}` : ''}`
       return await runMutation(res, caller, cat, table, sql, p, returnRep, wantObject, sp, gen, 200, 'RETURNING t.*')
     }

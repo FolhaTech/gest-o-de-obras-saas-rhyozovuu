@@ -482,7 +482,7 @@ export default function PlannerPage() {
   // Deletar tarefa
   const handleDeleteTask = async (task: PlannerTask) => {
     const warn = task.stage_id
-      ? '\n\nEla é espelho de um item do Cronograma: a etapa correspondente também será excluída.'
+      ? '\n\nEla é espelho de um item do Cronograma: só a tarefa do Planner será excluída; a etapa continua no Cronograma e a tarefa volta se a etapa for editada.'
       : ''
     if (!confirm(`Tem certeza que deseja excluir a tarefa "${task.title}"?${warn}`)) return
     try {
