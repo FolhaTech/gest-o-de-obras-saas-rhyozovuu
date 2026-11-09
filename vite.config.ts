@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '::',
     port: 8080,
+    // API local (pnpm dev:api) no mesmo protocolo do Supabase: /rest, /auth, /storage, /functions.
+    proxy: Object.fromEntries(
+      ['/rest/v1', '/auth/v1', '/storage/v1', '/functions/v1'].map((p) => [
+        p,
+        { target: 'http://localhost:3001', changeOrigin: false },
+      ]),
+    ),
   },
   build: {
     outDir: mode === 'development' ? 'dev-dist' : 'dist',
