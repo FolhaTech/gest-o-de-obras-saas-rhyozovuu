@@ -143,14 +143,11 @@ export async function exportPlannerTaskPdf(task: PlannerTask): Promise<void> {
   const assignee = task.team_members
   const rows: [string, string][] = [
     ['Obra', task.works?.name?.trim() || 'Geral (sem obra)'],
-    [
-      'Responsável',
-      assignee?.name ? `${assignee.name.trim()}${assignee.role?.trim() ? ` (${assignee.role.trim()})` : ''}` : 'Não atribuído',
-    ],
+    ['Responsável', assignee?.name ? assignee.name.trim() : 'Não atribuído'],
     ['Início', task.start_date ? formatDate(task.start_date) : 'Não definido'],
     ['Prazo final', task.due_date ? formatDate(task.due_date) : 'Sem prazo'],
     ['Origem', task.stage_id ? 'Cronograma da obra' : 'Planner'],
-    ['Telefone do responsável', assignee?.phone || '-'],
+    ['E-mail do responsável', assignee?.email || '-'],
     ['Criada em', fmtDateTime(task.created_at)],
     ['Atualizada em', fmtDateTime(task.updated_at)],
   ]

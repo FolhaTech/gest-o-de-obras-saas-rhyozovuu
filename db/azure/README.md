@@ -42,6 +42,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/06_work_rented_materials.sql  # mater
 psql "$ADMIN_URL/gestao_obras" -f db/azure/07_planner_status_delayed.sql  # status Em Atraso nas tarefas
 psql "$ADMIN_URL/gestao_obras" -f db/azure/08_permissoes_prestador.sql  # permissões do Prestador; teste: node db/azure/test-permissoes.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/09_planner_so_vinculados.sql  # só Admin vê todos os cards do Planner
+psql "$ADMIN_URL/gestao_obras" -f db/azure/10_responsavel_usuario.sql  # Pessoa Responsável = usuário do sistema
 ```
 
 ## Desenvolvimento local

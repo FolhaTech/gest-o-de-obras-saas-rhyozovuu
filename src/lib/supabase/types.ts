@@ -1009,6 +1009,7 @@ export type Database = {
           end_date_real: string | null
           id: string
           manager: string | null
+          manager_user_id: string | null
           name: string
           notes: string | null
           progress_percentage: number | null
@@ -1022,6 +1023,7 @@ export type Database = {
           end_date_real?: string | null
           id?: string
           manager?: string | null
+          manager_user_id?: string | null
           name: string
           notes?: string | null
           progress_percentage?: number | null
@@ -1035,6 +1037,7 @@ export type Database = {
           end_date_real?: string | null
           id?: string
           manager?: string | null
+          manager_user_id?: string | null
           name?: string
           notes?: string | null
           progress_percentage?: number | null
