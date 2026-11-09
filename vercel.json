@@ -7,10 +7,10 @@
     "api/gateway.ts": { "maxDuration": 60 }
   },
   "rewrites": [
-    { "source": "/rest/v1/:path*", "destination": "/api/gateway?__svc=rest&__p=:path*" },
-    { "source": "/auth/v1/:path*", "destination": "/api/gateway?__svc=auth&__p=:path*" },
-    { "source": "/storage/v1/:path*", "destination": "/api/gateway?__svc=storage&__p=:path*" },
-    { "source": "/functions/v1/:path*", "destination": "/api/gateway?__svc=functions&__p=:path*" },
+    { "source": "/rest/v1/:__vp*", "destination": "/api/gateway?__svc=rest&__p=:__vp*" },
+    { "source": "/auth/v1/:__vp*", "destination": "/api/gateway?__svc=auth&__p=:__vp*" },
+    { "source": "/storage/v1/:__vp*", "destination": "/api/gateway?__svc=storage&__p=:__vp*" },
+    { "source": "/functions/v1/:__vp*", "destination": "/api/gateway?__svc=functions&__p=:__vp*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
