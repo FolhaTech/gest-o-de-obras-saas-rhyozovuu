@@ -91,6 +91,18 @@ const mir = await sb.from('planner_tasks').select('id,progress_percentage').eq('
 ok('porcentagem aparece na consulta por obra', mir.data?.[0]?.progress_percentage === 80)
 await sb.from('planner_tasks').delete().eq('id', pr.data?.id)
 
+// --- Cronograma (work_stages) <-> Planner (planner_tasks) ---
+const stg = await sb.from('work_stages').insert({ work_id: work.id, name: 'smoke-cronograma', start_date: '2099-01-01', end_date_planned: '2099-01-10', progress_percentage: 20, status: 'in_progress' }).select('id').single()
+ok('cria etapa no cronograma', !stg.error, stg.error?.message)
+const mirror = await sb.from('planner_tasks').select('id,title,progress_percentage,stage_id,work_id').eq('stage_id', stg.data?.id).single()
+ok('etapa aparece no Planner com os mesmos dados', mirror.data?.title === 'smoke-cronograma' && mirror.data.progress_percentage === 20 && mirror.data.work_id === work.id, mirror.error?.message)
+await sb.from('planner_tasks').update({ progress_percentage: 70 }).eq('id', mirror.data?.id)
+const back = await sb.from('work_stages').select('progress_percentage').eq('id', stg.data?.id).single()
+ok('progresso editado no Planner volta para o cronograma', Number(back.data?.progress_percentage) === 70, JSON.stringify(back.data))
+await sb.from('work_stages').delete().eq('id', stg.data?.id)
+const gone = await sb.from('planner_tasks').select('id').eq('stage_id', stg.data?.id)
+ok('excluir etapa remove a tarefa espelho', !gone.error && gone.data.length === 0)
+
 // --- storage ---
 const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], { type: 'image/png' })
 const path = `smoke/${Date.now()}.png`
