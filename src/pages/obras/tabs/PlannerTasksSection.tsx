@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
+import { progressFromStatus, taskProgress } from '@/lib/planner-progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -36,12 +37,6 @@ const STATUS_LABEL: Record<PlannerTaskStatus, string> = {
   pending: 'Pendente',
   in_progress: 'Em Andamento',
   completed: 'Concluída',
-}
-
-const STATUS_PROGRESS: Record<PlannerTaskStatus, number> = {
-  pending: 0,
-  in_progress: 50,
-  completed: 100,
 }
 
 const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; className: string }> = {
@@ -139,9 +134,11 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   }
 
   const handleStatusChange = async (taskId: string, status: PlannerTaskStatus) => {
+    const current = tasks.find((t) => t.id === taskId)
+    const progress = progressFromStatus(status, current ? taskProgress(current) : 0)
     const { error: updateError } = await supabase
       .from('planner_tasks' as any)
-      .update({ status })
+      .update({ status, progress_percentage: progress })
       .eq('id', taskId)
 
     if (updateError) {
@@ -152,7 +149,9 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
       })
       return
     }
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)))
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status, progress_percentage: progress } : t)),
+    )
   }
 
   const summary = useMemo(() => {
@@ -161,7 +160,7 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
     const total = linked.length
     const done = linked.filter((t) => t.status === 'completed').length
     const progress = total
-      ? Math.round(linked.reduce((acc, t) => acc + STATUS_PROGRESS[t.status], 0) / total)
+      ? Math.round(linked.reduce((acc, t) => acc + taskProgress(t), 0) / total)
       : 0
     return { total, done, progress }
   }, [tasks, obraId])
@@ -286,7 +285,10 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
                       )}
                     </div>
                   </div>
-                  <Progress value={STATUS_PROGRESS[task.status]} className="h-2" />
+                  <div className="flex items-center gap-3">
+                    <Progress value={taskProgress(task)} className="h-2 flex-1" />
+                    <span className="text-sm font-medium w-10 text-right">{taskProgress(task)}%</span>
+                  </div>
                   {task.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
                   )}

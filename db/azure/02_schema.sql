@@ -834,6 +834,7 @@ CREATE TABLE IF NOT EXISTS public.planner_tasks (
   description TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
   priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+  progress_percentage INTEGER NOT NULL DEFAULT 0 CHECK (progress_percentage BETWEEN 0 AND 100),
   start_date DATE,
   due_date DATE,
   assignee_id UUID REFERENCES public.team_members(id) ON DELETE SET NULL,
