@@ -20,9 +20,12 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import DashboardCharts from './dashboard/DashboardCharts'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 import { Obra, Despesa, Receita, Material } from '@/types'
 
 export default function Index() {
+  // Só o administrador vê valores (R$); o Gestor vê os demais indicadores
+  const { canSeeValues } = useAuth()
   const {
     data: obras,
     loading: loadObras,
@@ -238,86 +241,90 @@ export default function Index() {
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Receita Total
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              {formatCurrency(totalRevenue)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Despesa Total
-            </CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalSpent)}</div>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Saldo Global
-            </CardTitle>
-            <Wallet className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(balance)}</div>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              ROI Global Consolidado
-            </CardTitle>
-            <TrendingUp
-              className={`h-4 w-4 ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-500' : 'text-red-500'}`}
-            />
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-            >
-              {globalRoi !== null ? `${globalRoi > 0 ? '+' : ''}${globalRoi.toFixed(1)}%` : '—'}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Retorno sobre o total investido</p>
-          </CardContent>
-        </Card>
-      </div>
+      {canSeeValues && (
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Receita Total
+              </CardTitle>
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-emerald-600">
+                {formatCurrency(totalRevenue)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Despesa Total
+              </CardTitle>
+              <TrendingDown className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{formatCurrency(totalSpent)}</div>
+            </CardContent>
+          </Card>
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Saldo Global
+              </CardTitle>
+              <Wallet className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{formatCurrency(balance)}</div>
+            </CardContent>
+          </Card>
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ROI Global Consolidado
+              </CardTitle>
+              <TrendingUp
+                className={`h-4 w-4 ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-500' : 'text-red-500'}`}
+              />
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-2xl font-bold ${globalRoi !== null && globalRoi >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+              >
+                {globalRoi !== null ? `${globalRoi > 0 ? '+' : ''}${globalRoi.toFixed(1)}%` : '—'}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Retorno sobre o total investido</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Progresso do Orçamento (Previsto vs Realizado)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex justify-between mb-2">
-              <div>
-                <p className="text-sm text-muted-foreground">Previsto</p>
-                <p className="text-xl font-bold">{formatCurrency(totalBudget)}</p>
+        {canSeeValues && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Progresso do Orçamento (Previsto vs Realizado)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between mb-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Previsto</p>
+                  <p className="text-xl font-bold">{formatCurrency(totalBudget)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Realizado</p>
+                  <p className="text-xl font-bold text-primary">{formatCurrency(totalSpent)}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Realizado</p>
-                <p className="text-xl font-bold text-primary">{formatCurrency(totalSpent)}</p>
-              </div>
-            </div>
-            <Progress value={budgetConsumedPercent} className="h-3 bg-secondary" />
-            <p className="text-xs text-muted-foreground mt-2 text-right">
-              {budgetConsumedPercent.toFixed(1)}% consumido
-            </p>
-          </CardContent>
-        </Card>
+              <Progress value={budgetConsumedPercent} className="h-3 bg-secondary" />
+              <p className="text-xs text-muted-foreground mt-2 text-right">
+                {budgetConsumedPercent.toFixed(1)}% consumido
+              </p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="flex flex-col justify-center">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -351,7 +358,7 @@ export default function Index() {
         </Card>
       </div>
 
-      <DashboardCharts despesas={despesas} />
+      {canSeeValues && <DashboardCharts despesas={despesas} />}
     </div>
   )
 }

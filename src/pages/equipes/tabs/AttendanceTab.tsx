@@ -16,10 +16,12 @@ import { ChevronLeft, ChevronRight, Check, X, Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/formatters'
 import { Equipe, AttendanceRecord, AttendanceExtra } from '@/types'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function AttendanceTab() {
+  const { canSeeValues } = useAuth() // valores (diária, extra, total) só para o administrador
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [workers, setWorkers] = useState<Equipe[]>([])
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -284,10 +286,10 @@ export default function AttendanceTab() {
                 Presença ({format(selectedDate, 'dd/MM')})
               </TableHead>
               <TableHead className="text-center">Dias na Semana</TableHead>
-              <TableHead className="text-right min-w-[100px]">Valor Diária</TableHead>
-              <TableHead className="min-w-[120px]">Extra Semanal (R$)</TableHead>
+              {canSeeValues && <TableHead className="text-right min-w-[100px]">Valor Diária</TableHead>}
+              {canSeeValues && <TableHead className="min-w-[120px]">Extra Semanal (R$)</TableHead>}
               <TableHead className="min-w-[150px]">Notas da Semana</TableHead>
-              <TableHead className="text-right min-w-[120px]">Total a Receber</TableHead>
+              {canSeeValues && <TableHead className="text-right min-w-[120px]">Total a Receber</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -372,11 +374,14 @@ export default function AttendanceTab() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center font-bold">{totalDays}</TableCell>
+                    {canSeeValues && (
                     <TableCell className="text-right text-muted-foreground">
                       {worker.payment_type === 'monthly'
                         ? 'Mensal'
                         : formatCurrency(worker.daily_cost)}
                     </TableCell>
+                    )}
+                    {canSeeValues && (
                     <TableCell>
                       <Input
                         type="number"
@@ -387,6 +392,7 @@ export default function AttendanceTab() {
                         placeholder="0.00"
                       />
                     </TableCell>
+                    )}
                     <TableCell>
                       <Input
                         className="h-9"
@@ -395,11 +401,13 @@ export default function AttendanceTab() {
                         placeholder="Observações..."
                       />
                     </TableCell>
+                    {canSeeValues && (
                     <TableCell className="text-right font-bold text-primary">
                       {worker.payment_type === 'monthly'
                         ? 'Contrato'
                         : formatCurrency(totalDays * (worker.daily_cost || 0) + extraVal)}
                     </TableCell>
+                    )}
                   </TableRow>
                 )
               })
@@ -490,6 +498,7 @@ export default function AttendanceTab() {
                       <div className="text-muted-foreground text-xs">Dias Trabalhados</div>
                       <div className="font-semibold">{totalDays} dias</div>
                     </div>
+                    {canSeeValues && (
                     <div className="space-y-1">
                       <div className="text-muted-foreground text-xs">Valor Diária</div>
                       <div className="font-semibold">
@@ -498,10 +507,12 @@ export default function AttendanceTab() {
                           : formatCurrency(worker.daily_cost)}
                       </div>
                     </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 pt-2 border-t">
                     <div className="flex gap-2">
+                      {canSeeValues && (
                       <div className="flex-1 space-y-1">
                         <label className="text-xs text-muted-foreground">Extra Semanal (R$)</label>
                         <Input
@@ -515,6 +526,7 @@ export default function AttendanceTab() {
                           placeholder="0.00"
                         />
                       </div>
+                      )}
                       <div className="flex-[2] space-y-1">
                         <label className="text-xs text-muted-foreground">Notas</label>
                         <Input
@@ -527,7 +539,7 @@ export default function AttendanceTab() {
                     </div>
                   </div>
 
-                  {worker.payment_type !== 'monthly' && (
+                  {canSeeValues && worker.payment_type !== 'monthly' && (
                     <div className="flex justify-between items-center pt-3 border-t">
                       <span className="text-sm font-medium">Total na Semana:</span>
                       <span className="text-lg font-bold text-primary">

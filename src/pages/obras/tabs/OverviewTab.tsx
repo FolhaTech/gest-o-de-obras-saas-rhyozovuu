@@ -22,6 +22,7 @@ function FullOverview({
   onAddNote: () => void
   onNavigateToRevenues?: () => void
 }) {
+  const { canSeeValues } = useAuth()
   const {
     data: despesas,
     loading: loadingDespesas,
@@ -92,16 +93,19 @@ function FullOverview({
       )}
 
       {/* Seção Principal de Indicadores de Retorno Financeiro por Obra */}
-      <WorkFinancialReturnSection
-        obra={obra}
-        metrics={metrics}
-        onNavigateToRevenues={onNavigateToRevenues}
-      />
+      {canSeeValues && (
+        <WorkFinancialReturnSection
+          obra={obra}
+          metrics={metrics}
+          onNavigateToRevenues={onNavigateToRevenues}
+        />
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-6">
           <ProjectDetailsCard obra={obra} />
 
+          {canSeeValues && (
           <Card>
             <CardHeader>
               <CardTitle>Resumo Financeiro</CardTitle>
@@ -129,6 +133,7 @@ function FullOverview({
               </div>
             </CardContent>
           </Card>
+          )}
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -260,7 +265,7 @@ function PhysicalProgressCard({ obra }: { obra: Obra }) {
 
 /**
  * Prestador: só Detalhes do Projeto e Progresso Físico (sem ROI, ponto de equilíbrio, payback,
- * resumo financeiro e notas). Equipe interna: visão completa.
+ * resumo financeiro e notas). Equipe interna: visão completa; sem os blocos de valores para quem não é admin.
  */
 export default function OverviewTab(props: {
   obra: Obra

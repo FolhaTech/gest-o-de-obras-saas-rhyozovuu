@@ -25,7 +25,7 @@ navegador ──supabase-js──▶ /rest/v1 /auth/v1 /storage/v1 /functions/v1
 | `DATABASE_URL` | Vercel + `.env.local` | `postgres://usuario:senha@host:5432/gestao_obras` (senha com `%`-encoding) |
 | `JWT_SECRET` | Vercel + `.env.local` | 32+ caracteres aleatórios; assina os tokens de login |
 | `OPENAI_API_KEY` | Vercel (opcional) | IA de composição e leitura de nota fiscal |
-| `ALLOW_SIGNUP` | Vercel (opcional) | `false` fecha o cadastro aberto |
+| `ALLOW_SIGNUP` | Vercel (opcional) | O cadastro aberto vem **fechado**; `true` o abre (não recomendado). Quem cria usuários é o administrador (Configurações → Usuários → Novo usuário) |
 | `VITE_SUPABASE_ANON_KEY` | `.env` (público) | gerada por `node server/gen-anon-key.mjs` |
 
 ## Preparar um banco novo
@@ -46,12 +46,13 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/10_responsavel_usuario.sql  # Pessoa 
 psql "$ADMIN_URL/gestao_obras" -f db/azure/11_perdas_metas_financeiro.sql  # perdas de materiais, metas/premiação e financeiro fechado ao Prestador; teste: node db/azure/test-perdas-metas.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/12_materiais_alocados_valores.sql  # materiais alocados com valores (R$), valores fechados ao Prestador; teste: node db/azure/test-materiais-valores.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/13_responsavel_equipe.sql  # Pessoa Responsável = membro da Equipe; usuário vinculado ao membro vê só os cards dele; testes: test-permissoes.mjs, test-cronograma-sync.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/14_rls_por_papel.sql  # permissões por papel: sem acesso anônimo, mínimo privilégio, Gestor como Admin sem valores (R$); teste: node db/azure/test-papeis.mjs
 ```
 
 ## Desenvolvimento local
 
 ```bash
-pnpm dev:api   # API em http://localhost:3001 (lê .env.local)
+pnpm dev:api   # API em http://localhost:3001 (lê .env.local). Para o smoke: ALLOW_SIGNUP=true ROLE_CACHE_MS=0 pnpm dev:api
 pnpm dev       # front em http://localhost:8080, com proxy para a API
 pnpm smoke     # teste de ponta a ponta com o supabase-js (cria e apaga os próprios dados)
 ```

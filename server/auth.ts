@@ -18,6 +18,9 @@ import {
 import { header } from './http.js'
 
 const MIN_PASSWORD = 6
+
+/** Cadastro aberto só com ALLOW_SIGNUP=true. Por padrão fica FECHADO: quem cria usuários é o administrador. */
+const signupOpen = () => process.env.ALLOW_SIGNUP === 'true'
 // Hash de mentira para igualar o tempo de resposta quando o e-mail não existe.
 const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8ZpFq6A6vN1b8nVQ0p0cT4mB1m1m1G'
 
@@ -94,7 +97,7 @@ export async function handleAuth(req: Req, res: Res, _caller: Caller, route: Rou
       case 'settings':
         return sendJson(res, 200, {
           external: { email: true },
-          disable_signup: process.env.ALLOW_SIGNUP === 'false',
+          disable_signup: !signupOpen(),
           mailer_autoconfirm: true,
         })
 
@@ -141,7 +144,7 @@ export async function handleAuth(req: Req, res: Res, _caller: Caller, route: Rou
 
       case 'signup': {
         if (method !== 'POST') break
-        if (process.env.ALLOW_SIGNUP === 'false') {
+        if (!signupOpen()) {
           return authError(res, 403, 'signup_disabled', 'Cadastro desabilitado. Peça a um administrador.')
         }
         const body = (await readJson(req)) ?? {}

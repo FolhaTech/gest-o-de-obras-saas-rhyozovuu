@@ -39,7 +39,7 @@ export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState('visao-geral')
   // Prestador não vê o financeiro da obra e não edita/exclui a obra
-  const { role } = useAuth()
+  const { role, canSeeValues } = useAuth()
   const isPrestador = role === 'prestador'
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -329,6 +329,7 @@ export default function ObraDetail() {
                 onChange={(e) => setFormData({ ...formData, total_area: Number(e.target.value) })}
               />
             </div>
+            {canSeeValues && (
             <div className="space-y-2">
               <Label>Orçamento Planejado</Label>
               <Input
@@ -339,6 +340,7 @@ export default function ObraDetail() {
                 }
               />
             </div>
+            )}
             <Button type="submit" className="w-full">
               Salvar Alterações
             </Button>
@@ -384,7 +386,7 @@ export default function ObraDetail() {
           >
             Materiais Locados
           </TabsTrigger>
-          {!isPrestador && (
+          {canSeeValues && (
             <TabsTrigger
               value="receitas"
               className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"

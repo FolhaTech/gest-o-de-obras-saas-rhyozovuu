@@ -32,7 +32,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+import { useAuth } from '@/hooks/use-auth'
+
 export default function MateriaisList() {
+  const { canSeeValues } = useAuth() // preço unitário só para o administrador
   const [materiais, setMateriais] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
@@ -516,6 +519,7 @@ export default function MateriaisList() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
+              {canSeeValues && (
               <div className="space-y-2">
                 <Label>Preço Unitário (R$)</Label>
                 <Input
@@ -525,6 +529,7 @@ export default function MateriaisList() {
                   onChange={(e) => setEditFormData({ ...editFormData, unit_price: e.target.value })}
                 />
               </div>
+              )}
               <div className="space-y-2">
                 <Label>Peso Saco (kg)</Label>
                 <Input

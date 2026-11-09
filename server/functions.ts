@@ -108,6 +108,40 @@ async function setUserPassword(
   })
 }
 
+const ROLES = new Set(['admin', 'gestor', 'prestador'])
+
+/** Admin cria um usuário (o cadastro aberto fica fechado). Entra já confirmado e com o papel escolhido. */
+async function createUser(
+  caller: Caller,
+  body: { email?: string; password?: string; fullName?: string; role?: string },
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const { password } = body
+  const role = typeof body.role === 'string' ? body.role : 'prestador'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: 400, body: { error: 'E-mail inválido' } }
+  if (typeof password !== 'string' || password.length < 6 || password.length > 72) {
+    return { status: 400, body: { error: 'A senha deve ter de 6 a 72 caracteres' } }
+  }
+  if (!ROLES.has(role)) return { status: 400, body: { error: 'Papel inválido' } }
+  const fullName = typeof body.fullName === 'string' ? body.fullName.trim().slice(0, 120) : ''
+  const hash = await bcrypt.hash(password, 10)
+  return withAdmin(async (c) => {
+    const admin = await c.query("select 1 from public.profiles where id = $1 and lower(role) = 'admin'", [caller.sub])
+    if (!admin.rowCount) return { status: 403, body: { error: 'Apenas administradores podem criar usuários.' } }
+    try {
+      const r = await c.query(
+        `insert into auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+         values ($1, $2, now(), $3::jsonb) returning id, email`,
+        [email, hash, JSON.stringify({ role, ...(fullName ? { full_name: fullName } : {}) })],
+      )
+      return { status: 200, body: { success: true, id: r.rows[0].id, email: r.rows[0].email } }
+    } catch (e) {
+      if ((e as { code?: string }).code === '23505') return { status: 409, body: { error: 'Já existe um usuário com esse e-mail.' } }
+      throw e
+    }
+  })
+}
+
 export async function handleFunctions(req: Req, res: Res, caller: Caller, route: Route) {
   if ((req.method ?? 'GET').toUpperCase() === 'OPTIONS') return sendEmpty(res, 204)
   if (caller.role !== 'authenticated') return sendJson(res, 401, { error: 'Unauthorized' })
@@ -119,6 +153,10 @@ export async function handleFunctions(req: Req, res: Res, caller: Caller, route:
     if (name === 'parse-receipt') return sendJson(res, 200, await parseReceipt(body))
     if (name === 'set-user-password') {
       const out = await setUserPassword(caller, body)
+      return sendJson(res, out.status, out.body)
+    }
+    if (name === 'create-user') {
+      const out = await createUser(caller, body)
       return sendJson(res, out.status, out.body)
     }
     return sendJson(res, 404, { error: `Função "${name}" não encontrada` })

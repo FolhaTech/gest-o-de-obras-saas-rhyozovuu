@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatDate } from '@/lib/formatters'
+import { useAuth } from '@/hooks/use-auth'
 import { useData } from '@/hooks/use-data'
 import { Equipe, WorkerGroup } from '@/types'
 import { Plus, UserCheck, UserMinus, Edit, Trash, Filter, Layers, Search } from 'lucide-react'
@@ -35,6 +36,7 @@ import { useToast } from '@/hooks/use-toast'
 import WorkerDetailSheet from './WorkerDetailSheet'
 
 export default function WorkersTab() {
+  const { canSeeValues } = useAuth() // pagamento (diária/mensal e valor) só para o administrador
   const { data: equipes, loading, refetch } = useData<Equipe>('team_members')
   const { data: groups, refetch: refetchGroups } = useData<WorkerGroup>('worker_groups')
   const { toast } = useToast()
@@ -312,6 +314,7 @@ export default function WorkersTab() {
               </div>
 
               <div className="grid grid-cols-3 gap-4">
+                {canSeeValues && (
                 <div className="space-y-2">
                   <Label>Tipo Pagamento</Label>
                   <Select
@@ -327,6 +330,8 @@ export default function WorkersTab() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
+                {canSeeValues && (
                 <div className="space-y-2">
                   <Label htmlFor="worker-cost">Valor (R$)</Label>
                   <Input
@@ -342,6 +347,7 @@ export default function WorkersTab() {
                     }
                   />
                 </div>
+                )}
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select
@@ -374,7 +380,7 @@ export default function WorkersTab() {
               <TableHead>Grupo</TableHead>
               <TableHead>Contato / PIX</TableHead>
               <TableHead>Admissão</TableHead>
-              <TableHead>Pagamento</TableHead>
+              {canSeeValues && <TableHead>Pagamento</TableHead>}
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -416,9 +422,11 @@ export default function WorkersTab() {
                     {eq.admission_date ? formatDate(eq.admission_date) : '-'}
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">
-                      {eq.payment_type === 'monthly' ? 'Mensal' : formatCurrency(eq.daily_cost)}
-                    </div>
+                    {canSeeValues && (
+                      <div className="font-medium">
+                        {eq.payment_type === 'monthly' ? 'Mensal' : formatCurrency(eq.daily_cost)}
+                      </div>
+                    )}
                     <Badge variant="outline" className="mt-1 text-[10px]">
                       {eq.type === 'internal' ? 'Própria' : 'Terceira'}
                     </Badge>

@@ -35,8 +35,7 @@ const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ?
  * com quantidade e valores (R$). Os valores ficam em outra tabela, fechada ao Prestador.
  */
 export default function AllocatedItemsPanel({ obraId }: { obraId: string }) {
-  const { role } = useAuth()
-  const canSeeValues = role !== 'prestador'
+  const { canSeeValues } = useAuth() // valores (R$) só para o administrador
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')

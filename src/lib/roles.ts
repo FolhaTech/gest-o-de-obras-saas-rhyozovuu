@@ -42,18 +42,28 @@ export function getRoleLabel(role: AppRole | string | null | undefined): string 
   }
 }
 
+/** Valores (R$, preços, custos, receitas, ROI): só o administrador. O Gestor tem as mesmas permissões, sem valores. */
+export function canSeeValuesFor(role: AppRole | string | null | undefined): boolean {
+  return normalizeRole(role) === 'admin'
+}
+
+/** Páginas que só existem para quem vê valores (despesas e Airbnb são 100% financeiras). */
+const VALUE_ONLY_PATHS = ['/despesas', '/airbnb']
+
 /**
  * Rotas permitidas para cada papel.
  * Prestador: Obras (/obras, /obras/:id), Planner (/planner), Materiais (/materiais), Diário de Obra (/diario-obra).
- * Admin e Gestor: Acesso irrestrito a todas as rotas.
+ * Admin: acesso irrestrito. Gestor: tudo, menos as páginas financeiras (despesas e Airbnb).
  */
 export function canAccessPath(
   role: AppRole | string | null | undefined,
   pathname: string,
 ): boolean {
   const norm = normalizeRole(role)
-  if (norm === 'admin' || norm === 'gestor') {
-    return true
+  if (norm === 'admin') return true
+  if (norm === 'gestor') {
+    const p = pathname.split('?')[0].split('#')[0]
+    return !VALUE_ONLY_PATHS.some((v) => p === v || p.startsWith(v + '/'))
   }
 
   // Normalização do pathname para validação de prefixos

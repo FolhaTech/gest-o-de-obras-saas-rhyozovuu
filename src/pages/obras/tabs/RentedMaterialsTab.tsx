@@ -11,6 +11,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, formatDate, formatSupabaseError } from '@/lib/formatters'
 import { localISODate } from '@/lib/planner-progress'
@@ -115,6 +116,7 @@ const EMPTY_FORM = {
 
 export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
   const { toast } = useToast()
+  const { canSeeValues } = useAuth() // valores (R$) só para o administrador
   const [items, setItems] = useState<RentedMaterial[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -299,6 +301,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
             </div>
           </CardContent>
         </Card>
+        {canSeeValues && (
         <Card className="shadow-none border">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -310,6 +313,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
             </div>
           </CardContent>
         </Card>
+        )}
         <Card className={`shadow-none border ${summary.late > 0 ? 'border-rose-300' : ''}`}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -343,11 +347,11 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                 <TableHead>Material</TableHead>
                 <TableHead>Locadora</TableHead>
                 <TableHead className="text-right">Qtd.</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                {canSeeValues && <TableHead className="text-right">Valor</TableHead>}
                 <TableHead>Período</TableHead>
                 <TableHead>Devolução</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Custo acumulado</TableHead>
+                {canSeeValues && <TableHead className="text-right">Custo acumulado</TableHead>}
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -364,10 +368,12 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                   <TableCell className="text-right whitespace-nowrap">
                     {Number(item.quantity)} {item.unit}
                   </TableCell>
+                  {canSeeValues && (
                   <TableCell className="text-right whitespace-nowrap">
                     {formatCurrency(Number(item.rental_cost))}
                     <div className="text-[10px] text-muted-foreground">{PERIOD_LABEL[item.cost_period]}</div>
                   </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap text-sm">
                     {formatDate(item.start_date)}
                     <div className="text-[10px] text-muted-foreground">{rentalDays(item, today)} dia(s)</div>
@@ -380,9 +386,11 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                         : '-'}
                   </TableCell>
                   <TableCell>{statusBadge(item)}</TableCell>
+                  {canSeeValues && (
                   <TableCell className="text-right font-semibold whitespace-nowrap">
                     {formatCurrency(rentalTotal(item, today))}
                   </TableCell>
+                  )}
                   <TableCell className="text-right whitespace-nowrap">
                     {!item.returned_date && (
                       <Button
@@ -476,6 +484,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                 </Select>
               </div>
             </div>
+            {canSeeValues && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="rm-cost">Valor da locação (R$)</Label>
@@ -505,6 +514,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                 </Select>
               </div>
             </div>
+            )}
             <div className={`grid gap-4 ${editingId ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div className="space-y-2">
                 <Label htmlFor="rm-start">Início *</Label>
