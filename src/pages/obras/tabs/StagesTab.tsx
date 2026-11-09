@@ -83,7 +83,7 @@ export default function StagesTab({ obraId }: { obraId: string }) {
       })
 
       if (!error) {
-        toast({ title: 'Etapa adicionada!' })
+        toast({ title: 'Etapa adicionada!', description: 'Ela também aparece no Planner.' })
         setOpen(false)
         setFormData({ name: '', manager: '', progress: 0 })
         refetch()

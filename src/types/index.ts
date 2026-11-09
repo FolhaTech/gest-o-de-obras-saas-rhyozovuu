@@ -268,6 +268,8 @@ export interface PlannerTask {
   status: PlannerTaskStatus
   priority: PlannerTaskPriority
   progress_percentage?: number
+  /** Quando preenchido, a tarefa é o espelho de uma etapa do Cronograma (work_stages). */
+  stage_id?: string | null
   start_date: string | null
   due_date: string | null
   assignee_id: string | null

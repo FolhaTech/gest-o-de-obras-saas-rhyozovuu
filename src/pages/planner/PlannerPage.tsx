@@ -481,7 +481,10 @@ export default function PlannerPage() {
 
   // Deletar tarefa
   const handleDeleteTask = async (task: PlannerTask) => {
-    if (!confirm(`Tem certeza que deseja excluir a tarefa "${task.title}"?`)) return
+    const warn = task.stage_id
+      ? '\n\nEla é espelho de um item do Cronograma: a etapa correspondente também será excluída.'
+      : ''
+    if (!confirm(`Tem certeza que deseja excluir a tarefa "${task.title}"?${warn}`)) return
     try {
       const { error } = await supabase
         .from('planner_tasks' as any)
@@ -863,6 +866,13 @@ export default function PlannerPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmitTask} className="space-y-4 py-2">
+            {editingTask?.stage_id && (
+              <p className="text-xs rounded-md border bg-muted/40 p-2 text-muted-foreground">
+                Esta tarefa vem do <strong>Cronograma</strong> da obra: nome, datas, responsável e
+                progresso ficam iguais nos dois lugares.
+              </p>
+            )}
+
             {/* Título */}
             <div className="space-y-1.5">
               <Label htmlFor="task-title">Título da Tarefa *</Label>
@@ -1193,6 +1203,11 @@ export default function PlannerPage() {
                     {previewTask.works.name}
                   </Badge>
                 )}
+                {previewTask.stage_id && (
+                  <Badge variant="outline" className="gap-1">
+                    <CalendarDays className="h-3 w-3" /> Cronograma
+                  </Badge>
+                )}
               </div>
               <DialogTitle className="text-xl font-bold">{previewTask.title}</DialogTitle>
             </DialogHeader>
@@ -1432,12 +1447,19 @@ function TaskCard({
       <CardContent className="p-3 space-y-2.5">
         {/* Badges de Obra e Prioridade */}
         <div className="flex items-center justify-between gap-1 flex-wrap">
-          <Badge
-            variant="outline"
-            className={`text-[10px] px-1.5 py-0 h-4 ${PRIORITY_CONFIG[task.priority].badgeClass}`}
-          >
-            {PRIORITY_CONFIG[task.priority].label}
-          </Badge>
+          <div className="flex items-center gap-1">
+            <Badge
+              variant="outline"
+              className={`text-[10px] px-1.5 py-0 h-4 ${PRIORITY_CONFIG[task.priority].badgeClass}`}
+            >
+              {PRIORITY_CONFIG[task.priority].label}
+            </Badge>
+            {task.stage_id && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                <CalendarDays className="h-2.5 w-2.5" /> Cronograma
+              </Badge>
+            )}
+          </div>
 
           {task.works && (
             <Badge
@@ -1599,6 +1621,11 @@ function TaskListItem({
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                   <Building className="h-2.5 w-2.5 mr-1" />
                   {task.works.name}
+                </Badge>
+              )}
+              {task.stage_id && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                  <CalendarDays className="h-2.5 w-2.5" /> Cronograma
                 </Badge>
               )}
             </div>

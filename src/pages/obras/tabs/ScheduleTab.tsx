@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   differenceInDays,
   parseISO,
@@ -19,9 +19,31 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { CalendarDays, AlertCircle, CheckCircle2, Database, RefreshCw, WifiOff } from 'lucide-react'
+import {
+  CalendarDays,
+  AlertCircle,
+  CheckCircle2,
+  Database,
+  Plus,
+  RefreshCw,
+  WifiOff,
+} from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { supabase } from '@/lib/supabase/client'
+import { useToast } from '@/hooks/use-toast'
+import { useData } from '@/hooks/use-data'
 
 export default function ScheduleTab({ obraId }: { obraId: string }) {
   const {
@@ -31,6 +53,174 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
     isNetworkError,
     refetch,
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
+
+  const { toast } = useToast()
+  const { data: teamMembers } = useData<{ id: string; name: string }>('team_members')
+
+  const EMPTY_FORM = {
+    name: '',
+    manager: '',
+    start_date: '',
+    end_date_planned: '',
+    progress: 0,
+    notes: '',
+  }
+  const [addOpen, setAddOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.name.trim()) return
+    if (form.end_date_planned < form.start_date) {
+      toast({
+        title: 'Datas inválidas',
+        description: 'O fim planejado não pode ser anterior ao início.',
+        variant: 'destructive',
+      })
+      return
+    }
+    const progress = Math.min(100, Math.max(0, Math.round(Number(form.progress) || 0)))
+    setSaving(true)
+    // A etapa do cronograma gera automaticamente a tarefa espelho no Planner (gatilho no banco).
+    const { error } = await supabase.from('work_stages').insert({
+      work_id: obraId,
+      name: form.name.trim(),
+      manager: form.manager.trim() || null,
+      start_date: form.start_date,
+      end_date_planned: form.end_date_planned,
+      progress_percentage: progress,
+      status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'pending',
+      notes: form.notes.trim() || null,
+    })
+    setSaving(false)
+    if (error) {
+      toast({ title: 'Erro ao adicionar', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({
+      title: 'Item adicionado ao Cronograma',
+      description: 'Ele também já aparece no Planner, com os mesmos dados.',
+    })
+    setAddOpen(false)
+    setForm(EMPTY_FORM)
+    refetch()
+  }
+
+  const undatedCount = useMemo(
+    () => (stages || []).filter((s) => !(s.start_date && s.end_date_planned)).length,
+    [stages],
+  )
+
+  const addButton = (
+    <Button size="sm" className="gap-2" onClick={() => setAddOpen(true)}>
+      <Plus className="h-4 w-4" /> Adicionar ao Cronograma
+    </Button>
+  )
+
+  const undatedHint =
+    undatedCount > 0 ? (
+      <span className="text-xs text-muted-foreground">
+        {undatedCount} etapa(s) sem datas não aparecem no gráfico — defina início e fim em
+        &quot;Etapas do Projeto&quot;.
+      </span>
+    ) : null
+
+  const addDialog = (
+    <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Adicionar ao Cronograma</DialogTitle>
+          <DialogDescription>
+            O item entra no cronograma desta obra e é espelhado automaticamente no Planner.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="sch-name">Nome do item *</Label>
+            <Input
+              id="sch-name"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Ex.: Reboco externo"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sch-manager">Responsável</Label>
+            <Input
+              id="sch-manager"
+              list="sch-team-members"
+              value={form.manager}
+              onChange={(e) => setForm({ ...form, manager: e.target.value })}
+              placeholder="Escolha um membro da equipe ou digite"
+            />
+            <datalist id="sch-team-members">
+              {(teamMembers || []).map((m) => (
+                <option key={m.id} value={m.name.trim()} />
+              ))}
+            </datalist>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="sch-start">Início *</Label>
+              <Input
+                id="sch-start"
+                type="date"
+                required
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sch-end">Fim planejado *</Label>
+              <Input
+                id="sch-end"
+                type="date"
+                required
+                min={form.start_date || undefined}
+                value={form.end_date_planned}
+                onChange={(e) => setForm({ ...form, end_date_planned: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sch-progress">Progresso atual (%)</Label>
+            <Input
+              id="sch-progress"
+              type="number"
+              min={0}
+              max={100}
+              value={form.progress}
+              onChange={(e) => setForm({ ...form, progress: Number(e.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sch-notes">Observações</Label>
+            <Textarea
+              id="sch-notes"
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => setAddOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Salvando...' : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 
   const validStages = useMemo(() => {
     return (stages || [])
@@ -141,9 +331,17 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
           </CardTitle>
           <CardDescription>Visualize o progresso planejado x realizado.</CardDescription>
         </CardHeader>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Nenhuma etapa com data de início e previsão de término cadastrada para exibir o gráfico.
+        <CardContent className="py-8 text-center text-muted-foreground space-y-4">
+          <p>
+            Nenhuma etapa com data de início e previsão de término cadastrada para exibir o
+            gráfico.
+          </p>
+          <div className="flex flex-col items-center gap-2">
+            {addButton}
+            {undatedHint}
+          </div>
         </CardContent>
+        {addDialog}
       </Card>
     )
   }
@@ -158,6 +356,11 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
         <CardDescription>
           Acompanhe o planejamento vs. execução de cada etapa da obra
         </CardDescription>
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          {addButton}
+          {undatedHint}
+        </div>
+        {addDialog}
         <div className="flex gap-4 mt-4 text-xs font-medium text-muted-foreground">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-sm bg-blue-200 dark:bg-blue-900" />
