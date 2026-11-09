@@ -108,6 +108,19 @@ try {
   ok('prestador não exclui perfis', (await attempt('delete from profiles where id = $1', [other.id])).rowCount === 0)
   ok('prestador altera o próprio nome', (await attempt("update profiles set full_name = 'Teste Nome' where id = $1", [presta.id])).rowCount === 1)
 
+  // --- Gestor (colaborador): também só os cards em que é Pessoa Responsável ---
+  await c.query("RESET ROLE")
+  await c.query("select set_config('request.jwt.claim.sub', '', true)")
+  await c.query("update profiles set role = 'gestor' where id = $1", [presta.id])
+  const ownNow = Number((await one("select count(*) n from planner_tasks where assignee_id = $1", [A])).n)
+  await as("obras_authenticated", presta.id)
+  const gSeen = await q("select id, assignee_id from planner_tasks")
+  ok("gestor vê só os cards em que é Pessoa Responsável", gSeen.length === ownNow && gSeen.every((t) => t.assignee_id === A) && !gSeen.some((t) => t.id === taskB), `${gSeen.length} de ${totalTasks + 2}`)
+  ok("gestor não altera card de outro", (await attempt("update planner_tasks set title = $2 where id = $1", [taskB, "x"])).rowCount === 0)
+  ok("gestor não cria card para outro", (await attempt("insert into planner_tasks (title, assignee_id) values ($1, $2)", ["x", B])).error?.code === "42501")
+  ok("gestor vê só os anexos dos seus cards", (await q("select id from planner_task_attachments where id = $1", [attB])).length === 0)
+  ok("gestor continua alterando o cronograma", (await attempt("update work_stages set notes = 'g' where id = (select id from work_stages limit 1)")).rowCount === 1)
+
   // --- Equipe interna (admin) ---
   await as('obras_authenticated', staff.id)
   ok('admin vê todas as tarefas', Number((await one('select count(*) n from planner_tasks')).n) >= totalTasks)

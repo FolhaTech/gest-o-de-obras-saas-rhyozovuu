@@ -130,10 +130,11 @@ const PRIORITY_CONFIG: Record<PlannerTaskPriority, { label: string; badgeClass: 
 
 export default function PlannerPage() {
   const { user, role, profile } = useAuth()
-  // Prestador: vê e edita somente as tarefas atribuídas ao membro da equipe vinculado a ele (o banco garante).
-  const isPrestador = role === 'prestador'
+  // Só o Admin vê todos os cards. Prestador e Gestor (colaboradores) veem e editam somente os cards em que
+  // são a "Pessoa Responsável", isto é, o membro da equipe vinculado ao usuário (o banco garante).
+  const isRestricted = role !== 'admin'
   const myMemberId: string | null = profile?.team_member_id ?? null
-  const canCreate = !isPrestador || !!myMemberId
+  const canCreate = !isRestricted || !!myMemberId
   const { toast } = useToast()
 
   const [tasks, setTasks] = useState<PlannerTask[]>([])
@@ -293,7 +294,7 @@ export default function PlannerPage() {
     resetForm()
     setFormStatus(defaultStatus)
     setFormProgress(progressFromStatus(defaultStatus, 0))
-    if (isPrestador) setFormAssigneeId(myMemberId ?? 'none')
+    if (isRestricted) setFormAssigneeId(myMemberId ?? 'none')
     setDialogOpen(true)
   }
 
@@ -424,8 +425,8 @@ export default function PlannerPage() {
         priority: formPriority,
         progress_percentage: formProgress,
         work_id: formWorkId === 'none' ? null : formWorkId,
-        // prestador só cria/edita tarefas atribuídas a si mesmo
-        assignee_id: isPrestador ? myMemberId : formAssigneeId === 'none' ? null : formAssigneeId,
+        // quem não é admin só cria/edita cards em que é a Pessoa Responsável
+        assignee_id: isRestricted ? myMemberId : formAssigneeId === 'none' ? null : formAssigneeId,
         start_date: formStartDate || null,
         due_date: formDueDate || null,
         created_by: user?.id || null,
@@ -674,7 +675,7 @@ export default function PlannerPage() {
         </div>
       </div>
 
-      {isPrestador && (
+      {isRestricted && (
         <div
           className={`rounded-lg border p-3 text-sm ${
             myMemberId
@@ -683,7 +684,7 @@ export default function PlannerPage() {
           }`}
         >
           {myMemberId
-            ? 'Você vê somente as tarefas atribuídas a você.'
+            ? 'Você vê somente os cards em que é a Pessoa Responsável.'
             : 'Seu usuário ainda não está vinculado a um membro da equipe, por isso nenhuma tarefa aparece. Peça a um administrador para vincular em Configurações → Usuários.'}
         </div>
       )}
@@ -811,8 +812,8 @@ export default function PlannerPage() {
                 </SelectContent>
               </Select>
 
-              {/* Filtro por Responsável (não faz sentido para o prestador) */}
-              {!isPrestador && (
+              {/* Filtro por Responsável (não faz sentido para quem vê só os próprios cards) */}
+              {!isRestricted && (
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                 <SelectTrigger className="text-xs sm:text-sm h-9">
                   <SelectValue placeholder="Responsável" />
@@ -1085,7 +1086,7 @@ export default function PlannerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Pessoa Responsável</Label>
-                <Select value={formAssigneeId} onValueChange={setFormAssigneeId} disabled={isPrestador}>
+                <Select value={formAssigneeId} onValueChange={setFormAssigneeId} disabled={isRestricted}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um membro da equipe" />
                   </SelectTrigger>
