@@ -176,7 +176,7 @@ export default function GroupsTab() {
   const workerCountByGroup = useMemo(() => {
     const counts: Record<string, number> = {}
     teamMembers.forEach((m) => {
-      if (m.group_id) {
+      if (m.group_id && !m.provider_id) {
         counts[m.group_id] = (counts[m.group_id] || 0) + 1
       }
     })

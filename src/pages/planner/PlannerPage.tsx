@@ -186,7 +186,7 @@ export default function PlannerPage() {
         supabase.from('works').select('id, name').order('name'),
         supabase
           .from('team_members')
-          .select('id, name, role, phone')
+          .select('id, name, role, phone, provider_id')
           .eq('status', 'active')
           .order('name'),
       ])
@@ -824,6 +824,7 @@ export default function PlannerPage() {
                   {teamMembers.map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       {member.name} {member.role ? `(${member.role})` : ''}
+                      {member.provider_id ? ' · Prestador' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1095,6 +1096,7 @@ export default function PlannerPage() {
                     {teamMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.name} {m.role ? `• ${m.role}` : ''}
+                        {m.provider_id ? ' · Prestador' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

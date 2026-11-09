@@ -89,6 +89,8 @@ export interface Equipe {
   daily_cost: number | null
   work_id: string | null
   group_id?: string | null
+  /** Preenchido nas linhas espelho de Prestadores (Equipes > Prestadores): não são funcionários. */
+  provider_id?: string | null
   status: string | null
   admission_date?: string | null
   pix_key?: string | null

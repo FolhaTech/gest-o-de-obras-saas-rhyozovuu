@@ -59,7 +59,7 @@ function formatLastLogin(value?: string | null) {
 
 export default function UsersTab() {
   const { data: profiles, loading, refetch } = useData<Profile>('profiles')
-  const { data: members } = useData<{ id: string; name: string; status?: string | null }>(
+  const { data: members } = useData<{ id: string; name: string; status?: string | null; provider_id?: string | null }>(
     'team_members',
   )
   const { user: currentUser, refreshProfile, role: myRole } = useAuth()
@@ -294,6 +294,7 @@ export default function UsersTab() {
                           {(members || []).map((m) => (
                             <SelectItem key={m.id} value={m.id}>
                               {m.name.trim()}
+                              {m.provider_id ? ' · Prestador' : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
