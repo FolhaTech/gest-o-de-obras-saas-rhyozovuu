@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Edit2, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { Clock, Edit2, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -114,7 +114,8 @@ const newLine = (): Line => ({ key: ++lineKey, item: '', quantity: '1', unit: 'u
 export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number) => void }) {
   const { toast } = useToast()
   const { user, role, canSeeBilling } = useAuth()
-  const isFinance = role === 'admin' || role === 'financeiro' // atende as solicitações
+  const isFinance = role === 'financeiro' // SÓ o financeiro atende as solicitações
+  const isAdmin = role === 'admin' // acompanha (vê tudo e os valores) e exclui, mas não atende
   const seesAll = role !== 'prestador'
 
   const [items, setItems] = useState<Request[]>([])
@@ -183,6 +184,7 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
   const late = items.filter((r) => daysLate(r, today) > 0).length
 
   const canEditOwn = (r: Request) => r.requested_by === user?.id && r.status === 'requested'
+  const minePending = items.filter((r) => r.requested_by === user?.id && r.status === 'requested').length
 
   // ---------------------------------------------------------------- solicitar
   const openCreate = () => {
@@ -337,7 +339,7 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
   }
 
   const cards = [
-    { label: 'Novas', value: String(count('requested')), cls: count('requested') ? 'text-blue-600' : '' },
+    { label: isFinance ? 'Novas (a atender)' : 'Pendentes pelo financeiro', value: String(count('requested')), cls: count('requested') ? 'text-blue-600' : '' },
     { label: 'Em cotação', value: String(count('quoting')), cls: '' },
     { label: 'Aprovadas (a comprar)', value: String(count('approved')), cls: count('approved') ? 'text-teal-600' : '' },
     { label: 'Compradas no mês', value: String(boughtMonth.length), cls: '' },
@@ -350,7 +352,9 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
         <p className="text-sm text-muted-foreground">
           {isFinance
             ? 'Solicitações de compra enviadas pelos usuários. Atenda, cote, aprove e registre a compra.'
-            : 'Peça aqui o que precisa ser comprado: o financeiro recebe a solicitação e atende.'}
+            : isAdmin
+              ? 'Acompanhe as solicitações de compra. Quem atende é o financeiro.'
+              : 'Peça aqui o que precisa ser comprado. A solicitação fica pendente pelo financeiro até ele atender.'}
         </p>
         <Button className="gap-2 shrink-0" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Solicitar compra
@@ -359,6 +363,12 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
 
       {!seesAll && (
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Você vê somente as solicitações que fez.</div>
+      )}
+      {!isFinance && minePending > 0 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 flex items-center gap-2">
+          <Clock className="h-4 w-4 shrink-0" />
+          Você tem {minePending} solicitação(ões) <strong>pendente(s) pelo financeiro</strong>. Elas ficam com o financeiro até serem atendidas.
+        </div>
       )}
 
       <div className={`grid grid-cols-2 gap-3 ${canSeeBilling ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
@@ -442,7 +452,10 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
                     </TableCell>
                     {seesAll && <TableCell className="text-sm">{who(r.requester)}</TableCell>}
                     <TableCell>
-                      <Badge variant="outline" className={`font-normal ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</Badge>
+                      <Badge variant="outline" className={`font-normal gap-1 ${STATUS_CLASS[r.status]}`}>
+                        {r.status === 'requested' && <Clock className="h-3 w-3" />}
+                        {STATUS_LABEL[r.status]}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.supplier && <div>{r.supplier}</div>}
@@ -454,7 +467,9 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
                       {r.invoice_number && <div className="text-xs text-muted-foreground">NF {r.invoice_number}</div>}
                       {r.finance_notes && <div className="text-xs max-w-xs">{r.finance_notes}</div>}
                       {r.handled_by && !isFinance && <div className="text-[10px] text-muted-foreground">por {who(r.handler)}</div>}
-                      {!r.supplier && !r.finance_notes && !r.invoice_number && !(canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0)) && <span className="text-muted-foreground">-</span>}
+                      {!r.supplier && !r.finance_notes && !r.invoice_number && !(canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0)) && (
+                        <span className="text-xs text-muted-foreground">{r.status === 'requested' ? 'Aguardando o financeiro' : '-'}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       {isFinance && (
@@ -472,7 +487,7 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
                           </Button>
                         </>
                       )}
-                      {(isFinance || canEditOwn(r)) && (
+                      {(isFinance || isAdmin || canEditOwn(r)) && (
                         <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" title="Excluir" onClick={() => deleteRequest(r)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>

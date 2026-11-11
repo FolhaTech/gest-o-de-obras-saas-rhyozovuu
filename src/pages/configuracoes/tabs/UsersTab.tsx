@@ -195,9 +195,10 @@ export default function UsersTab() {
             preços, custos, ROI nem pagamentos.
           </li>
           <li>
-            <strong>Financeiro:</strong> Acessa somente o <strong>Faturamento</strong>: recebe as
-            solicitações de compra feitas pelos usuários (Compras) e controla o Pagamento (Equipe). Não
-            acessa obras, estoque nem os demais valores.
+            <strong>Financeiro:</strong> Acessa somente o <strong>Faturamento</strong>: é o único que
+            atende as solicitações de compra feitas pelos usuários (Compras, que ficam “pendentes pelo
+            financeiro” até lá) e controla o Pagamento (Equipe). Não acessa obras, estoque nem os demais
+            valores.
           </li>
           <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as

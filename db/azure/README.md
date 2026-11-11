@@ -55,6 +55,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/19_planner_historico_progresso.sql  #
 psql "$ADMIN_URL/gestao_obras" -f db/azure/20_excluir_material.sql  # excluir material usado em composição de obra (o retrato sai junto); com consumo registrado continua protegido; teste: node db/azure/test-excluir-material.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/21_manutencao_casas.sql  # Manutenção das casas: check-in/check-out (hora do servidor), materiais usados com baixa no estoque; teste: node db/azure/test-manutencao-casas.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/22_faturamento.sql  # papel Financeiro, Faturamento > Compras (solicitações) e Pagamento (Equipe); teste: node db/azure/test-faturamento.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/23_compras_so_financeiro.sql  # Compras: só o Financeiro atende (o Admin acompanha); quem pediu vê "pendente pelo financeiro"; teste: node db/azure/test-faturamento.mjs
 ```
 
 ## Desenvolvimento local

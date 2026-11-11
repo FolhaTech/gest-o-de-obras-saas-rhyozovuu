@@ -262,6 +262,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const reqSel = () => sb.from('purchase_requests').select('id, item, status, supplier, quoted_value, final_value').eq('id', reqId)
   const reqAdmin = await reqSel()
   ok('admin lê a solicitação de compra com os valores', !reqAdmin.error && reqAdmin.data.length === 1 && Number(reqAdmin.data[0].quoted_value) === 150 && Number(reqAdmin.data[0].final_value) === 140, reqAdmin.error?.message)
+  // pedido de OUTRO usuário (o admin não é o solicitante): ele não atende, só o financeiro
+  const otherUser = (await db.query('select id from public.profiles where id <> $1 order by email limit 1', [smokeUserId])).rows[0].id
+  const reqOther = (await db.query("insert into public.purchase_requests (item, quantity, requested_by) values ('smoke-compra-outro', 1, $1) returning id", [otherUser])).rows[0].id
+  const admAtend = await sb.from('purchase_requests').update({ status: 'approved', supplier: 'Admin' }).eq('id', reqOther).select('id')
+  ok('o admin NÃO atende o pedido de outro usuário (só o financeiro atende)', !admAtend.error && admAtend.data.length === 0, admAtend.error?.message)
+  const reqOtherRow = (await db.query('select status, supplier from public.purchase_requests where id = $1', [reqOther])).rows[0]
+  ok('...e o pedido continua pendente pelo financeiro', reqOtherRow.status === 'requested' && reqOtherRow.supplier === null)
   const payAdmin = await sb.from('team_payments').select('reference, payment_amount').eq('reference', 'smoke-pagamento')
   ok('admin lê o pagamento da equipe com o valor', !payAdmin.error && payAdmin.data.length === 1 && Number(payAdmin.data[0].payment_amount) === 321, payAdmin.error?.message)
   // admin cria usuário (o cadastro aberto vem fechado) com o papel escolhido
