@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import ProgressHistory, { completionText } from './ProgressHistory'
 import { useToast } from '@/hooks/use-toast'
 import { formatDate, formatSupabaseError, isMissingTableError } from '@/lib/formatters'
 import {
@@ -149,6 +150,8 @@ export default function PlannerPage() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
   const [workFilter, setWorkFilter] = useState<string>('all')
   const [overdueOnly, setOverdueOnly] = useState(false)
+  // card -> dias que levou para chegar a 100% (última conclusão registrada no histórico do progresso)
+  const [completionDays, setCompletionDays] = useState<Record<string, number>>({})
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
 
@@ -244,6 +247,20 @@ export default function PlannerPage() {
         }))
 
         setTasks(fullTasks)
+
+        // dias até 100% de cada card concluído (histórico do progresso)
+        const { data: doneRows } = await supabase
+          .from('planner_task_progress_history' as any)
+          .select('task_id, days_to_complete, changed_at')
+          .in('task_id', taskIds)
+          .gte('new_percentage', 100)
+          .not('days_to_complete', 'is', null)
+          .order('changed_at', { ascending: true })
+        const byTask: Record<string, number> = {}
+        ;((doneRows ?? []) as unknown as { task_id: string; days_to_complete: number }[]).forEach((r) => {
+          byTask[r.task_id] = r.days_to_complete // a última conclusão vence
+        })
+        setCompletionDays(byTask)
       } else {
         setTasks([])
       }
@@ -589,6 +606,29 @@ export default function PlannerPage() {
     })
   }, [tasks, searchQuery, statusFilter, assigneeFilter, workFilter, overdueOnly])
 
+  // Cartões de resumo: clicar filtra por status (clicar de novo no mesmo cartão volta a mostrar todos)
+  const toggleStatusCard = (status: 'all' | PlannerTaskStatus) => {
+    setOverdueOnly(false)
+    setStatusFilter((cur) => (status === 'all' || cur === status ? 'all' : status))
+  }
+  const statusCardProps = (status: 'all' | PlannerTaskStatus, label: string, ring: string) => {
+    const active = statusFilter === status && !overdueOnly
+    return {
+      role: 'button' as const,
+      tabIndex: 0,
+      'aria-pressed': active,
+      title: status === 'all' ? 'Clique para mostrar todas as tarefas' : `Clique para filtrar: ${label}`,
+      onClick: () => toggleStatusCard(status),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          toggleStatusCard(status)
+        }
+      },
+      className: `shadow-none border cursor-pointer transition-colors hover:bg-muted/40 ${active ? `ring-2 ${ring}` : ''}`,
+    }
+  }
+
   // Contadores
   const counts = useMemo(() => {
     return {
@@ -691,7 +731,7 @@ export default function PlannerPage() {
 
       {/* Métricas / Contadores */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card className="shadow-none border">
+        <Card {...statusCardProps('all', 'todas', 'ring-primary border-primary')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">
@@ -705,7 +745,7 @@ export default function PlannerPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none border">
+        <Card {...statusCardProps('pending', 'pendentes', 'ring-amber-500 border-amber-500')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">Pendentes</p>
@@ -717,7 +757,7 @@ export default function PlannerPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none border">
+        <Card {...statusCardProps('in_progress', 'em andamento', 'ring-blue-500 border-blue-500')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">Em Andamento</p>
@@ -729,7 +769,7 @@ export default function PlannerPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none border">
+        <Card {...statusCardProps('completed', 'concluídas', 'ring-emerald-500 border-emerald-500')}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium uppercase">Concluídas</p>
@@ -937,6 +977,7 @@ export default function PlannerPage() {
                         onExportPdf={() => handleExportPdf(task)}
                         exporting={pdfBusyId === task.id}
                         onStatusChange={(newStatus) => handleQuickStatusChange(task.id, newStatus)}
+                        completionDays={completionDays[task.id]}
                       />
                     ))
                   )}
@@ -1082,6 +1123,10 @@ export default function PlannerPage() {
                 Essa porcentagem aparece na aba &quot;Etapas do Projeto&quot; da obra vinculada.
               </p>
             </div>
+
+            {editingTask && (
+              <ProgressHistory taskId={editingTask.id} createdAt={editingTask.created_at} />
+            )}
 
             {/* Responsável e Obra */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1346,6 +1391,13 @@ export default function PlannerPage() {
                 <Progress value={taskProgress(previewTask)} className="h-2" />
               </div>
 
+              {/* Histórico do progresso */}
+              <ProgressHistory
+                taskId={previewTask.id}
+                createdAt={previewTask.created_at}
+                progress={taskProgress(previewTask)}
+              />
+
               {/* Informações de Responsável e Datas */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/20 rounded-lg border text-sm">
                 <div>
@@ -1550,6 +1602,7 @@ function TaskCard({
   onExportPdf,
   exporting,
   onStatusChange,
+  completionDays,
 }: {
   task: PlannerTask
   onEdit: () => void
@@ -1558,6 +1611,8 @@ function TaskCard({
   onExportPdf: () => void
   exporting?: boolean
   onStatusChange: (status: PlannerTaskStatus) => void
+  /** Dias que o card levou para chegar a 100% (do histórico do progresso). */
+  completionDays?: number
 }) {
   const overdue = isTaskOverdue(task)
   const images = task.attachments?.filter((a) => a.file_type === 'image') || []
@@ -1632,6 +1687,11 @@ function TaskCard({
             <span className="font-semibold text-foreground">{taskProgress(task)}%</span>
           </div>
           <Progress value={taskProgress(task)} className="h-1.5" />
+          {task.status === 'completed' && completionDays !== undefined && (
+            <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              {completionText(completionDays)}
+            </p>
+          )}
         </div>
 
         {/* Pessoa Responsável e Prazos */}
