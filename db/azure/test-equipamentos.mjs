@@ -51,12 +51,18 @@ try {
   // ---------------------------------------------------------------- gestor cadastra e registra manutenção
   await as('obras_authenticated', p2.id)
   const eq = await attempt(
-    "insert into equipment (name, code, purchase_date, work_id) values ('BETONEIRA TESTE', 'EQ-1', '2026-03-01', $1) returning id, status, maintenance_interval_months, initial_maintenance_count, purchase_value",
+    "insert into equipment (name, code, purchase_date, work_id) values ('BETONEIRA TESTE', 'EQ-1', '2026-03-01', $1) returning id, status, maintenance_interval_months, initial_maintenance_count, purchase_value, quantity",
     [work],
   )
   ok('gestor cadastra equipamento', !eq.error, eq.error?.message)
   const row = eq.rows[0]
   ok('padrões: em uso, intervalo de 6 meses, 0 manutenções anteriores', row?.status === 'active' && row.maintenance_interval_months === 6 && row.initial_maintenance_count === 0)
+  ok('quantidade padrão é 1 unidade', row?.quantity === 1)
+  const q3 = await attempt("insert into equipment (name, quantity) values ('MARTELETE', 3) returning quantity")
+  ok('cadastra com a quantidade informada (3)', !q3.error && q3.rows[0].quantity === 3, q3.error?.message)
+  ok('gestor altera a quantidade', (await attempt('update equipment set quantity = 5 where id = $1', [row.id])).rowCount === 1)
+  ok('quantidade 0 é rejeitada', (await attempt("insert into equipment (name, quantity) values ('x', 0)")).error?.code === '23514')
+  ok('quantidade negativa é rejeitada', (await attempt("insert into equipment (name, quantity) values ('x', -2)")).error?.code === '23514')
   const m = await attempt("insert into equipment_maintenances (equipment_id, maintenance_date, description) values ($1, '2026-09-01', 'troca de óleo') returning id, created_by", [row.id])
   ok('gestor registra manutenção', !m.error, m.error?.message)
   ok('manutenção guarda quem registrou', m.rows[0]?.created_by === p2.id)
