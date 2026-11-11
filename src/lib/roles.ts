@@ -52,7 +52,8 @@ const VALUE_ONLY_PATHS = ['/despesas', '/airbnb']
 
 /**
  * Rotas permitidas para cada papel.
- * Prestador: Obras (/obras, /obras/:id), Planner (/planner), Materiais (/materiais), Diário de Obra (/diario-obra).
+ * Prestador: Obras (/obras, /obras/:id), Planner (/planner), Materiais (/materiais), Diário de Obra (/diario-obra),
+ * Manutenção das casas (/manutencao).
  * Admin: acesso irrestrito. Gestor: tudo, menos as páginas financeiras (despesas e Airbnb).
  */
 export function canAccessPath(
@@ -83,7 +84,9 @@ export function canAccessPath(
     cleanPath === '/materiais' ||
     cleanPath.startsWith('/materiais/') ||
     cleanPath === '/diario-obra' ||
-    cleanPath.startsWith('/diario-obra/')
+    cleanPath.startsWith('/diario-obra/') ||
+    cleanPath === '/manutencao' ||
+    cleanPath.startsWith('/manutencao/')
   ) {
     return true
   }

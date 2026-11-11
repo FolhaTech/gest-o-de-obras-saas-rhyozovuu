@@ -47,7 +47,7 @@ try {
   const presta2 = await one("select id from profiles where lower(role) = 'prestador' and id <> $1 order by email limit 1", [presta.id])
   const admin = await one("select id from profiles where lower(role) = 'admin' order by email limit 1")
   const work = (await one('select id from works limit 1')).id
-  const mat = await one('select id, name, unit_price from materials limit 1')
+  const mat = await one("insert into materials (name, unit_of_measure, unit_price) values ('MATERIAL TESTE PERDA', 'kg', 8) returning id, name, unit_price")
 
   // dados financeiros de apoio (como dono do banco)
   await c.query("insert into revenues (work_id, value, description, date) values ($1, 100, 'rec-teste', current_date)", [work])
