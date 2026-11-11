@@ -79,8 +79,11 @@ r = await sb.from('work_stages').select('id', { count: 'exact', head: true })
 ok('count exact head', !r.error && r.count === (await db.query('select count(*)::int n from public.work_stages')).rows[0].n, `count=${r.count}`)
 r = await sb.from('work_stages').select('id,status,progress_percentage').in('status', ['completed', 'in_progress']).order('created_at', { ascending: false }).limit(3)
 ok('in + order + limit', !r.error && r.data.length <= 3, r.error?.message)
-r = await sb.from('materials').select('id,name').ilike('name', '%cim%')
-ok('ilike', !r.error && r.data.length >= 1, r.error?.message)
+// material de teste próprio (o catálogo real pode mudar); a busca em MAIÚSCULAS prova que o ilike ignora caixa
+await db.query("insert into public.materials (name) values ('smoke-cimento-ilike')")
+r = await sb.from('materials').select('id,name').ilike('name', '%CIMENTO-ILIKE%')
+ok('ilike', !r.error && r.data.length === 1 && r.data[0].name === 'smoke-cimento-ilike', r.error?.message)
+await db.query("delete from public.materials where name = 'smoke-cimento-ilike'")
 r = await sb.from('attendance_records').select('id,date').gte('date', '2020-01-01').lte('date', '2099-12-31').limit(1)
 ok('gte/lte em date', !r.error && r.data.length === 1, r.error?.message)
 

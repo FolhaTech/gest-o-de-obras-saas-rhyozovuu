@@ -158,7 +158,11 @@ export default function DiarioObraList() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este registro?')) return
-    await supabase.from('work_diaries').delete().eq('id', id)
+    const { error } = await supabase.from('work_diaries').delete().eq('id', id)
+    if (error) {
+      toast({ title: 'Não foi possível excluir', description: error.message, variant: 'destructive' })
+      return
+    }
     refetch()
   }
 

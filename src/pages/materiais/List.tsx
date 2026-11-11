@@ -36,7 +36,8 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 
 export default function MateriaisList() {
-  const { canSeeValues } = useAuth() // preço unitário só para o administrador
+  const { canSeeValues, role } = useAuth() // preço unitário só para o administrador
+  const canManage = role !== 'prestador' // o Prestador só consulta o estoque
   const [materiais, setMateriais] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
@@ -192,9 +193,41 @@ export default function MateriaisList() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Deseja excluir este material?')) return
-    await supabase.from('materials').delete().eq('id', id)
+  /** Quantas linhas de uma tabela usam o material (0 se a consulta falhar). */
+  const countUsage = async (table: string, materialId: string) => {
+    const { count } = await supabase
+      .from(table as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('material_id', materialId)
+    return count ?? 0
+  }
+
+  const handleDelete = async (item: { id: string; name: string }) => {
+    // consumo real registrado trava a exclusão: apagaria o que foi gasto nas obras
+    const consumed = await countUsage('consumption_tracking', item.id)
+    if (consumed > 0) {
+      toast({
+        title: 'Não é possível excluir este material',
+        description: `"${item.name}" tem ${consumed} lançamento(s) de consumo registrado(s) nas obras. Excluir apagaria esse histórico.`,
+        variant: 'destructive',
+      })
+      return
+    }
+    const [inCompositions, inWorks] = await Promise.all([
+      countUsage('compositions_history', item.id),
+      countUsage('work_extra_materials', item.id),
+    ])
+    const impact = [
+      inCompositions > 0 ? `sai de ${inCompositions} composição(ões) de serviços de obras` : null,
+      inWorks > 0 ? `sai de ${inWorks} lista(s) de materiais de obras` : null,
+    ].filter(Boolean)
+    const msg = `Excluir "${item.name}"?${impact.length ? `\n\nIsso também: ${impact.join(' e ')}.` : ''}`
+    if (!confirm(msg)) return
+    const { error } = await supabase.from('materials').delete().eq('id', item.id)
+    if (error) {
+      toast({ title: 'Não foi possível excluir', description: error.message, variant: 'destructive' })
+      return
+    }
     toast({ title: 'Material excluído' })
     fetchData()
   }
@@ -215,7 +248,7 @@ export default function MateriaisList() {
           <h1 className="text-3xl font-bold tracking-tight">Estoque e Materiais</h1>
           <p className="text-muted-foreground">Catálogo de insumos e conversões para KG.</p>
         </div>
-        {view === 'estoque' && (
+        {view === 'estoque' && canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -443,6 +476,7 @@ export default function MateriaisList() {
                       )}
                     </TableCell>
                     <TableCell className="text-right flex items-center justify-end gap-1">
+                      {canManage && (<>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -455,10 +489,11 @@ export default function MateriaisList() {
                         variant="ghost"
                         size="icon"
                         className="text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => handleDelete(item)}
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
+                      </>)}
                     </TableCell>
                   </TableRow>
                 )
