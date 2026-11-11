@@ -236,6 +236,17 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const eqAdmin = await eqSel()
   const eqAdminCost = [eqAdmin.data?.[0]?.equipment_maintenances].flat()[0]?.maintenance_cost
   ok('admin lê o equipamento com os valores', !eqAdmin.error && Number(eqAdmin.data[0]?.purchase_value) === 500 && Number(eqAdminCost) === 80, eqAdmin.error?.message)
+  // veículo de teste (criado no banco) com valor de compra, custo de manutenção e nota de combustível
+  const vehId = (await db.query("insert into public.vehicles (plate, model, purchase_value) values ('SMK0A00', 'smoke-veiculo', 90000) returning id")).rows[0].id
+  await db.query('insert into public.vehicle_maintenances (vehicle_id, maintenance_cost, odometer_km) values ($1, 150, 1000)', [vehId])
+  await db.query('insert into public.vehicle_fuel_receipts (vehicle_id, liters, price_per_liter, total_value, odometer_km) values ($1, 30, 6.5, 195, 1200)', [vehId])
+  const vehSel = () => sb.from('vehicles').select('id, plate, odometer_km, purchase_value, vehicle_maintenances(id, maintenance_cost), vehicle_fuel_receipts(id, liters, price_per_liter, total_value)').eq('id', vehId)
+  const vAdmin = await vehSel()
+  const vA = vAdmin.data?.[0]
+  const vAm = [vA?.vehicle_maintenances].flat()[0]
+  const vAf = [vA?.vehicle_fuel_receipts].flat()[0]
+  ok('admin lê o veículo com todos os valores', !vAdmin.error && Number(vA?.purchase_value) === 90000 && Number(vAm?.maintenance_cost) === 150 && Number(vAf?.total_value) === 195 && Number(vAf?.price_per_liter) === 6.5, vAdmin.error?.message)
+  ok('o km do veículo acompanha o maior km lançado', vA?.odometer_km === 1200, String(vA?.odometer_km))
   // admin cria usuário (o cadastro aberto vem fechado) com o papel escolhido
   const nuEmail = `smoke-nu-${Date.now()}@example.com`
   const cu = await sb.functions.invoke('create-user', { body: { email: nuEmail, password: 'segredo123', fullName: 'Novo Smoke', role: 'gestor' } })
@@ -250,6 +261,8 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const allocPrest = await allocSel()
   const pv = [allocPrest.data?.[0]?.work_extra_material_values].flat().filter(Boolean)
   ok('prestador vê os itens alocados, mas sem os valores', !allocPrest.error && allocPrest.data.length === 1 && Number(allocPrest.data[0].quantity) === 3 && pv.length === 0, allocPrest.error?.message)
+  const vP = await vehSel()
+  ok('prestador não enxerga veículos', !vP.error && vP.data.length === 0, vP.error?.message)
   const mine = await sb.from('planner_tasks').select('id,assignee_id')
   ok('prestador vê só as tarefas atribuídas a ele', !mine.error && mine.data.length > 0 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === mA.id), `${mine.data?.length} de ${allTasks}`)
   const others = await sb.from('planner_tasks').select('id').eq('assignee_id', mB.id)
@@ -316,6 +329,16 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('gestor cadastra equipamento (o valor é descartado)', !eqGIns.error && eqGIns.data.name === 'smoke-equip-g' && !('purchase_value' in eqGIns.data), eqGIns.error?.message)
   const eqGKept = (await db.query("select purchase_value::int v from public.equipment where name = 'smoke-equip-g'")).rows[0]?.v
   ok('o valor enviado pelo gestor não foi gravado', eqGKept === 0, `valor=${eqGKept}`)
+  const vG = await vehSel()
+  const vGv = vG.data?.[0]
+  const vGm = [vGv?.vehicle_maintenances].flat()[0]
+  const vGf = [vGv?.vehicle_fuel_receipts].flat()[0]
+  ok('gestor lê veículo, manutenção e nota de combustível SEM os valores', !vG.error && vG.data.length === 1 && vGv.plate === 'SMK0A00' && !('purchase_value' in vGv) && !!vGm && !('maintenance_cost' in vGm) && !!vGf && Number(vGf.liters) === 30 && !('total_value' in vGf) && !('price_per_liter' in vGf), vG.error?.message)
+  const vGIns = await sb.from('vehicle_fuel_receipts').insert({ vehicle_id: vehId, liters: 12, total_value: 99, price_per_liter: 8 }).select('id, liters').single()
+  const vGKept = (await db.query('select total_value::int t, price_per_liter::int p from public.vehicle_fuel_receipts where id = $1', [vGIns.data?.id])).rows[0]
+  ok('gestor registra abastecimento (litros ficam, o valor enviado é descartado)', !vGIns.error && Number(vGIns.data.liters) === 12 && vGKept?.t === 0 && vGKept?.p === 0, vGIns.error?.message)
+  const vGFilter = await sb.from('vehicle_fuel_receipts').select('id').gt('total_value', 100)
+  ok('gestor não descobre o valor da nota por filtro', vGFilter.error?.code === '42501', vGFilter.error?.code)
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
@@ -330,6 +353,7 @@ const fn = await sb.functions.invoke('generate-composition', { body: { serviceNa
 ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.materials), fn.error?.message)
 
 await db.query("delete from public.equipment where name like 'smoke-equip%'")
+await db.query("delete from public.vehicles where plate like 'SMK%'") // manutenções e abastecimentos saem em cascata
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
 await db.query("delete from public.work_stages where name like 'smoke-%'") // o card espelho sai em cascata
 await db.query("delete from public.planner_tasks where title like 'smoke-%'")

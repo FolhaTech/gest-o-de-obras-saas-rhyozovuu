@@ -25,6 +25,7 @@ import {
   Building2,
   CalendarDays,
   BookOpenCheck,
+  Car,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
@@ -45,6 +46,7 @@ const allMenuItems: MenuItem[] = [
   { title: 'Diário de Obra', url: '/diario-obra', icon: BookOpen },
   { title: 'Equipes', url: '/equipes', icon: Users },
   { title: 'Materiais', url: '/materiais', icon: Package },
+  { title: 'Veículos', url: '/veiculos', icon: Car },
   { title: 'Despesas', url: '/despesas', icon: Receipt },
   { title: 'Airbnb', url: '/airbnb', icon: Building2 },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
