@@ -6,6 +6,7 @@ import {
   PackageCheck,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   Truck,
   Wallet,
@@ -61,6 +62,7 @@ interface RentedMaterial {
   expected_return_date: string | null
   returned_date: string | null
   notes: string | null
+  works?: { id: string; name: string } | null
 }
 
 const PERIOD_LABEL: Record<CostPeriod, string> = {
@@ -102,6 +104,7 @@ function rentalStatus(item: RentedMaterial, today: string): StatusKey {
 }
 
 const EMPTY_FORM = {
+  work_id: '',
   name: '',
   supplier: '',
   quantity: '1',
@@ -114,10 +117,43 @@ const EMPTY_FORM = {
   notes: '',
 }
 
-export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
+const lateReturn = (i: Pick<RentedMaterial, 'returned_date' | 'expected_return_date'>, today: string) =>
+  !i.returned_date && !!i.expected_return_date && i.expected_return_date < today
+
+/** Quantos materiais locados estão com a devolução atrasada (para o contador da aba em Materiais). */
+export function useRentedLateCount() {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    let alive = true
+    supabase
+      .from('work_rented_materials' as any)
+      .select('returned_date, expected_return_date')
+      .is('returned_date', null)
+      .then(({ data }) => {
+        if (!alive) return
+        const today = localISODate()
+        setCount(((data ?? []) as unknown as RentedMaterial[]).filter((i) => lateReturn(i, today)).length)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+  return count
+}
+
+/**
+ * Materiais locados (equipamentos e materiais alugados) com o custo acumulado da locação.
+ * Em Materiais lista as locações de TODAS as obras (com a coluna Obra e o filtro por obra); com `obraId`
+ * mostra só as de uma obra. Admin e Gestor lançam; o Prestador só consulta. Valores (R$) só para o Admin.
+ */
+export default function RentedMaterialsPanel({ obraId }: { obraId?: string }) {
   const { toast } = useToast()
-  const { canSeeValues } = useAuth() // valores (R$) só para o administrador
+  const { canSeeValues, role } = useAuth() // valores (R$) só para o administrador
+  const canManage = role !== 'prestador' // o Prestador só consulta
   const [items, setItems] = useState<RentedMaterial[]>([])
+  const [works, setWorks] = useState<{ id: string; name: string }[]>([])
+  const [workFilter, setWorkFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -128,11 +164,16 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
-    const { data, error: err } = await supabase
+    let query = supabase
       .from('work_rented_materials' as any)
-      .select('*')
-      .eq('work_id', obraId)
+      .select('*, works:work_id(id, name)')
       .order('start_date', { ascending: false })
+    if (obraId) query = query.eq('work_id', obraId)
+    const [{ data, error: err }, workRes] = await Promise.all([
+      query,
+      obraId ? Promise.resolve({ data: [] as { id: string; name: string }[] }) : supabase.from('works').select('id, name').order('name'),
+    ])
+    setWorks((workRes.data ?? []) as { id: string; name: string }[])
     if (err) {
       setError(formatSupabaseError(err))
       setItems([])
@@ -147,24 +188,34 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
     fetchItems()
   }, [fetchItems])
 
+  const visible = useMemo(() => {
+    const t = search.trim().toLowerCase()
+    return items.filter((i) => {
+      if (workFilter !== 'all' && i.work_id !== workFilter) return false
+      if (!t) return true
+      return i.name.toLowerCase().includes(t) || (i.supplier ?? '').toLowerCase().includes(t) || (i.works?.name ?? '').toLowerCase().includes(t)
+    })
+  }, [items, workFilter, search])
+
   const summary = useMemo(() => {
-    const active = items.filter((i) => !i.returned_date)
+    const active = visible.filter((i) => !i.returned_date)
     return {
       active: active.length,
       late: active.filter((i) => rentalStatus(i, today) === 'atrasado').length,
-      total: items.reduce((acc, i) => acc + rentalTotal(i, today), 0),
+      total: visible.reduce((acc, i) => acc + rentalTotal(i, today), 0),
     }
-  }, [items, today])
+  }, [visible, today])
 
   const openCreate = () => {
     setEditingId(null)
-    setForm({ ...EMPTY_FORM, start_date: today })
+    setForm({ ...EMPTY_FORM, work_id: obraId ?? '', start_date: today })
     setOpen(true)
   }
 
   const openEdit = (item: RentedMaterial) => {
     setEditingId(item.id)
     setForm({
+      work_id: item.work_id,
       name: item.name,
       supplier: item.supplier ?? '',
       quantity: String(item.quantity),
@@ -183,6 +234,11 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
     e.preventDefault()
     const quantity = Number(form.quantity.replace(',', '.'))
     const rentalCost = Number((form.rental_cost || '0').replace(',', '.'))
+    const targetWork = obraId ?? form.work_id
+    if (!targetWork) {
+      toast({ title: 'Escolha a obra', description: 'Informe em qual obra o material está locado.', variant: 'destructive' })
+      return
+    }
     if (!form.name.trim() || !(quantity > 0) || rentalCost < 0 || Number.isNaN(rentalCost)) {
       toast({ title: 'Confira os dados', description: 'Informe nome, quantidade e valor válidos.', variant: 'destructive' })
       return
@@ -196,7 +252,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
       return
     }
     const payload = {
-      work_id: obraId,
+      work_id: targetWork,
       name: form.name.trim(),
       supplier: form.supplier.trim() || null,
       quantity,
@@ -276,16 +332,20 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
             <Truck className="h-5 w-5 text-primary" /> Materiais Locados
           </h3>
           <p className="text-xs text-muted-foreground">
-            Equipamentos e materiais alugados para esta obra, com o custo acumulado da locação.
+            {obraId
+              ? 'Equipamentos e materiais alugados para esta obra, com o custo acumulado da locação.'
+              : 'Equipamentos e materiais alugados para as obras, com o custo acumulado da locação.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={fetchItems} className="gap-2">
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
-          <Button size="sm" onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Adicionar material locado
-          </Button>
+          {canManage && (
+            <Button size="sm" onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Adicionar material locado
+            </Button>
+          )}
         </div>
       </div>
 
@@ -327,6 +387,22 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
         </Card>
       </div>
 
+      {!obraId && items.length > 0 && (
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por material, locadora ou obra..." className="pl-9" />
+          </div>
+          <Select value={workFilter} onValueChange={setWorkFilter}>
+            <SelectTrigger className="md:w-56"><SelectValue placeholder="Obra" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as obras</SelectItem>
+              {works.map((w) => <SelectItem key={w.id} value={w.id}>{w.name.trim()}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {loading ? (
         <Skeleton className="h-40 w-full" />
       ) : error ? (
@@ -334,10 +410,14 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
       ) : items.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-card space-y-3">
           <Truck className="h-10 w-10 mx-auto text-muted-foreground opacity-60" />
-          <p className="text-sm text-muted-foreground">Nenhum material locado nesta obra ainda.</p>
-          <Button size="sm" onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Adicionar material locado
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            {obraId ? 'Nenhum material locado nesta obra ainda.' : 'Nenhum material locado ainda.'}
+          </p>
+          {canManage && (
+            <Button size="sm" onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Adicionar material locado
+            </Button>
+          )}
         </div>
       ) : (
         <div className="rounded-md border bg-card overflow-x-auto">
@@ -345,6 +425,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Material</TableHead>
+                {!obraId && <TableHead>Obra</TableHead>}
                 <TableHead>Locadora</TableHead>
                 <TableHead className="text-right">Qtd.</TableHead>
                 {canSeeValues && <TableHead className="text-right">Valor</TableHead>}
@@ -352,11 +433,16 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                 <TableHead>Devolução</TableHead>
                 <TableHead>Status</TableHead>
                 {canSeeValues && <TableHead className="text-right">Custo acumulado</TableHead>}
-                <TableHead className="text-right">Ações</TableHead>
+                {canManage && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
+              {visible.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">Nenhum material locado encontrado.</TableCell>
+                </TableRow>
+              )}
+              {visible.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className="font-medium">{item.name}</div>
@@ -364,6 +450,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                       <div className="text-xs text-muted-foreground line-clamp-1">{item.notes}</div>
                     )}
                   </TableCell>
+                  {!obraId && <TableCell>{item.works?.name?.trim() ?? '-'}</TableCell>}
                   <TableCell>{item.supplier || '-'}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {Number(item.quantity)} {item.unit}
@@ -391,6 +478,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                     {formatCurrency(rentalTotal(item, today))}
                   </TableCell>
                   )}
+                  {canManage && (
                   <TableCell className="text-right whitespace-nowrap">
                     {!item.returned_date && (
                       <Button
@@ -422,6 +510,7 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -439,6 +528,17 @@ export default function RentedMaterialsTab({ obraId }: { obraId: string }) {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
+            {!obraId && (
+              <div className="space-y-2">
+                <Label>Obra *</Label>
+                <Select value={form.work_id} onValueChange={(v) => setForm({ ...form, work_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Em qual obra está locado" /></SelectTrigger>
+                  <SelectContent>
+                    {works.map((w) => <SelectItem key={w.id} value={w.id}>{w.name.trim()}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="rm-name">Material / equipamento *</Label>
               <Input
