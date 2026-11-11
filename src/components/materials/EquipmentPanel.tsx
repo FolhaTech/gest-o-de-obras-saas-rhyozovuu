@@ -69,6 +69,7 @@ interface Equipment extends EquipmentLike {
   code: string | null
   category: string | null
   purchase_value?: number | null
+  quantity: number
   work_id: string | null
   status: string
   notes: string | null
@@ -125,6 +126,7 @@ export function useEquipmentAlertCount() {
 
 const emptyForm = () => ({
   name: '',
+  quantity: '1',
   code: '',
   category: '',
   purchase_date: '',
@@ -205,6 +207,7 @@ export default function EquipmentPanel() {
   const soon = rows.filter((r) => r.st.maintenanceAlert === 'soon')
   const replace = rows.filter((r) => r.st.replaceAlert)
   const inUse = rows.filter((r) => r.eq.status !== 'retired').length
+  const units = rows.filter((r) => r.eq.status !== 'retired').reduce((sum, r) => sum + (r.eq.quantity ?? 1), 0)
 
   const openCreate = () => {
     setEditingId(null)
@@ -218,6 +221,7 @@ export default function EquipmentPanel() {
       code: e.code ?? '',
       category: e.category ?? '',
       purchase_date: e.purchase_date ?? '',
+      quantity: String(e.quantity ?? 1),
       purchase_value: e.purchase_value ? String(e.purchase_value) : '',
       work_id: e.work_id ?? NO_WORK,
       status: e.status,
@@ -234,8 +238,9 @@ export default function EquipmentPanel() {
     const interval = Math.round(num(form.maintenance_interval_months))
     const initial = Math.round(num(form.initial_maintenance_count))
     const cost = num(form.purchase_value)
-    if (!form.name.trim() || !(interval >= 1) || !(initial >= 0) || Number.isNaN(cost) || cost < 0) {
-      toast({ title: 'Confira os dados', description: 'Informe o nome, o intervalo (meses) e valores válidos.', variant: 'destructive' })
+    const qty = Math.round(num(form.quantity))
+    if (!form.name.trim() || !(qty >= 1) || !(interval >= 1) || !(initial >= 0) || Number.isNaN(cost) || cost < 0) {
+      toast({ title: 'Confira os dados', description: 'Informe o nome, a quantidade (mínimo 1), o intervalo (meses) e valores válidos.', variant: 'destructive' })
       return
     }
     if (form.purchase_date && form.purchase_date > today) {
@@ -248,6 +253,7 @@ export default function EquipmentPanel() {
     }
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
+      quantity: qty,
       code: form.code.trim() || null,
       category: form.category.trim() || null,
       purchase_date: form.purchase_date || null,
@@ -406,15 +412,16 @@ export default function EquipmentPanel() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Equipamentos', value: inUse, tone: '' },
-          { label: 'Manutenção vencida', value: overdue.length, tone: overdue.length ? 'text-rose-600' : '' },
-          { label: `Vence em ${DUE_SOON_DAYS} dias`, value: soon.length, tone: soon.length ? 'text-amber-600' : '' },
-          { label: `${REPLACE_THRESHOLD}+ manutenções`, value: replace.length, tone: replace.length ? 'text-orange-600' : '' },
+          { label: 'Equipamentos', value: inUse, tone: '', sub: `${units} unidade(s) no total` },
+          { label: 'Manutenção vencida', value: overdue.length, tone: overdue.length ? 'text-rose-600' : '', sub: '' },
+          { label: `Vence em ${DUE_SOON_DAYS} dias`, value: soon.length, tone: soon.length ? 'text-amber-600' : '', sub: '' },
+          { label: `${REPLACE_THRESHOLD}+ manutenções`, value: replace.length, tone: replace.length ? 'text-orange-600' : '', sub: '' },
         ].map((c) => (
           <Card key={c.label} className="shadow-none border">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground font-medium uppercase">{c.label}</p>
               <h3 className={`text-2xl font-bold mt-1 ${c.tone}`}>{c.value}</h3>
+              {c.sub && <p className="text-xs text-muted-foreground mt-0.5">{c.sub}</p>}
             </CardContent>
           </Card>
         ))}
@@ -446,6 +453,7 @@ export default function EquipmentPanel() {
             <TableHeader>
               <TableRow>
                 <TableHead>Equipamento</TableHead>
+                <TableHead className="text-center">Qtd.</TableHead>
                 <TableHead>Obra / local</TableHead>
                 <TableHead>Comprado em</TableHead>
                 <TableHead className="text-center">Manutenções</TableHead>
@@ -459,7 +467,7 @@ export default function EquipmentPanel() {
             <TableBody>
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">
                     Nenhum equipamento encontrado.
                   </TableCell>
                 </TableRow>
@@ -472,6 +480,7 @@ export default function EquipmentPanel() {
                       {[eq.code, eq.category].filter(Boolean).join(' · ') || '-'}
                     </div>
                   </TableCell>
+                  <TableCell className="text-center font-medium">{eq.quantity ?? 1}</TableCell>
                   <TableCell>{eq.works?.name ?? 'Depósito'}</TableCell>
                   <TableCell className="whitespace-nowrap">{eq.purchase_date ? formatDate(eq.purchase_date) : '-'}</TableCell>
                   <TableCell className="text-center">
@@ -548,9 +557,15 @@ export default function EquipmentPanel() {
             <DialogDescription>Dados da compra e do controle de manutenção.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="eq-name">Nome *</Label>
-              <Input id="eq-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Betoneira 400 L" />
+            <div className="grid grid-cols-[1fr_7rem] gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="eq-name">Nome *</Label>
+                <Input id="eq-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Betoneira 400 L" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="eq-qty">Quantidade *</Label>
+                <Input id="eq-qty" type="number" required min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -569,7 +584,7 @@ export default function EquipmentPanel() {
               </div>
               {canSeeValues && (
                 <div className="space-y-2">
-                  <Label htmlFor="eq-value">Valor da compra (R$)</Label>
+                  <Label htmlFor="eq-value">Valor total da compra (R$)</Label>
                   <Input id="eq-value" inputMode="decimal" placeholder="0,00" value={form.purchase_value} onChange={(e) => setForm({ ...form, purchase_value: e.target.value })} />
                 </div>
               )}
