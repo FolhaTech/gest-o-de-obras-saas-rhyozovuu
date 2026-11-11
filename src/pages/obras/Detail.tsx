@@ -25,7 +25,6 @@ import { useToast } from '@/hooks/use-toast'
 import OverviewTab from './tabs/OverviewTab'
 import StagesTab from './tabs/StagesTab'
 import MaterialsTab from './tabs/MaterialsTab'
-import RentedMaterialsTab from './tabs/RentedMaterialsTab'
 import MaterialLossesPanel from '@/components/materials/MaterialLossesPanel'
 import RevenuesTab from './tabs/RevenuesTab'
 import ScheduleTab from './tabs/ScheduleTab'
@@ -380,12 +379,6 @@ export default function ObraDetail() {
           >
             Materiais Alocados
           </TabsTrigger>
-          <TabsTrigger
-            value="locados"
-            className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
-          >
-            Materiais Locados
-          </TabsTrigger>
           {canSeeValues && (
             <TabsTrigger
               value="receitas"
@@ -428,9 +421,6 @@ export default function ObraDetail() {
           {activeTab === 'materiais' && (
             <MaterialsTab obraId={obra.id} workArea={obra.total_area || 0} />
           )}
-        </TabsContent>
-        <TabsContent value="locados" className="mt-0">
-          {activeTab === 'locados' && <RentedMaterialsTab obraId={obra.id} />}
         </TabsContent>
         <TabsContent value="perdas" className="mt-0">
           {activeTab === 'perdas' && <MaterialLossesPanel obraId={obra.id} />}
