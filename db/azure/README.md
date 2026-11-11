@@ -50,6 +50,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/14_rls_por_papel.sql  # permissões p
 psql "$ADMIN_URL/gestao_obras" -f db/azure/15_prestadores_responsavel.sql  # Prestadores (Equipes) também são opção de Pessoa Responsável (linha espelho em team_members); teste: node db/azure/test-prestadores-responsavel.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/16_equipamentos.sql  # Equipamentos (Materiais): compra, manutenções e alertas; teste: node db/azure/test-equipamentos.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/17_equipamentos_quantidade.sql  # quantidade de unidades por equipamento
+psql "$ADMIN_URL/gestao_obras" -f db/azure/18_veiculos.sql  # Veículos: cadastro, manutenções e notas de combustível (só Admin e Gestor); teste: node db/azure/test-veiculos.mjs
 ```
 
 ## Desenvolvimento local

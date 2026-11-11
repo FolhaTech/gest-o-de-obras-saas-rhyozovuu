@@ -17,6 +17,7 @@ import ObraDetail from './pages/obras/Detail'
 import DiarioObraList from './pages/diario-obra/List'
 import EquipesList from './pages/equipes/List'
 import MateriaisList from './pages/materiais/List'
+import VeiculosList from './pages/veiculos/List'
 import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
@@ -67,6 +68,7 @@ const App = () => (
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
                 <Route path="/equipes" element={<EquipesList />} />
+                <Route path="/veiculos" element={<VeiculosList />} />
                 {/* Páginas 100% financeiras: só o Administrador (o Gestor não vê valores) */}
                 <Route element={<RoleRoute allowedRoles={['admin']} />}>
                   <Route path="/despesas" element={<DespesasList />} />

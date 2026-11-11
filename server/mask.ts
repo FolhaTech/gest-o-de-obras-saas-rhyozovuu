@@ -29,7 +29,8 @@ export const VALUE_KEYS = new Set([
   'cost_period',
   'reward_amount',
   'purchase_value', // equipment: valor da compra
-  'maintenance_cost', // equipment_maintenances: custo da manutenção
+  'maintenance_cost', // equipment_maintenances e vehicle_maintenances: custo da manutenção
+  'price_per_liter', // vehicle_fuel_receipts (o total da nota usa total_value)
 ])
 /** Escondida só do Prestador (o Gestor tem as mesmas permissões do administrador). */
 export const PRESTADOR_ONLY_KEYS = new Set(['pix_key'])
