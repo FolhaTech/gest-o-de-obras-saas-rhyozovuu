@@ -161,7 +161,9 @@ const ranon = await mk0().from('work_rented_materials').select('id')
 ok('anon não lê materiais locados', !!ranon.error || ranon.data.length === 0)
 
 // --- perdas de materiais e metas (equipe interna) ---
-const mat0 = (await sb.from('materials').select('id,name,unit_price').limit(1).single()).data
+// material de teste próprio (o catálogo real pode estar vazio); sai no final pelo nome "smoke-mat%"
+await db.query("insert into public.materials (name, unit_of_measure, unit_price, stock_quantity) values ('smoke-mat-perda', 'kg', 12, 100)")
+const mat0 = (await sb.from('materials').select('id,name,unit_price').eq('name', 'smoke-mat-perda').single()).data
 const loss = await sb.from('material_losses').insert({ work_id: work.id, material_id: mat0.id, material_name: mat0.name, quantity: 2.5, unit: 'kg', unit_cost: mat0.unit_price ?? 0, reason: 'quebra' }).select('id, created_by, works:work_id(id, name), reporter:created_by(full_name, email)').single()
 ok('registra perda de material (em nome de quem lançou)', !loss.error && loss.data.created_by === smokeUserId && loss.data.works?.id === work.id && !!loss.data.reporter?.email, loss.error?.message)
 const lossBad = await sb.from('material_losses').insert({ work_id: work.id, material_name: 'x', quantity: 1, reason: 'invalido' })
@@ -266,6 +268,22 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador vê os itens alocados, mas sem os valores', !allocPrest.error && allocPrest.data.length === 1 && Number(allocPrest.data[0].quantity) === 3 && pv.length === 0, allocPrest.error?.message)
   const vP = await vehSel()
   ok('prestador não enxerga veículos', !vP.error && vP.data.length === 0, vP.error?.message)
+  // manutenção da casa: o colaborador faz check-in, lança material (baixa no estoque) e faz check-out
+  const manMat = (await db.query("insert into public.materials (name, unit_of_measure, stock_quantity) values ('smoke-mat-man', 'kg', 2) returning id")).rows[0].id
+  const manStock = async () => Number((await db.query('select stock_quantity from public.materials where id = $1', [manMat])).rows[0].stock_quantity)
+  const ci = await sb.from('house_maintenances').insert({ work_id: work.id, service_type: 'Diarista', performed_by: 'smoke-man', status: 'in_progress' }).select('id, status, check_in_at, check_out_at, created_by').single()
+  ok('colaborador faz check-in (hora de entrada do servidor)', !ci.error && ci.data.status === 'in_progress' && !!ci.data.check_in_at && ci.data.check_out_at === null && ci.data.created_by === smokeUserId, ci.error?.message)
+  const manTooMuch = await sb.from('house_maintenance_materials').insert({ maintenance_id: ci.data?.id, material_id: manMat, quantity: 5 })
+  ok('material acima do estoque é recusado com mensagem clara', !!manTooMuch.error && /Estoque insuficiente/.test(manTooMuch.error.message), manTooMuch.error?.message)
+  ok('...e o estoque não mexe', (await manStock()) === 2)
+  const manUse = await sb.from('house_maintenance_materials').insert({ maintenance_id: ci.data?.id, material_id: manMat, quantity: 1 }).select('material_name, unit, quantity').single()
+  ok('material dentro do estoque dá baixa (2 → 1)', !manUse.error && manUse.data.material_name === 'smoke-mat-man' && (await manStock()) === 1, manUse.error?.message)
+  const co = await sb.from('house_maintenances').update({ status: 'done' }).eq('id', ci.data?.id).select('status, check_in_at, check_out_at').single()
+  ok('check-out grava a hora de saída (depois da entrada)', !co.error && co.data.status === 'done' && new Date(co.data.check_out_at) >= new Date(co.data.check_in_at), co.error?.message)
+  const manList = await sb.from('house_maintenances').select('id, house_maintenance_materials(material_name, quantity)').eq('id', ci.data?.id)
+  ok('a lista traz a manutenção com os materiais usados (embed)', !manList.error && manList.data.length === 1 && [manList.data[0].house_maintenance_materials].flat().length === 1)
+  const manDel = await sb.from('house_maintenances').delete().eq('id', ci.data?.id).select('id')
+  ok('colaborador exclui a manutenção dele e o material volta ao estoque (1 → 2)', !manDel.error && manDel.data.length === 1 && (await manStock()) === 2, manDel.error?.message)
   const mine = await sb.from('planner_tasks').select('id,assignee_id')
   ok('prestador vê só as tarefas atribuídas a ele', !mine.error && mine.data.length > 0 && mine.data.length < allTasks && mine.data.every((t) => t.assignee_id === mA.id), `${mine.data?.length} de ${allTasks}`)
   const others = await sb.from('planner_tasks').select('id').eq('assignee_id', mB.id)
@@ -356,6 +374,8 @@ const fn = await sb.functions.invoke('generate-composition', { body: { serviceNa
 ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.materials), fn.error?.message)
 
 await db.query("delete from public.equipment where name like 'smoke-equip%'")
+await db.query("delete from public.house_maintenances where performed_by = 'smoke-man'")
+await db.query("delete from public.materials where name like 'smoke-mat%'") // as movimentações saem em cascata
 await db.query("delete from public.vehicles where plate like 'SMK%'") // manutenções e abastecimentos saem em cascata
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
 await db.query("delete from public.work_stages where name like 'smoke-%'") // o card espelho sai em cascata

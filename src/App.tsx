@@ -18,6 +18,7 @@ import DiarioObraList from './pages/diario-obra/List'
 import EquipesList from './pages/equipes/List'
 import MateriaisList from './pages/materiais/List'
 import VeiculosList from './pages/veiculos/List'
+import ManutencaoList from './pages/manutencao/List'
 import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/obras/:id" element={<ObraDetail />} />
               <Route path="/diario-obra" element={<DiarioObraList />} />
               <Route path="/materiais" element={<MateriaisList />} />
+              <Route path="/manutencao" element={<ManutencaoList />} />
               <Route path="/manual" element={<ManualPage />} />
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
