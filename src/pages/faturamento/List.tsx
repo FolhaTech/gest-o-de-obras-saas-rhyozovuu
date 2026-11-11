@@ -12,7 +12,7 @@ import TeamPaymentsPanel from './TeamPaymentsPanel'
 export default function FaturamentoList() {
   const { role, canSeeBilling } = useAuth()
   const [newCount, setNewCount] = useState(0)
-  const isFinance = role === 'admin' || role === 'financeiro'
+  const isFinance = role === 'financeiro' // só o financeiro atende: o contador de pendentes é dele
 
   return (
     <div className="space-y-6">

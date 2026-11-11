@@ -400,7 +400,7 @@ export default function ManualPage() {
             ],
             [
               'Financeiro',
-              'Acessa somente o Faturamento: recebe as solicitações de compra feitas pelos usuários (Faturamento → Compras), atende, cota e registra a compra, e controla o Pagamento (Equipe).',
+              'Acessa somente o Faturamento: é o único que atende as solicitações de compra feitas pelos usuários (Faturamento → Compras: cota, aprova e registra a compra) e controla o Pagamento (Equipe). Quem solicitou acompanha o pedido como “Pendente pelo financeiro” até ser atendido.',
             ],
             [
               'Prestador (colaborador)',

@@ -86,7 +86,7 @@ try {
   await as('obras_authenticated', req1.id)
   ok('edita a própria solicitação enquanto está "solicitada"', (await attempt("update purchase_requests set quantity = 12, notes = 'urgente' where id = $1", [row.id])).rowCount === 1)
   const hack = await attempt("update purchase_requests set status = 'approved' where id = $1", [row.id])
-  ok('não aprova a própria solicitação', /só pode manter a solicitação ou cancelá-la/.test(hack.error?.message ?? ''), hack.error?.message)
+  ok('não aprova a própria solicitação (só o financeiro atende)', /Somente o financeiro atende/.test(hack.error?.message ?? ''), hack.error?.message)
   const keep = await attempt("update purchase_requests set supplier = 'EU', quoted_value = 1, final_value = 1 where id = $1 returning supplier, quoted_value, final_value", [row.id])
   ok('não preenche fornecedor nem valores (ficam como estavam)', keep.rows[0]?.supplier === null && keep.rows[0].quoted_value === null && keep.rows[0].final_value === null)
   await as('obras_authenticated', other.id)
@@ -94,6 +94,15 @@ try {
   ok('...nem exclui', (await attempt('delete from purchase_requests where id = $1', [row.id])).rowCount === 0)
   await as('obras_authenticated', ges.id)
   ok('o gestor vê mas não altera as dos outros', (await attempt("update purchase_requests set status = 'approved' where id = $1", [row.id])).rowCount === 0)
+
+  // o ADMIN acompanha, mas não atende (só o Financeiro)
+  await as('obras_authenticated', admin.id)
+  ok('o admin NÃO atende a solicitação de outro usuário', (await attempt("update purchase_requests set status = 'approved', supplier = 'ADMIN', final_value = 1 where id = $1", [row.id])).rowCount === 0)
+  ok('o admin não grava valores na solicitação', (await attempt('update purchase_requests set quoted_value = 5 where id = $1', [row.id])).rowCount === 0)
+  const adminOwn = (await one("insert into purchase_requests (item, status, supplier, final_value) values ('PEDIDO DO ADMIN', 'purchased', 'X', 1) returning id, status, supplier, final_value")).id
+  const adminOwnRow = await one('select status, supplier, final_value from purchase_requests where id = $1', [adminOwn])
+  ok('o admin, quando solicita, entra como qualquer usuário (pendente pelo financeiro, sem parte do financeiro)', adminOwnRow.status === 'requested' && adminOwnRow.supplier === null && adminOwnRow.final_value === null)
+  ok('o admin exclui uma solicitação (limpeza)', (await attempt('delete from purchase_requests where id = $1', [adminOwn])).rowCount === 1)
 
   // ---------------------------------------------------------------- o financeiro atende
   await as('obras_authenticated', fin.id)

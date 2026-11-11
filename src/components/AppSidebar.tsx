@@ -64,7 +64,7 @@ export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
   const [newPurchases, setNewPurchases] = useState(0)
-  const seesPurchases = role === 'admin' || role === 'financeiro'
+  const seesPurchases = role === 'financeiro' // só o financeiro atende: o contador de pendentes é dele
   useEffect(() => {
     if (!seesPurchases) return
     let alive = true

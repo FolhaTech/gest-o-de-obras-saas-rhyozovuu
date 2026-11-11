@@ -5,7 +5,7 @@ export type PurchaseStatus = 'requested' | 'quoting' | 'approved' | 'purchased' 
 export type Urgency = 'low' | 'normal' | 'high' | 'urgent'
 
 export const STATUS_LABEL: Record<PurchaseStatus, string> = {
-  requested: 'Solicitada',
+  requested: 'Pendente pelo financeiro',
   quoting: 'Em cotação',
   approved: 'Aprovada',
   purchased: 'Comprada',
@@ -14,7 +14,7 @@ export const STATUS_LABEL: Record<PurchaseStatus, string> = {
   cancelled: 'Cancelada',
 }
 
-/** Situações que o financeiro escolhe ao atender (cancelar é do solicitante). */
+/** Situações que o financeiro escolhe ao atender (cancelar é do solicitante). "requested" = voltar a pendente. */
 export const FINANCE_STATUSES: PurchaseStatus[] = ['requested', 'quoting', 'approved', 'purchased', 'delivered', 'rejected']
 
 export const URGENCY_LABEL: Record<Urgency, string> = {
