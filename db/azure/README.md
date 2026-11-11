@@ -54,6 +54,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/18_veiculos.sql  # Veículos: cadastr
 psql "$ADMIN_URL/gestao_obras" -f db/azure/19_planner_historico_progresso.sql  # histórico do progresso de cada card do Planner (quando mudou, quem mudou, dias até 100%); teste: node db/azure/test-planner-historico.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/20_excluir_material.sql  # excluir material usado em composição de obra (o retrato sai junto); com consumo registrado continua protegido; teste: node db/azure/test-excluir-material.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/21_manutencao_casas.sql  # Manutenção das casas: check-in/check-out (hora do servidor), materiais usados com baixa no estoque; teste: node db/azure/test-manutencao-casas.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/22_faturamento.sql  # papel Financeiro, Faturamento > Compras (solicitações) e Pagamento (Equipe); teste: node db/azure/test-faturamento.mjs
 ```
 
 ## Desenvolvimento local

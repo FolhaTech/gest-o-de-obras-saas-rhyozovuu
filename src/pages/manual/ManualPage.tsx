@@ -362,7 +362,7 @@ export default function ManualPage() {
         <Step n={3}>
           Para <strong>alterar o nível de acesso</strong>, use o seletor da coluna{' '}
           <strong>“Alterar Nível de Acesso”</strong> e escolha entre <strong>Admin</strong>,{' '}
-          <strong>Gestor</strong> ou <strong>Prestador</strong>. A mudança vale a partir do próximo
+          <strong>Gestor</strong>, <strong>Financeiro</strong> ou <strong>Prestador</strong>. A mudança vale a partir do próximo
           carregamento do sistema para aquele usuário.
         </Step>
         <Tip kind="warn">
@@ -396,11 +396,15 @@ export default function ManualPage() {
             ],
             [
               'Gestor',
-              'Acesso a todas as áreas operacionais e financeiras: obras, planner, materiais, diário, equipes, despesas, relatórios e catálogo de serviços.',
+              'As mesmas permissões do Admin (obras, planner, materiais, diário, equipes, veículos, manutenção, relatórios e catálogo de serviços), porém sem nenhum indicador de valores (R$). Não acessa Despesas, Airbnb nem o Pagamento (Equipe).',
             ],
             [
-              'Prestador',
-              'Acesso somente a Planner, Obras, Materiais e Diário de Obras. As demais áreas (financeiro, equipes, configurações) ficam bloqueadas.',
+              'Financeiro',
+              'Acessa somente o Faturamento: recebe as solicitações de compra feitas pelos usuários (Faturamento → Compras), atende, cota e registra a compra, e controla o Pagamento (Equipe).',
+            ],
+            [
+              'Prestador (colaborador)',
+              'Acessa Planner (só os cards dele), Obras, Materiais, Diário de Obra, Manutenção das casas (check-in/check-out) e pode solicitar compras em Faturamento → Compras. Não vê valores.',
             ],
           ]}
         />
@@ -410,6 +414,9 @@ export default function ManualPage() {
           </Badge>
           <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border border-blue-200">
             Gestor
+          </Badge>
+          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border border-emerald-200">
+            Financeiro
           </Badge>
           <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-200">
             Prestador

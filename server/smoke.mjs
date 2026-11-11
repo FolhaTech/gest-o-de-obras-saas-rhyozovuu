@@ -255,6 +255,15 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const vAf = [vA?.vehicle_fuel_receipts].flat()[0]
   ok('admin lê o veículo com todos os valores', !vAdmin.error && Number(vA?.purchase_value) === 90000 && Number(vAm?.maintenance_cost) === 150 && Number(vAf?.total_value) === 195 && Number(vAf?.price_per_liter) === 6.5, vAdmin.error?.message)
   ok('o km do veículo acompanha o maior km lançado', vA?.odometer_km === 1200, String(vA?.odometer_km))
+  // solicitação de compra e pagamento da equipe de teste (Faturamento), com valores
+  const smkMember = (await db.query('select id from public.team_members order by name limit 1')).rows[0].id
+  const reqId = (await db.query("insert into public.purchase_requests (item, quantity, unit, requested_by, status, supplier, quoted_value, final_value) values ('smoke-compra', 3, 'un', $1, 'quoting', 'Loja Smoke', 150, 140) returning id", [smokeUserId])).rows[0].id
+  await db.query("insert into public.team_payments (member_id, reference, payment_amount) values ($1, 'smoke-pagamento', 321)", [smkMember])
+  const reqSel = () => sb.from('purchase_requests').select('id, item, status, supplier, quoted_value, final_value').eq('id', reqId)
+  const reqAdmin = await reqSel()
+  ok('admin lê a solicitação de compra com os valores', !reqAdmin.error && reqAdmin.data.length === 1 && Number(reqAdmin.data[0].quoted_value) === 150 && Number(reqAdmin.data[0].final_value) === 140, reqAdmin.error?.message)
+  const payAdmin = await sb.from('team_payments').select('reference, payment_amount').eq('reference', 'smoke-pagamento')
+  ok('admin lê o pagamento da equipe com o valor', !payAdmin.error && payAdmin.data.length === 1 && Number(payAdmin.data[0].payment_amount) === 321, payAdmin.error?.message)
   // admin cria usuário (o cadastro aberto vem fechado) com o papel escolhido
   const nuEmail = `smoke-nu-${Date.now()}@example.com`
   const cu = await sb.functions.invoke('create-user', { body: { email: nuEmail, password: 'segredo123', fullName: 'Novo Smoke', role: 'gestor' } })
@@ -271,6 +280,14 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador vê os itens alocados, mas sem os valores', !allocPrest.error && allocPrest.data.length === 1 && Number(allocPrest.data[0].quantity) === 3 && pv.length === 0, allocPrest.error?.message)
   const vP = await vehSel()
   ok('prestador não enxerga veículos', !vP.error && vP.data.length === 0, vP.error?.message)
+  const reqP = await reqSel()
+  ok('o solicitante vê a própria solicitação, sem valores (mas vê fornecedor e situação)', !reqP.error && reqP.data.length === 1 && reqP.data[0].supplier === 'Loja Smoke' && !('quoted_value' in reqP.data[0]) && !('final_value' in reqP.data[0]), reqP.error?.message)
+  const newReq = await sb.from('purchase_requests').insert({ item: 'smoke-pedido', quantity: 2, unit: 'un', status: 'approved', supplier: 'Fornecedor Falso', quoted_value: 9, final_value: 9 }).select('id, status, supplier, quoted_value').single()
+  ok('o prestador solicita compra e a parte do financeiro é ignorada (situação "solicitada")', !newReq.error && newReq.data.status === 'requested' && newReq.data.supplier === null && !('quoted_value' in newReq.data), newReq.error?.message)
+  const reqEdit = await sb.from('purchase_requests').update({ status: 'approved' }).eq('id', newReq.data?.id).select('id')
+  ok('o prestador não aprova a própria solicitação', !!reqEdit.error && /cancelá-la/.test(reqEdit.error.message), reqEdit.error?.message)
+  const payP = await sb.from('team_payments').select('id')
+  ok('o prestador não enxerga o pagamento da equipe', !payP.error && payP.data.length === 0)
   // manutenção da casa: o colaborador faz check-in, lança material (baixa no estoque) e faz check-out
   const manMat = (await db.query("insert into public.materials (name, unit_of_measure, stock_quantity) values ('smoke-mat-man', 'kg', 2) returning id")).rows[0].id
   const manStock = async () => Number((await db.query('select stock_quantity from public.materials where id = $1', [manMat])).rows[0].stock_quantity)
@@ -363,6 +380,34 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('gestor registra abastecimento (litros ficam, o valor enviado é descartado)', !vGIns.error && Number(vGIns.data.liters) === 12 && vGKept?.t === 0 && vGKept?.p === 0, vGIns.error?.message)
   const vGFilter = await sb.from('vehicle_fuel_receipts').select('id').gt('total_value', 100)
   ok('gestor não descobre o valor da nota por filtro', vGFilter.error?.code === '42501', vGFilter.error?.code)
+  const reqG = await reqSel()
+  ok('o gestor vê a solicitação de compra, sem os valores', !reqG.error && reqG.data.length === 1 && reqG.data[0].item === 'smoke-compra' && !('quoted_value' in reqG.data[0]) && !('final_value' in reqG.data[0]), reqG.error?.message)
+  const reqGFilter = await sb.from('purchase_requests').select('id').gt('quoted_value', 100)
+  ok('o gestor não descobre o valor cotado por filtro', reqGFilter.error?.code === '42501', reqGFilter.error?.code)
+  const payG = await sb.from('team_payments').select('id')
+  ok('o gestor não enxerga o pagamento da equipe', !payG.error && payG.data.length === 0)
+
+  // ---- papel Financeiro: valores do Faturamento sim; valores gerais e áreas da equipe interna não
+  await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
+  const reqF = await reqSel()
+  ok('o financeiro vê a solicitação de compra COM os valores', !reqF.error && reqF.data.length === 1 && Number(reqF.data[0].quoted_value) === 150 && Number(reqF.data[0].final_value) === 140, reqF.error?.message)
+  const payF = await sb.from('team_payments').select('reference, payment_amount').eq('reference', 'smoke-pagamento')
+  ok('o financeiro vê o pagamento da equipe com o valor', !payF.error && payF.data.length === 1 && Number(payF.data[0].payment_amount) === 321, payF.error?.message)
+  const worksF = await sb.from('works').select('*').limit(2)
+  ok('o financeiro NÃO vê os valores gerais das obras', !worksF.error && worksF.data.length > 0 && worksF.data.every((w) => w.name && !('contracted_value' in w) && !('budget_planned' in w)), worksF.error?.message)
+  const memF = await sb.from('team_members').select('*').limit(2)
+  ok('o financeiro NÃO vê a diária e o salário da equipe', !memF.error && memF.data.length > 0 && memF.data.every((m) => !('daily_cost' in m) && !('fixed_salary' in m)))
+  const memPix = await sb.from('team_members').select('id, name, pix_key').limit(2)
+  ok('o financeiro vê a chave PIX (para pagar)', !memPix.error && memPix.data.length > 0 && memPix.data.every((m) => 'pix_key' in m), memPix.error?.message)
+  const atend = await sb.from('purchase_requests').update({ status: 'purchased', final_value: 138, supplier: 'Loja Smoke 2' }).eq('id', reqId).select('status, final_value, handled_by, purchased_at').single()
+  ok('o financeiro atende: marca como comprada e registra o valor', !atend.error && atend.data.status === 'purchased' && Number(atend.data.final_value) === 138 && atend.data.handled_by === smokeUserId && !!atend.data.purchased_at, atend.error?.message)
+  const newPay = await sb.from('team_payments').insert({ member_id: smkMember, reference: 'smoke-pagamento-2', payment_amount: 50 }).select('member_name, status').single()
+  ok('o financeiro lança pagamento da equipe', !newPay.error && newPay.data.status === 'pending' && !!newPay.data.member_name, newPay.error?.message)
+  const finWork = await sb.from('works').insert({ name: 'smoke-nao-pode' }).select('id')
+  ok('o financeiro não cria obra (não é equipe interna)', !!finWork.error, finWork.error?.message)
+  const finVeh = await sb.from('vehicles').select('id')
+  ok('o financeiro não enxerga veículos', !finVeh.error && finVeh.data.length === 0)
+  await db.query("update public.profiles set role = 'gestor' where id = $1", [smokeUserId])
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
@@ -379,6 +424,8 @@ ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.
 await db.query("delete from public.equipment where name like 'smoke-equip%'")
 await db.query("delete from public.house_maintenances where performed_by = 'smoke-man'")
 await db.query("delete from public.materials where name like 'smoke-mat%'") // as movimentações saem em cascata
+await db.query("delete from public.purchase_requests where item like 'smoke-%'")
+await db.query("delete from public.team_payments where reference like 'smoke-%'")
 await db.query("delete from public.vehicles where plate like 'SMK%'") // manutenções e abastecimentos saem em cascata
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
 await db.query("delete from public.work_stages where name like 'smoke-%'") // o card espelho sai em cascata

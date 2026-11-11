@@ -108,7 +108,7 @@ async function setUserPassword(
   })
 }
 
-const ROLES = new Set(['admin', 'gestor', 'prestador'])
+const ROLES = new Set(['admin', 'gestor', 'prestador', 'financeiro'])
 
 /** Admin cria um usuário (o cadastro aberto fica fechado). Entra já confirmado e com o papel escolhido. */
 async function createUser(
