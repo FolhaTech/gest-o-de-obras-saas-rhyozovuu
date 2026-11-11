@@ -88,7 +88,8 @@ try {
   const dBad = await attempt("insert into work_diaries (work_id, date, notes, author_id) values ($1, current_date, 'forjado', $2)", [work, admin.id])
   ok('prestador não registra diário em nome de outro', dBad.error?.code === '42501', dBad.error?.code)
   ok('prestador altera o próprio diário', (await attempt("update work_diaries set notes = 'ok' where id = $1", [d1.rows[0].id])).rowCount === 1)
-  ok('prestador só vê o card dele no Planner', (await q('select id from planner_tasks')).every((t) => t.id === tA))
+  const seenP = (await q('select id from planner_tasks')).map((t) => t.id)
+  ok('prestador só vê os cards do membro vinculado (vê o dele, não o de outro)', seenP.includes(tA) && !seenP.includes(tB))
 
   // ---------------------------------------------------------------- gestor
   await as('obras_authenticated', gestor.id)

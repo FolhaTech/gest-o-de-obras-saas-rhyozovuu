@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Search, Edit, Trash } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import MaterialLossesPanel from '@/components/materials/MaterialLossesPanel'
+import EquipmentPanel, { useEquipmentAlertCount } from '@/components/materials/EquipmentPanel'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -41,8 +42,9 @@ export default function MateriaisList() {
   const { toast } = useToast()
 
   const [tab, setTab] = useState('all')
-  // Estoque (catálogo) ou Controle de Perdas
-  const [view, setView] = useState<'estoque' | 'perdas'>('estoque')
+  // Estoque (catálogo), Controle de Perdas ou Equipamentos
+  const [view, setView] = useState<'estoque' | 'perdas' | 'equipamentos'>('estoque')
+  const equipmentAlerts = useEquipmentAlertCount()
   const [search, setSearch] = useState('')
 
   const [open, setOpen] = useState(false)
@@ -346,9 +348,24 @@ export default function MateriaisList() {
         >
           Controle de Perdas
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={view === 'equipamentos' ? 'default' : 'ghost'}
+          className="h-8 text-xs gap-1.5"
+          onClick={() => setView('equipamentos')}
+        >
+          Equipamentos
+          {equipmentAlerts > 0 && (
+            <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold leading-4 text-white">
+              {equipmentAlerts}
+            </span>
+          )}
+        </Button>
       </div>
 
       {view === 'perdas' && <MaterialLossesPanel />}
+      {view === 'equipamentos' && <EquipmentPanel />}
 
       {view === 'estoque' && (
       <Tabs value={tab} onValueChange={setTab} className="w-full space-y-4">
