@@ -51,6 +51,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/15_prestadores_responsavel.sql  # Pre
 psql "$ADMIN_URL/gestao_obras" -f db/azure/16_equipamentos.sql  # Equipamentos (Materiais): compra, manutenções e alertas; teste: node db/azure/test-equipamentos.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/17_equipamentos_quantidade.sql  # quantidade de unidades por equipamento
 psql "$ADMIN_URL/gestao_obras" -f db/azure/18_veiculos.sql  # Veículos: cadastro, manutenções e notas de combustível (só Admin e Gestor); teste: node db/azure/test-veiculos.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/19_planner_historico_progresso.sql  # histórico do progresso de cada card do Planner (quando mudou, quem mudou, dias até 100%); teste: node db/azure/test-planner-historico.mjs
 ```
 
 ## Desenvolvimento local
