@@ -474,7 +474,11 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja remover este serviço? O histórico de materiais dele também será apagado.'))
       return
-    await supabase.from('work_services').delete().eq('id', id)
+    const { error } = await supabase.from('work_services').delete().eq('id', id)
+    if (error) {
+      toast({ title: 'Não foi possível remover', description: error.message, variant: 'destructive' })
+      return
+    }
     fetchData()
   }
 
