@@ -19,8 +19,6 @@ const db = new pg.Client({
   ssl: { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED !== 'false' },
 })
 await db.connect()
-// Cards que já existiam no Planner (o teste mexe em etapas, o que recria cards espelho; ao final remove os novos)
-const preTasks = (await db.query('select id from public.planner_tasks')).rows.map((r) => r.id)
 
 const API = process.env.API_URL ?? 'http://localhost:3001'
 const anon = process.env.VITE_SUPABASE_ANON_KEY ?? 'anon'
@@ -220,6 +218,8 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const [mA, mB] = (await db.query('select id from public.team_members order by name limit 2')).rows
   const mineId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-meu', $1, $2) returning id", [work.id, mA.id])).rows[0].id
   const theirsId = (await db.query("insert into public.planner_tasks (title, work_id, assignee_id) values ('smoke-dele', $1, $2) returning id", [work.id, mB.id])).rows[0].id
+  // etapa própria do teste: nunca altera etapa real (o card espelho sai junto ao excluir a etapa)
+  const smokeStageId = (await db.query("insert into public.work_stages (work_id, name) values ($1, 'smoke-etapa-rls') returning id", [work.id])).rows[0].id
   const allTasks = (await sb.from('planner_tasks').select('id')).data.length
   const allStages = (await sb.from('work_stages').select('id')).data.length
   // item de planilha (materiais alocados com valores) criado direto no banco; removido no final do bloco
@@ -229,6 +229,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const allocAdmin = await allocSel()
   const av = [allocAdmin.data?.[0]?.work_extra_material_values].flat()[0]
   ok('admin lê os itens alocados com os valores (embed)', !allocAdmin.error && allocAdmin.data.length === 1 && Number(av?.total_cost) === 6, allocAdmin.error?.message)
+  // equipamento de teste (criado no banco) com valor de compra e custo de manutenção
+  const eqId = (await db.query("insert into public.equipment (name, purchase_value) values ('smoke-equip', 500) returning id")).rows[0].id
+  await db.query('insert into public.equipment_maintenances (equipment_id, maintenance_cost, maintenance_date) values ($1, 80, current_date)', [eqId])
+  const eqSel = () => sb.from('equipment').select('id, name, purchase_value, equipment_maintenances(id, maintenance_cost)').eq('id', eqId)
+  const eqAdmin = await eqSel()
+  const eqAdminCost = [eqAdmin.data?.[0]?.equipment_maintenances].flat()[0]?.maintenance_cost
+  ok('admin lê o equipamento com os valores', !eqAdmin.error && Number(eqAdmin.data[0]?.purchase_value) === 500 && Number(eqAdminCost) === 80, eqAdmin.error?.message)
   // admin cria usuário (o cadastro aberto vem fechado) com o papel escolhido
   const nuEmail = `smoke-nu-${Date.now()}@example.com`
   const cu = await sb.functions.invoke('create-user', { body: { email: nuEmail, password: 'segredo123', fullName: 'Novo Smoke', role: 'gestor' } })
@@ -253,7 +260,7 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('prestador vê as etapas do cronograma de todos', !stagesSeen.error && stagesSeen.data.length === allStages, `${stagesSeen.data?.length} etapas`)
   const stIns = await sb.from('work_stages').insert({ work_id: work.id, name: 'smoke-prestador' })
   ok('prestador não cria etapa no cronograma', stIns.error?.code === '42501', stIns.error?.code)
-  const anyStage = stagesSeen.data[0].id
+  const anyStage = smokeStageId
   const stUpd = await sb.from('work_stages').update({ name: 'hack' }).eq('id', anyStage).select()
   ok('prestador não altera etapa', !stUpd.error && stUpd.data.length === 0)
   const stDel = await sb.from('work_stages').delete().eq('id', anyStage).select()
@@ -302,6 +309,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   await db.query('delete from public.works where id = $1', [wid])
   const gCreate = await sb.functions.invoke('create-user', { body: { email: `smoke-x-${Date.now()}@example.com`, password: 'segredo123', role: 'prestador' } })
   ok('gestor não cria usuário', !!gCreate.error)
+  const eqG = await eqSel()
+  const eqGm = [eqG.data?.[0]?.equipment_maintenances].flat()[0]
+  ok('gestor lê equipamento e manutenções SEM os valores', !eqG.error && eqG.data.length === 1 && eqG.data[0].name === 'smoke-equip' && !('purchase_value' in eqG.data[0]) && !!eqGm && !('maintenance_cost' in eqGm), eqG.error?.message)
+  const eqGIns = await sb.from('equipment').insert({ name: 'smoke-equip-g', purchase_value: 99 }).select('id, name, purchase_value').single()
+  ok('gestor cadastra equipamento (o valor é descartado)', !eqGIns.error && eqGIns.data.name === 'smoke-equip-g' && !('purchase_value' in eqGIns.data), eqGIns.error?.message)
+  const eqGKept = (await db.query("select purchase_value::int v from public.equipment where name = 'smoke-equip-g'")).rows[0]?.v
+  ok('o valor enviado pelo gestor não foi gravado', eqGKept === 0, `valor=${eqGKept}`)
   const gestorStage = await sb.from('work_stages').update({ notes: 'ok' }).eq('id', anyStage).select()
   ok('gestor continua alterando o cronograma', !gestorStage.error && gestorStage.data.length === 1)
   await sb.from('work_stages').update({ notes: null }).eq('id', anyStage)
@@ -315,8 +329,10 @@ const bigName = `smoke/big-${Date.now()}.jpg`
 const fn = await sb.functions.invoke('generate-composition', { body: { serviceName: 'Teste', unit: 'm2' } })
 ok('functions.invoke generate-composition', !fn.error && Array.isArray(fn.data?.materials), fn.error?.message)
 
+await db.query("delete from public.equipment where name like 'smoke-equip%'")
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
-await db.query('delete from public.planner_tasks where not (id = any($1::uuid[]))', [preTasks])
+await db.query("delete from public.work_stages where name like 'smoke-%'") // o card espelho sai em cascata
+await db.query("delete from public.planner_tasks where title like 'smoke-%'")
 // remove o usuário de teste (e o perfil/dados dele em cascata); se algo ainda o referenciar, ele fica
 await db.query('delete from auth.users where id = $1', [smokeUserId]).catch((e) => console.log('usuário de teste mantido:', e.message))
 await db.end()
