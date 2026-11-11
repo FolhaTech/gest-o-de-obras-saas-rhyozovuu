@@ -1,10 +1,11 @@
-export type AppRole = 'admin' | 'gestor' | 'prestador'
+export type AppRole = 'admin' | 'gestor' | 'prestador' | 'financeiro'
 
 /**
  * Normaliza qualquer valor vindo do banco/metadados para uma role canônica:
  * - 'admin' -> 'admin'
  * - 'gestor', 'manager' -> 'gestor'
  * - 'prestador' -> 'prestador'
+ * - 'financeiro', 'finance' -> 'financeiro'
  * - 'engineer' (compatibilidade legado) -> 'gestor'
  * - Padrão de segurança: fallback para 'prestador' ou o default definido
  */
@@ -22,6 +23,7 @@ export function normalizeRole(rawRole?: string | null): AppRole {
   ) {
     return 'gestor'
   }
+  if (lower === 'financeiro' || lower === 'finance') return 'financeiro'
   if (lower === 'prestador' || lower === 'fornecedor' || lower === 'terceirizado') {
     return 'prestador'
   }
@@ -37,6 +39,8 @@ export function getRoleLabel(role: AppRole | string | null | undefined): string 
       return 'Administrador'
     case 'gestor':
       return 'Gestor de Obras'
+    case 'financeiro':
+      return 'Financeiro'
     case 'prestador':
       return 'Prestador'
   }
@@ -47,49 +51,41 @@ export function canSeeValuesFor(role: AppRole | string | null | undefined): bool
   return normalizeRole(role) === 'admin'
 }
 
+/** Valores do Faturamento (compras e pagamento da equipe): Administrador e Financeiro. */
+export function canSeeBillingFor(role: AppRole | string | null | undefined): boolean {
+  const r = normalizeRole(role)
+  return r === 'admin' || r === 'financeiro'
+}
+
 /** Páginas que só existem para quem vê valores (despesas e Airbnb são 100% financeiras). */
 const VALUE_ONLY_PATHS = ['/despesas', '/airbnb']
 
+/** Rotas do Prestador (colaborador): Obras, Planner, Materiais, Diário de Obra, Manutenção das casas e Faturamento > Compras. */
+const PRESTADOR_PATHS = ['/planner', '/obras', '/materiais', '/diario-obra', '/manutencao', '/faturamento']
+
+/** Rotas do Financeiro: só o Faturamento (compras solicitadas e pagamento da equipe). */
+const FINANCEIRO_PATHS = ['/faturamento']
+
+const underPath = (clean: string, base: string) => clean === base || clean.startsWith(base + '/')
+
 /**
  * Rotas permitidas para cada papel.
- * Prestador: Obras (/obras, /obras/:id), Planner (/planner), Materiais (/materiais), Diário de Obra (/diario-obra),
- * Manutenção das casas (/manutencao).
  * Admin: acesso irrestrito. Gestor: tudo, menos as páginas financeiras (despesas e Airbnb).
+ * Prestador: Obras, Planner, Materiais, Diário de Obra, Manutenção e Faturamento (só Compras).
+ * Financeiro: Faturamento. Manual do Sistema: qualquer papel.
  */
 export function canAccessPath(
   role: AppRole | string | null | undefined,
   pathname: string,
 ): boolean {
   const norm = normalizeRole(role)
-  if (norm === 'admin') return true
-  if (norm === 'gestor') {
-    const p = pathname.split('?')[0].split('#')[0]
-    return !VALUE_ONLY_PATHS.some((v) => p === v || p.startsWith(v + '/'))
-  }
-
-  // Normalização do pathname para validação de prefixos
   const cleanPath = pathname.split('?')[0].split('#')[0]
 
-  // Manual do Sistema: acessível a qualquer papel logado
-  if (cleanPath === '/manual' || cleanPath.startsWith('/manual/')) {
-    return true
-  }
+  if (norm === 'admin') return true
+  if (norm === 'gestor') return !VALUE_ONLY_PATHS.some((v) => underPath(cleanPath, v))
 
-  // Rotas permitidas para o Prestador
-  if (
-    cleanPath === '/planner' ||
-    cleanPath.startsWith('/planner/') ||
-    cleanPath === '/obras' ||
-    cleanPath.startsWith('/obras/') ||
-    cleanPath === '/materiais' ||
-    cleanPath.startsWith('/materiais/') ||
-    cleanPath === '/diario-obra' ||
-    cleanPath.startsWith('/diario-obra/') ||
-    cleanPath === '/manutencao' ||
-    cleanPath.startsWith('/manutencao/')
-  ) {
-    return true
-  }
+  if (underPath(cleanPath, '/manual')) return true
 
-  return false
+  const allowed = norm === 'financeiro' ? FINANCEIRO_PATHS : PRESTADOR_PATHS
+  return allowed.some((p) => underPath(cleanPath, p))
 }

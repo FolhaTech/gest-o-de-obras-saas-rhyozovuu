@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { normalizeRole } from '@/lib/roles'
-import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History, KeyRound, UserPlus } from 'lucide-react'
+import { ShieldCheck, HardHat, UserCheck, Shield, Clock, History, KeyRound, UserPlus, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -195,6 +195,11 @@ export default function UsersTab() {
             preços, custos, ROI nem pagamentos.
           </li>
           <li>
+            <strong>Financeiro:</strong> Acessa somente o <strong>Faturamento</strong>: recebe as
+            solicitações de compra feitas pelos usuários (Compras) e controla o Pagamento (Equipe). Não
+            acessa obras, estoque nem os demais valores.
+          </li>
+          <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
             demais áreas ficam bloqueadas). No Planner vê somente os cards em que é a Pessoa Responsável
             (membro da equipe vinculado); no Cronograma vê as etapas de todos, sem alterar.
@@ -244,6 +249,11 @@ export default function UsersTab() {
                         <UserCheck className="h-3 w-3" /> Gestor
                       </Badge>
                     )}
+                    {currentNorm === 'financeiro' && (
+                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 gap-1">
+                        <Wallet className="h-3 w-3" /> Financeiro
+                      </Badge>
+                    )}
                     {currentNorm === 'prestador' && (
                       <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 gap-1">
                         <HardHat className="h-3 w-3" /> Prestador
@@ -274,6 +284,7 @@ export default function UsersTab() {
                       <SelectContent>
                         <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
                         <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
+                        <SelectItem value="financeiro">Financeiro (Faturamento)</SelectItem>
                         <SelectItem value="prestador">
                           Prestador (Planner/Obras/Mat./Diário)
                         </SelectItem>
@@ -375,6 +386,7 @@ export default function UsersTab() {
                 <SelectContent>
                   <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
                   <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
+                  <SelectItem value="financeiro">Financeiro (Faturamento)</SelectItem>
                   <SelectItem value="prestador">Prestador (Planner/Obras/Mat./Diário)</SelectItem>
                 </SelectContent>
               </Select>

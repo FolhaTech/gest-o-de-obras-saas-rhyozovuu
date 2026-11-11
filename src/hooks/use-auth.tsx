@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/types'
-import { AppRole, normalizeRole, canAccessPath, canSeeValuesFor } from '@/lib/roles'
+import { AppRole, normalizeRole, canAccessPath, canSeeValuesFor, canSeeBillingFor } from '@/lib/roles'
 
 export type Profile = Database['public']['Tables']['profiles']['Row'] & {
   /** Membro da equipe vinculado ao usuário (definido por um administrador). */
@@ -16,6 +16,8 @@ interface AuthContextType {
   role: AppRole
   /** Só o administrador vê valores (R$); Gestor e Prestador não. */
   canSeeValues: boolean
+  /** Valores do Faturamento (compras e pagamento da equipe): Admin e Financeiro. */
+  canSeeBilling: boolean
   canAccess: (pathname: string) => boolean
   refreshProfile: () => Promise<void>
   signUp: (email: string, password: string) => Promise<{ data: any; error: any }>
@@ -142,6 +144,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const role: AppRole = normalizeRole(profile?.role || (user?.user_metadata?.role as string))
   const canAccess = (pathname: string) => canAccessPath(role, pathname)
   const canSeeValues = canSeeValuesFor(role)
+  const canSeeBilling = canSeeBillingFor(role)
 
   return (
     <AuthContext.Provider
@@ -151,6 +154,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         profile,
         role,
         canSeeValues,
+        canSeeBilling,
         canAccess,
         refreshProfile,
         signUp,

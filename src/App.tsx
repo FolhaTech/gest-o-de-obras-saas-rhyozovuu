@@ -19,6 +19,7 @@ import EquipesList from './pages/equipes/List'
 import MateriaisList from './pages/materiais/List'
 import VeiculosList from './pages/veiculos/List'
 import ManutencaoList from './pages/manutencao/List'
+import FaturamentoList from './pages/faturamento/List'
 import DespesasList from './pages/despesas/List'
 import RelatoriosList from './pages/relatorios/List'
 import ConfiguracoesList from './pages/configuracoes/List'
@@ -29,14 +30,16 @@ import AccessDenied from './pages/AccessDenied'
 import NotFound from './pages/NotFound'
 
 /**
- * Redireciona a rota raiz ("/") se o usuário for 'prestador':
- * prestadores são encaminhados diretamente para /obras (pois não têm dashboard financeiro/indicadores).
- * Admin e Gestor acessam a tela principal (Index).
+ * Redireciona a rota raiz ("/"): prestadores vão direto para /obras (não têm dashboard) e o financeiro para
+ * /faturamento. Admin e Gestor acessam a tela principal (Index).
  */
 function HomeRoute() {
   const { role } = useAuth()
   if (role === 'prestador') {
     return <Navigate to="/obras" replace />
+  }
+  if (role === 'financeiro') {
+    return <Navigate to="/faturamento" replace />
   }
   return <Index />
 }
@@ -59,13 +62,17 @@ const App = () => (
               <Route path="/" element={<HomeRoute />} />
 
               {/* Seções permitidas para TODOS (inclusive prestador): Planner, Obras, Diário de Obra, Materiais */}
-              <Route path="/planner" element={<PlannerPage />} />
-              <Route path="/obras" element={<ObrasList />} />
-              <Route path="/obras/:id" element={<ObraDetail />} />
-              <Route path="/diario-obra" element={<DiarioObraList />} />
-              <Route path="/materiais" element={<MateriaisList />} />
-              <Route path="/manutencao" element={<ManutencaoList />} />
-              <Route path="/manual" element={<ManualPage />} />
+              {/* Cada papel só entra nas rotas que a regra de papéis (canAccessPath) libera */}
+              <Route element={<RoleRoute />}>
+                <Route path="/planner" element={<PlannerPage />} />
+                <Route path="/obras" element={<ObrasList />} />
+                <Route path="/obras/:id" element={<ObraDetail />} />
+                <Route path="/diario-obra" element={<DiarioObraList />} />
+                <Route path="/materiais" element={<MateriaisList />} />
+                <Route path="/manutencao" element={<ManutencaoList />} />
+                <Route path="/faturamento" element={<FaturamentoList />} />
+                <Route path="/manual" element={<ManualPage />} />
+              </Route>
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>

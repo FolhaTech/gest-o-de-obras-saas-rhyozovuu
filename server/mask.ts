@@ -1,5 +1,5 @@
 /**
- * Valores (R$) só para o administrador.
+ * Valores (R$) só para o administrador (o Financeiro vê apenas os do Faturamento: BILLING_KEYS).
  * As tabelas de valor puro (receitas, despesas, Airbnb, valores dos itens alocados) são fechadas por RLS.
  * Nas tabelas mistas (obras, materiais, equipe, contratos...) a coluna de valor não pode ser escondida por
  * linha, então a API remove essas chaves das respostas e das gravações de quem não é administrador, e recusa
@@ -32,12 +32,22 @@ export const VALUE_KEYS = new Set([
   'maintenance_cost', // equipment_maintenances e vehicle_maintenances: custo da manutenção
   'price_per_liter', // vehicle_fuel_receipts (o total da nota usa total_value)
 ])
+/**
+ * Valores do Faturamento (solicitações de compra e pagamento da equipe): Admin e Financeiro.
+ * O Financeiro vê SÓ estes; os valores gerais acima (obras, materiais, equipe...) ficam escondidos dele também.
+ */
+export const BILLING_KEYS = new Set([
+  'quoted_value', // purchase_requests: valor cotado
+  'final_value', // purchase_requests: valor da compra
+  'payment_amount', // team_payments: valor a pagar / pago
+])
 /** Escondida só do Prestador (o Gestor tem as mesmas permissões do administrador). */
 export const PRESTADOR_ONLY_KEYS = new Set(['pix_key'])
 
-export type Tier = 'admin' | 'gestor' | 'restrito'
+export type Tier = 'admin' | 'financeiro' | 'gestor' | 'restrito'
 
 const GESTOR_ALIASES = new Set(['gestor', 'gerente', 'manager', 'engineer', 'engenheiro'])
+const FINANCEIRO_ALIASES = new Set(['financeiro', 'finance'])
 const cache = new Map<string, { tier: Tier; at: number }>()
 const TTL_MS = Number(process.env.ROLE_CACHE_MS ?? 15_000)
 
@@ -50,12 +60,16 @@ export async function tierOf(caller: Caller): Promise<Tier> {
     const r = await c.query('select lower(btrim(role)) as role from public.profiles where id = $1', [caller.sub])
     return (r.rows[0]?.role as string | undefined) ?? ''
   })
-  const tier: Tier = raw === 'admin' ? 'admin' : GESTOR_ALIASES.has(raw) ? 'gestor' : 'restrito'
+  const tier: Tier = raw === 'admin' ? 'admin' : FINANCEIRO_ALIASES.has(raw) ? 'financeiro' : GESTOR_ALIASES.has(raw) ? 'gestor' : 'restrito'
   cache.set(caller.sub, { tier, at: Date.now() })
   return tier
 }
 
-const hidden = (tier: Tier) => (k: string) => VALUE_KEYS.has(k) || (tier === 'restrito' && PRESTADOR_ONLY_KEYS.has(k))
+const hidden = (tier: Tier) => (k: string) => {
+  if (tier === 'admin') return false
+  if (tier === 'financeiro') return VALUE_KEYS.has(k) // vê só os valores do Faturamento (e a chave PIX, para pagar)
+  return VALUE_KEYS.has(k) || BILLING_KEYS.has(k) || (tier === 'restrito' && PRESTADOR_ONLY_KEYS.has(k))
+}
 
 /** Remove as chaves de valor de qualquer objeto da resposta (inclusive aninhados em embeds). */
 export function maskRows<T>(data: T, tier: Tier): T {

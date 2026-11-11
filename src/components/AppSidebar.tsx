@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { supabase } from '@/lib/supabase/client'
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +29,7 @@ import {
   BookOpenCheck,
   Car,
   Hammer,
+  Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
@@ -49,6 +52,7 @@ const allMenuItems: MenuItem[] = [
   { title: 'Materiais', url: '/materiais', icon: Package },
   { title: 'Manutenção', url: '/manutencao', icon: Hammer },
   { title: 'Veículos', url: '/veiculos', icon: Car },
+  { title: 'Faturamento', url: '/faturamento', icon: Wallet },
   { title: 'Despesas', url: '/despesas', icon: Receipt },
   { title: 'Airbnb', url: '/airbnb', icon: Building2 },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
@@ -59,6 +63,24 @@ const allMenuItems: MenuItem[] = [
 export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
+  const [newPurchases, setNewPurchases] = useState(0)
+  const seesPurchases = role === 'admin' || role === 'financeiro'
+  useEffect(() => {
+    if (!seesPurchases) return
+    let alive = true
+    const load = () =>
+      supabase
+        .from('purchase_requests' as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'requested')
+        .then(({ count }) => alive && setNewPurchases(count ?? 0))
+    load()
+    const t = setInterval(load, 60_000) // confere a cada minuto
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [seesPurchases, pathname])
   const { isMobile, setOpenMobile } = useSidebar()
 
   const userName =
@@ -110,6 +132,11 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                      {item.url === '/faturamento' && seesPurchases && newPurchases > 0 && (
+                        <span className="ml-auto rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold leading-4 text-white">
+                          {newPurchases}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
