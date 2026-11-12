@@ -7,21 +7,27 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 
 interface DashboardChartsProps {
   despesas: Despesa[]
+  /** Obras que entram (filtros do Dashboard); nulo = todas. Vale para os contratos de terceiros. */
+  workIds?: string[] | null
 }
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 
-export default function DashboardCharts({ despesas }: DashboardChartsProps) {
+export default function DashboardCharts({ despesas, workIds = null }: DashboardChartsProps) {
   const [laborCost, setLaborCost] = useState(0)
+  // chave estável das obras filtradas (vazio = nenhuma; nulo = todas): refaz a soma só quando elas mudam
+  const workKey = workIds ? workIds.join(',') : null
 
   useEffect(() => {
     let isMounted = true
     const fetchLabor = async () => {
       try {
-        const { data, error } = await supabase.from('external_contracts').select('total_value')
+        const { data, error } = await supabase.from('external_contracts').select('total_value, work_id')
         if (!error && data && isMounted) {
-          setLaborCost(data.reduce((acc, curr) => acc + Number(curr.total_value || 0), 0))
+          const only = workKey !== null ? new Set(workKey.split(',').filter(Boolean)) : null
+          const rows = only ? data.filter((c: any) => c.work_id && only.has(c.work_id)) : data
+          setLaborCost(rows.reduce((acc, curr) => acc + Number(curr.total_value || 0), 0))
         }
       } catch (err) {
         console.warn('[DashboardCharts] Error loading labor costs:', err)
@@ -31,7 +37,7 @@ export default function DashboardCharts({ despesas }: DashboardChartsProps) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [workKey])
   const chartData = useMemo(() => {
     const expensesByCategory = despesas.reduce(
       (acc, despesa) => {

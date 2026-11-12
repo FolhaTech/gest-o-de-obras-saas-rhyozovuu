@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -19,13 +20,47 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import DashboardCharts from './dashboard/DashboardCharts'
+import DashboardFiltersBar from './dashboard/DashboardFiltersBar'
+import {
+  EMPTY_FILTERS,
+  belongsToFiltered,
+  filterObras,
+  hasAnyFilter,
+  hasObraFilter,
+  inPeriod,
+  periodRange,
+  type DashboardFilters,
+} from '@/lib/dashboard-filters'
 import { useData } from '@/hooks/use-data'
 import { useAuth } from '@/hooks/use-auth'
 import { Obra, Despesa, Receita, Material } from '@/types'
 
+const FILTERS_KEY = 'dashboard-filtros'
+
+/** Filtros guardados no navegador (se o armazenamento estiver bloqueado, começa sem filtros). */
+function loadFilters(): DashboardFilters {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY)
+    if (!raw) return EMPTY_FILTERS
+    const f = JSON.parse(raw)
+    return { ...EMPTY_FILTERS, ...f, workIds: Array.isArray(f.workIds) ? f.workIds : [] }
+  } catch {
+    return EMPTY_FILTERS
+  }
+}
+
 export default function Index() {
   // Só o administrador vê valores (R$); o Gestor vê os demais indicadores
   const { canSeeValues } = useAuth()
+  // Filtros: casas, situação, responsável e período (receitas e despesas)
+  const [filters, setFilters] = useState<DashboardFilters>(loadFilters)
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(filters))
+    } catch {
+      /* sem armazenamento: os filtros valem só nesta visita */
+    }
+  }, [filters])
   const {
     data: obras,
     loading: loadObras,
@@ -67,6 +102,13 @@ export default function Index() {
   const hasNetworkError = netObras || netDespesas || netReceitas || netMateriais
   const hasAnyError = Boolean(errObras || errDespesas || errReceitas || errMateriais)
 
+  // casa guardada nos filtros que não existe mais (obra excluída): sai dos filtros
+  useEffect(() => {
+    if (loadObras) return
+    const valid = filters.workIds.filter((id) => obras.some((o) => o.id === id))
+    if (valid.length !== filters.workIds.length) setFilters((cur) => ({ ...cur, workIds: valid }))
+  }, [obras, loadObras, filters.workIds])
+
   const handleRefreshAll = () => {
     refetchObras()
     refetchDespesas()
@@ -98,19 +140,29 @@ export default function Index() {
   }
 
   const today = new Date().toISOString().split('T')[0]
-  const totalObras = obras.length
-  const emAndamento = obras.filter((o) => o.status === 'in_progress').length
-  const atrasadas = obras.filter(
+
+  // aplica os filtros: as obras escolhidas e os registros ligados a elas (no período, para o financeiro)
+  const obrasF = filterObras(obras, filters, today)
+  const obraIds = new Set(obrasF.map((o) => o.id))
+  const range = periodRange(filters.period, today, filters.from, filters.to)
+  const despesasF = despesas.filter((d) => belongsToFiltered(d.work_id, obraIds, filters) && inPeriod(d.date, range))
+  const receitasF = receitas.filter((r) => belongsToFiltered(r.work_id, obraIds, filters) && inPeriod(r.date, range))
+  const materiaisF = materiais.filter((m) => m.work_id !== null && belongsToFiltered(m.work_id, obraIds, filters))
+  const filtered = hasAnyFilter(filters)
+
+  const totalObras = obrasF.length
+  const emAndamento = obrasF.filter((o) => o.status === 'in_progress').length
+  const atrasadas = obrasF.filter(
     (o) => !!o.end_date_planned && o.end_date_planned < today && o.status !== 'finished',
   )
   const avgProgress =
-    obras.reduce((acc, o) => acc + (Number(o.progress_percentage) || 0), 0) / (totalObras || 1)
+    obrasF.reduce((acc, o) => acc + (Number(o.progress_percentage) || 0), 0) / (totalObras || 1)
 
-  const totalBudget = obras.reduce((acc, o) => acc + (Number(o.budget_planned) || 0), 0)
-  const totalSpent = despesas.reduce((acc, d) => acc + (Number(d.value) || 0), 0)
-  const totalRevenue = receitas.reduce((acc, r) => acc + (Number(r.value) || 0), 0)
+  const totalBudget = obrasF.reduce((acc, o) => acc + (Number(o.budget_planned) || 0), 0)
+  const totalSpent = despesasF.reduce((acc, d) => acc + (Number(d.value) || 0), 0)
+  const totalRevenue = receitasF.reduce((acc, r) => acc + (Number(r.value) || 0), 0)
 
-  const allocatedMaterialsCount = materiais.filter((m) => m.work_id !== null).length
+  const allocatedMaterialsCount = materiaisF.length
 
   const budgetConsumedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
   const balance = totalRevenue - totalSpent
@@ -184,6 +236,14 @@ export default function Index() {
         </Button>
       </div>
 
+      <DashboardFiltersBar
+        obras={obras}
+        filters={filters}
+        onChange={setFilters}
+        showPeriod={canSeeValues}
+        shown={totalObras}
+      />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -194,6 +254,7 @@ export default function Index() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalObras}</div>
+            {filtered && <p className="text-xs text-muted-foreground mt-1">de {obras.length} no total</p>}
           </CardContent>
         </Card>
         <Card className="hover:shadow-md transition-shadow">
@@ -358,7 +419,7 @@ export default function Index() {
         </Card>
       </div>
 
-      {canSeeValues && <DashboardCharts despesas={despesas} />}
+      {canSeeValues && <DashboardCharts despesas={despesasF} workIds={hasObraFilter(filters) ? [...obraIds] : null} />}
     </div>
   )
 }
