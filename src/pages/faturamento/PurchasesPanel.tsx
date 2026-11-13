@@ -62,6 +62,7 @@ import ApprovalPanel from './ApprovalPanel'
 import DecisionDialog from './DecisionDialog'
 import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
+import InvoiceLink from './InvoiceLink'
 import QuotesDialog from './QuotesDialog'
 import StockHint from './StockHint'
 import { STATUS_CLASS, URGENCY_CLASS, fmtQty, todayISO, who } from './helpers'
@@ -445,7 +446,12 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         </div>
                       )}
                       {r.payment_mode && <div className="text-xs text-muted-foreground">{PAYMENT_MODE_LABEL[r.payment_mode]}</div>}
-                      {r.invoice_number && <div className="text-xs text-muted-foreground">NF {r.invoice_number}</div>}
+                      {(r.invoice_number || (canSeeBilling && r.invoice_file_path)) && (
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                          {r.invoice_number && <span>NF {r.invoice_number}</span>}
+                          {canSeeBilling && r.invoice_file_path && <InvoiceLink compact path={r.invoice_file_path} name={r.invoice_file_name} />}
+                        </div>
+                      )}
                       {canSeeBilling && (r.status === 'requested' || r.status === 'quoting') && (
                         <div className="text-xs text-muted-foreground">
                           {quoteCount[r.id] ?? 0}/{MIN_QUOTES} cotações{r.quote_round > 1 ? ` · rodada ${r.quote_round}` : ''}
@@ -460,7 +466,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         <div className="text-xs text-rose-700 max-w-xs">Recusa do admin: {r.admin_notes}</div>
                       )}
                       {r.finance_notes && <div className="text-xs max-w-xs">{r.finance_notes}</div>}
-                      {!r.supplier && !r.finance_notes && !r.invoice_number && !hasValue && !(canSeeBilling && (r.status === 'requested' || r.status === 'quoting' || r.status === 'quotes_sent')) && (
+                      {!r.supplier && !r.finance_notes && !r.invoice_number && !(canSeeBilling && r.invoice_file_path) && !hasValue && !(canSeeBilling && (r.status === 'requested' || r.status === 'quoting' || r.status === 'quotes_sent')) && (
                         <span className="text-xs text-muted-foreground">{r.status === 'requested' ? 'Aguardando o financeiro' : '-'}</span>
                       )}
                     </TableCell>
@@ -508,7 +514,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       )}
 
       {/* Etapas do fluxo */}
-      <DetailsDialog request={detail} canSeeQuotes={canSeeBilling} onClose={() => setDetailId(null)} />
+      <DetailsDialog request={detail} canSeeQuotes={canSeeBilling} canManageInvoice={isFinance} onChanged={fetchAll} onClose={() => setDetailId(null)} />
       {isFinance && <QuotesDialog request={quotesOf} onClose={() => setQuotesId(null)} onChanged={fetchAll} />}
       {isAdmin && <DecisionDialog request={decideOf} onClose={() => setDecideId(null)} onChanged={fetchAll} />}
       {isFinance && <FulfillDialog request={fulfillOf} onClose={() => setFulfillId(null)} onChanged={fetchAll} />}

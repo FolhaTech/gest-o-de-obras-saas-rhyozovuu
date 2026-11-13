@@ -347,6 +347,10 @@ export interface PurchaseRequestRow {
   quoted_value?: number | null
   final_value?: number | null
   invoice_number: string | null
+  /** Foto ou PDF da nota fiscal (bucket privado; só Admin e Financeiro abrem). */
+  invoice_file_path?: string | null
+  invoice_file_name?: string | null
+  invoice_file_type?: string | null
   purchased_at: string | null
   finance_notes: string | null
   handled_by: string | null
