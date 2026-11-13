@@ -1,6 +1,6 @@
 // Testa (RLS, transação desfeita no final): papel Financeiro, fluxo de compras (solicitação -> cotações -> aprovação do
 // admin -> compra -> pagamento/entrega -> recebimento) e pagamento da equipe (22, 23 e 24).
-// Se a migração 24 ainda não está aplicada, ela roda DENTRO da transação (e é desfeita junto).
+// Se as migrações 24 e 25 ainda não estão aplicadas, elas rodam DENTRO da transação (e são desfeitas junto).
 // Uso: node db/azure/test-faturamento.mjs (lê DATABASE_URL do .env.local)
 import { existsSync, readFileSync } from 'node:fs'
 import pg from 'pg'
@@ -53,6 +53,10 @@ try {
   if (!(await one("select to_regclass('public.purchase_quotes') t")).t) {
     await c.query(readFileSync('db/azure/24_compras_fluxo_cotacao.sql', 'utf8'))
     console.log('(migração 24 aplicada dentro da transação, ainda não está no banco)')
+  }
+  if (!(await one("select 1 x from information_schema.columns where table_name = 'purchase_requests' and column_name = 'invoice_file_path'"))) {
+    await c.query(readFileSync('db/azure/25_compras_nota_fiscal_arquivo.sql', 'utf8'))
+    console.log('(migração 25 aplicada dentro da transação, ainda não está no banco)')
   }
   const [adm1, adm2] = await q("select id from profiles where lower(role) = 'admin' order by email limit 2")
   const [req1, fin, ges, other] = await q("select id from profiles where lower(role) = 'prestador' order by email limit 4")
@@ -352,6 +356,66 @@ try {
   await user(adm1.id)
   const del = await attempt('delete from purchase_requests where id = $1', [d2])
   ok('o admin exclui a solicitação e as cotações dela saem junto', del.rowCount === 1 && !del.error && (await q('select id from purchase_quotes where request_id = $1', [d2])).length === 0, del.error?.message)
+
+  // ---------------------------------------------------------------- nota fiscal: foto ou PDF (bucket privado)
+  const bucket = await one("select public, file_size_limit from storage.buckets where id = 'purchase-invoices'")
+  ok('o bucket das notas é privado e limita o tamanho', bucket?.public === false && Number(bucket.file_size_limit) === 15728640, JSON.stringify(bucket))
+  const putFile = async (sub, path, mime = 'application/pdf', size = 100) => {
+    await user(sub)
+    return attempt("insert into storage.objects (bucket_id, name, owner, metadata, data) values ('purchase-invoices', $1, $2, $3::jsonb, $4) returning id", [path, sub, JSON.stringify({ size, mimetype: mime }), Buffer.from('%PDF-1.4 teste')])
+  }
+  const nf = await newReq(req1.id, 'NOTA FISCAL ARQUIVO')
+  const nfFile = nf + '/nf.pdf'
+  const up = await putFile(fin.id, nfFile)
+  ok('o financeiro envia o PDF da nota', !up.error && up.rowCount === 1, up.error?.message)
+  ok('PDF e imagens são aceitos', !(await putFile(fin.id, nf + '/foto.jpg', 'image/jpeg')).error && !(await putFile(fin.id, nf + '/foto.png', 'image/png', 5000000)).error)
+  ok('outro tipo de arquivo é recusado (html)', (await putFile(fin.id, nf + '/x.html', 'text/html')).error?.code === '42501')
+  ok('arquivo acima de 15 MB é recusado', (await putFile(fin.id, nf + '/grande.pdf', 'application/pdf', 15728641)).error?.code === '42501')
+  ok('o arquivo precisa estar na pasta de uma solicitação', (await putFile(fin.id, 'solto.pdf')).error?.code === '42501' && (await putFile(fin.id, 'pasta/qualquer.pdf')).error?.code === '42501')
+  for (const [nome, sub] of [['o admin', adm1.id], ['o gestor', ges.id], ['quem solicitou', req1.id], ['outro usuário', other.id]]) {
+    ok(nome + ' NÃO envia nota fiscal', (await putFile(sub, nf + '/intruso.pdf')).error?.code === '42501')
+  }
+  const readNf = async (role, sub) => {
+    await as(role, sub)
+    const r = await attempt("select id from storage.objects where bucket_id = 'purchase-invoices' and name = $1", [nfFile])
+    return r.error ? -1 : r.rows.length
+  }
+  ok('o financeiro lê a nota', (await readNf('obras_authenticated', fin.id)) === 1)
+  ok('o admin lê a nota', (await readNf('obras_authenticated', adm1.id)) === 1)
+  ok('o gestor NÃO lê a nota', (await readNf('obras_authenticated', ges.id)) === 0)
+  ok('quem solicitou NÃO lê a nota', (await readNf('obras_authenticated', req1.id)) === 0)
+  ok('outro usuário NÃO lê a nota', (await readNf('obras_authenticated', other.id)) === 0)
+  ok('anônimo NÃO lê a nota', (await readNf('obras_anon', null)) <= 0)
+  await user(adm1.id)
+  ok('o admin NÃO apaga a nota', (await attempt("delete from storage.objects where bucket_id = 'purchase-invoices' and name = $1", [nfFile])).rowCount === 0)
+
+  // o financeiro liga o arquivo à solicitação
+  await user(fin.id)
+  const link = await attempt("update purchase_requests set invoice_number = 'NF-77', invoice_file_path = $2, invoice_file_name = 'nf.pdf', invoice_file_type = 'application/pdf' where id = $1 returning invoice_file_path, invoice_file_name, invoice_file_type", [nf, nfFile])
+  ok('o financeiro anexa o arquivo na solicitação', link.rows[0]?.invoice_file_path === nfFile && link.rows[0].invoice_file_name === 'nf.pdf' && link.rows[0].invoice_file_type === 'application/pdf', link.error?.message)
+  const otherFolder = await attempt("update purchase_requests set invoice_file_path = $2 where id = $1", [nf, row.id + '/nf.pdf'])
+  ok('o arquivo de outra solicitação não vale', /pasta desta solicitação/.test(otherFolder.error?.message ?? ''), otherFolder.error?.message)
+  await user(req1.id)
+  const reqFile = await attempt("update purchase_requests set invoice_file_path = $2, invoice_file_name = 'x.pdf' where id = $1 returning invoice_file_path, invoice_file_name", [nf, nf + '/x.pdf'])
+  ok('quem solicitou não mexe no arquivo da nota', !!reqFile.error || (reqFile.rows[0]?.invoice_file_path === nfFile && reqFile.rows[0].invoice_file_name === 'nf.pdf'), reqFile.error?.message ?? JSON.stringify(reqFile.rows[0]))
+  await user(adm2.id)
+  const admFile = await attempt("update purchase_requests set invoice_file_path = null where id = $1 returning invoice_file_path", [nf])
+  ok('o admin também não mexe no arquivo da nota', admFile.rows[0]?.invoice_file_path === nfFile)
+  await user(req1.id)
+  const newWithFile = await attempt("insert into purchase_requests (item, invoice_file_path, invoice_file_name, invoice_file_type) values ('NASCE COM ARQUIVO', 'x/y.pdf', 'y.pdf', 'application/pdf') returning invoice_file_path, invoice_file_name, invoice_file_type", [])
+  ok('quem solicita não nasce com arquivo de nota', newWithFile.rows[0]?.invoice_file_path === null && newWithFile.rows[0].invoice_file_name === null && newWithFile.rows[0].invoice_file_type === null, newWithFile.error?.message)
+  await user(fin.id)
+  const unlink = await attempt("update purchase_requests set invoice_file_path = null, invoice_file_name = 'sobra.pdf', invoice_file_type = 'application/pdf' where id = $1 returning invoice_file_path, invoice_file_name, invoice_file_type", [nf])
+  ok('remover o arquivo limpa também o nome e o tipo', unlink.rows[0]?.invoice_file_path === null && unlink.rows[0].invoice_file_name === null && unlink.rows[0].invoice_file_type === null, unlink.error?.message)
+  ok('o financeiro apaga o arquivo da nota', (await attempt("delete from storage.objects where bucket_id = 'purchase-invoices' and name = $1", [nfFile])).rowCount === 1)
+  // excluir a solicitação apaga os arquivos dela
+  const nf2 = await newReq(req1.id, 'EXCLUIR COM NOTA')
+  await putFile(fin.id, nf2 + '/nf.pdf')
+  await putFile(fin.id, nf2 + '/outra.jpg', 'image/jpeg')
+  await user(adm1.id)
+  await attempt('delete from purchase_requests where id = $1', [nf2])
+  await internal()
+  ok('excluir a solicitação apaga os arquivos da nota', Number((await one("select count(*) n from storage.objects where bucket_id = 'purchase-invoices' and name like $1", [nf2 + '/%'])).n) === 0)
 
   // ---------------------------------------------------------------- rotinas internas (sem usuário) ficam livres
   await internal()

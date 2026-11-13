@@ -25,6 +25,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtDateTime, fmtQty, todayISO, who } from './helpers'
+import InvoiceFileField from './InvoiceFileField'
+import { removeInvoiceFiles, uploadInvoice, type UploadedInvoice } from './invoice-storage'
 
 interface Props {
   request: PurchaseRequestRow | null
@@ -46,6 +48,7 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
   const [invoice, setInvoice] = useState('')
   const [notes, setNotes] = useState('')
   const [checked, setChecked] = useState(false)
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
 
   const id = request?.id
   const status = request?.status
@@ -56,6 +59,7 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
     setInvoice(request.invoice_number ?? '')
     setNotes('')
     setChecked(false)
+    setInvoiceFile(null)
     // recomeça só quando muda a solicitação ou a etapa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, status])
@@ -91,12 +95,28 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
       body.finance_notes = notes.trim()
     }
     setSaving(true)
+    // foto ou PDF da nota: sobe primeiro e grava o caminho junto com a mudança de situação
+    let uploaded: UploadedInvoice | null = null
+    if (invoiceFile && (request.status === 'approved' || request.status === 'awaiting_delivery')) {
+      try {
+        uploaded = await uploadInvoice(request.id, invoiceFile)
+      } catch (e) {
+        setSaving(false)
+        toast({ title: 'Erro ao enviar a nota fiscal', description: e instanceof Error ? e.message : 'Falha no envio.', variant: 'destructive' })
+        return
+      }
+      body.invoice_file_path = uploaded.path
+      body.invoice_file_name = uploaded.name
+      body.invoice_file_type = uploaded.type
+    }
     const { error } = await supabase.from('purchase_requests' as any).update(body).eq('id', request.id)
     setSaving(false)
     if (error) {
+      await removeInvoiceFiles([uploaded?.path]) // não deixa o arquivo solto se a compra não foi gravada
       toast({ title: 'Erro ao salvar', description: formatSupabaseError(error), variant: 'destructive' })
       return
     }
+    if (uploaded) await removeInvoiceFiles([request.invoice_file_path]) // trocou o arquivo: apaga o antigo
     const done: Record<string, string> = {
       approved: mode === 'advance' ? 'Compra registrada: libere o pagamento antecipado.' : 'Compra registrada: aguardando a entrega.',
       awaiting_payment: 'Pagamento liberado: aguardando a entrega.',
@@ -165,6 +185,7 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
                   <Input id="fd-nf" value={invoice} onChange={(e) => setInvoice(e.target.value)} />
                 </div>
               </div>
+              <InvoiceFileField file={invoiceFile} onChange={setInvoiceFile} currentName={request.invoice_file_name} disabled={saving} />
             </>
           )}
 
@@ -174,6 +195,7 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
                 <Label htmlFor="fd-nf2">Nota fiscal</Label>
                 <Input id="fd-nf2" value={invoice} onChange={(e) => setInvoice(e.target.value)} />
               </div>
+              <InvoiceFileField file={invoiceFile} onChange={setInvoiceFile} currentName={request.invoice_file_name} disabled={saving} />
               <label className="flex cursor-pointer items-start gap-2 text-sm">
                 <Checkbox checked={checked} onCheckedChange={(v) => setChecked(v === true)} className="mt-0.5" />
                 <span>Recebi e conferi os itens (quantidade, qualidade e nota fiscal).</span>
