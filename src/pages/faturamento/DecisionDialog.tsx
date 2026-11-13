@@ -23,6 +23,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtDateTime, fmtQty, who } from './helpers'
+import StorageImage from './StorageImage'
 
 interface Props {
   request: PurchaseRequestRow | null
@@ -124,7 +125,12 @@ export default function DecisionDialog({ request, onClose, onChanged }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {request.notes && <p className="text-sm text-muted-foreground">Observação do pedido: {request.notes}</p>}
+        {(request.notes || request.item_image_path) && (
+          <div className="flex items-start gap-3">
+            {request.item_image_path && <StorageImage path={request.item_image_path} alt={`Imagem do item: ${request.item}`} size={72} />}
+            {request.notes && <p className="text-sm text-muted-foreground">Observação do pedido: {request.notes}</p>}
+          </div>
+        )}
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando...</p>
@@ -140,6 +146,7 @@ export default function DecisionDialog({ request, onClose, onChanged }: Props) {
                   className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors ${on ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-muted/40'}`}
                 >
                   <input type="radio" name="quote" className="mt-1" checked={on} onChange={() => setPick(q.id)} />
+                  {q.image_path && <StorageImage path={q.image_path} alt={`Imagem da cotação de ${q.supplier}`} />}
                   <div className="flex-1 space-y-0.5">
                     <div className="font-medium">
                       {q.supplier}

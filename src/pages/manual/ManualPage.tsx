@@ -384,21 +384,21 @@ export default function ManualPage() {
 
       <Chapter
         number={9}
-        title="Faturamento (Compras e Pagamento da equipe)"
+        title="Financeiro (Compras e Pagamento da equipe)"
         goal="Pedir uma compra, cotar com fornecedores, aprovar, comprar, pagar e receber, tudo com responsável em cada etapa."
       >
         <h3 className="text-lg font-semibold text-foreground">9.1 — Compras: do pedido ao recebimento</h3>
         <Step n={1}>
-          <strong>Solicitação.</strong> Em <strong>Faturamento → Compras</strong>, clique em{' '}
+          <strong>Solicitação.</strong> Em <strong>Financeiro → Compras</strong>, clique em{' '}
           <strong>“Solicitar compra”</strong> e informe o item, a quantidade, a obra, a urgência e o prazo. O pedido
           fica <strong>“Pendente pelo financeiro”</strong>. Quem pediu pode editar ou cancelar enquanto estiver nessa
           situação. Ao digitar o item, o sistema mostra <strong>quanto dele já existe no estoque</strong> (Materiais) e
-          avisa quando o estoque já cobre o pedido, para conferir antes de comprar.
+          avisa quando o estoque já cobre o pedido, para conferir antes de comprar. Você também pode anexar a <strong>imagem do item</strong> (foto do celular ou arquivo), que ajuda o financeiro a cotar o item certo; quem vê o pedido vê a imagem.
         </Step>
         <Step n={2}>
           <strong>Cotações (financeiro).</strong> O financeiro lança <strong>3 ou mais cotações de fornecedores
           diferentes</strong> (valor, prazo de entrega, condições e se o fornecedor pede pagamento antecipado ou após a
-          entrega). O botão <strong>“Enviar ao admin”</strong> só libera com 3 fornecedores e manda as cotações para o
+          entrega). Cada cotação pode ter uma <strong>imagem</strong> (foto do produto ou da proposta), que o admin vê ao aprovar. O botão <strong>“Enviar ao admin”</strong> só libera com 3 fornecedores e manda as cotações para o
           admin que abriu a solicitação (se quem pediu não é admin, qualquer admin aprova).
         </Step>
         <Step n={3}>
@@ -428,7 +428,7 @@ export default function ManualPage() {
         </Step>
         <Tip>
           Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
-          vermelho em <strong>Faturamento</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
+          vermelho em <strong>Financeiro</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
           cotar, comprar, pagar ou receber; o admin vê as cotações para aprovar.
         </Tip>
         <Tip kind="warn">
@@ -439,7 +439,7 @@ export default function ManualPage() {
         <Step n={1}>
           <strong>Pagamento semanal pela presença.</strong> Cada vez que o admin marca <strong>Presente</strong> em{' '}
           <strong>Equipes → Presença</strong>, o valor da semana daquela pessoa aparece e vai somando em{' '}
-          <strong>Faturamento → Pagamento (Equipe)</strong> (dias presentes × diária + extra semanal; um valor negativo no extra é desconto, como um vale). A semana vai de{' '}
+          <strong>Financeiro → Pagamento (Equipe)</strong> (dias presentes × diária + extra semanal; um valor negativo no extra é desconto, como um vale). A semana vai de{' '}
           <strong>sábado a sexta-feira</strong>. Cada pessoa tem o seu pagamento, separado.
         </Step>
         <Step n={2}>
@@ -476,11 +476,11 @@ export default function ManualPage() {
             ],
             [
               'Financeiro',
-              'No Faturamento trabalha de verdade: recebe as solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a compra, libera o pagamento (antecipado ou após a entrega), recebe e confere e encerra; também controla o Pagamento (Equipe). Nas demais áreas só consulta, com valores (R$) e sem botões de criar, editar ou excluir: Dashboard, Obras, Despesas, Equipes (presença e diárias), Materiais e Relatórios. Não acessa Planner, Diário de Obra, Manutenção, Veículos, Airbnb, documentos pessoais da equipe, usuários nem configurações.',
+              'Na área Financeiro trabalha de verdade: recebe as solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a compra, libera o pagamento (antecipado ou após a entrega), recebe e confere e encerra; também controla o Pagamento (Equipe). Nas demais áreas só consulta, com valores (R$) e sem botões de criar, editar ou excluir: Dashboard, Obras, Despesas, Equipes (presença e diárias), Materiais e Relatórios. Não acessa Planner, Diário de Obra, Manutenção, Veículos, Airbnb, documentos pessoais da equipe, usuários nem configurações.',
             ],
             [
               'Prestador (colaborador)',
-              'Acessa Planner (só os cards dele), Obras, Materiais, Diário de Obra, Manutenção das casas (check-in/check-out) e pode solicitar compras em Faturamento → Compras. Não vê valores.',
+              'Acessa Planner (só os cards dele), Obras, Materiais, Diário de Obra, Manutenção das casas (check-in/check-out) e pode solicitar compras em Financeiro → Compras. Não vê valores.',
             ],
           ]}
         />

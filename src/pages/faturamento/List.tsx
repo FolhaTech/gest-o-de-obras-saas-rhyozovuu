@@ -6,7 +6,7 @@ import PurchasesPanel from './PurchasesPanel'
 import TeamPaymentsPanel from './TeamPaymentsPanel'
 
 /**
- * Faturamento: Compras (solicitação, cotações do financeiro, aprovação do admin, compra, pagamento e recebimento) e
+ * Financeiro: Compras (solicitação, cotações do financeiro, aprovação do admin, compra, pagamento e recebimento) e
  * Pagamento (Equipe) (só Admin e Financeiro).
  */
 export default function FaturamentoList() {
@@ -19,7 +19,7 @@ export default function FaturamentoList() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Faturamento</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Financeiro</h1>
         <p className="text-muted-foreground">Solicitações de compra e pagamento da equipe.</p>
       </div>
 

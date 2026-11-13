@@ -87,7 +87,7 @@ const emptyForm = () => ({
   notes: '',
 })
 
-/** Faturamento > Pagamento (Equipe): pagamentos aos membros da equipe e prestadores. Só Admin e Financeiro. */
+/** Financeiro > Pagamento (Equipe): pagamentos aos membros da equipe e prestadores. Só Admin e Financeiro. */
 export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: number) => void }) {
   const { toast } = useToast()
   const { role } = useAuth()

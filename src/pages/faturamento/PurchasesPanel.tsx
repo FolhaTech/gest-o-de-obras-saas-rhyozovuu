@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Clock, Edit2, Eye, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { Clock, Edit2, Eye, ImageIcon, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -64,7 +64,9 @@ import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
 import InvoiceLink from './InvoiceLink'
 import QuotesDialog from './QuotesDialog'
+import ImageField from './ImageField'
 import StockHint from './StockHint'
+import { openImage, removeImages, uploadItemImage } from './image-storage'
 import { STATUS_CLASS, URGENCY_CLASS, fmtQty, todayISO, who } from './helpers'
 
 const SELECT =
@@ -80,12 +82,18 @@ interface Line {
   quantity: string
   unit: string
   notes: string
+  /** Imagem do item escolhida (ainda não enviada). */
+  image: File | null
+  /** Imagem que já está no pedido (edição): nome, caminho e se vai ser removida. */
+  currentImageName: string | null
+  currentImagePath: string | null
+  removeImage: boolean
 }
 let lineKey = 0
-const newLine = (): Line => ({ key: ++lineKey, item: '', quantity: '1', unit: 'un', notes: '' })
+const newLine = (): Line => ({ key: ++lineKey, item: '', quantity: '1', unit: 'un', notes: '', image: null, currentImageName: null, currentImagePath: null, removeImage: false })
 
 /**
- * Faturamento > Compras. Fluxo: o usuário solicita; o financeiro cota (3 ou mais fornecedores) e envia ao admin que
+ * Financeiro > Compras. Fluxo: o usuário solicita; o financeiro cota (3 ou mais fornecedores) e envia ao admin que
  * abriu; o admin aprova (ou recusa e o financeiro refaz); o financeiro compra, escolhe o pagamento (antecipado ou
  * após a entrega), libera o pagamento, recebe e confere e encerra.
  */
@@ -211,7 +219,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const openEdit = (r: PurchaseRequestRow) => {
     setEditing(r)
     setReqForm({ work_id: r.work_id ?? NO_WORK, urgency: r.urgency, needed_by: r.needed_by ?? '' })
-    setLines([{ key: ++lineKey, item: r.item, quantity: String(r.quantity), unit: r.unit || 'un', notes: r.notes ?? '' }])
+    setLines([{ key: ++lineKey, item: r.item, quantity: String(r.quantity), unit: r.unit || 'un', notes: r.notes ?? '', image: null, currentImageName: r.item_image_name ?? (r.item_image_path ? 'imagem' : null), currentImagePath: r.item_image_path ?? null, removeImage: false }])
     setReqOpen(true)
   }
   const setLine = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -238,18 +246,55 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     }
     setSaving(true)
     let err: unknown = null
+    let imageProblem: string | null = null
     if (editing) {
       const l = filled[0]
+      // imagem do item: envia a nova primeiro (precisa da pasta da solicitação); remove a antiga só depois de salvar
+      let uploaded: { path: string; name: string } | null = null
+      try {
+        if (l.image) uploaded = await uploadItemImage(editing.id, l.image)
+      } catch (e) {
+        imageProblem = e instanceof Error ? e.message : 'Falha no envio da imagem.'
+      }
+      const imagePatch = uploaded
+        ? { item_image_path: uploaded.path, item_image_name: uploaded.name }
+        : l.removeImage && !imageProblem
+          ? { item_image_path: null, item_image_name: null }
+          : {}
       const res = await supabase
         .from('purchase_requests' as any)
-        .update({ ...common, item: l.item.trim(), quantity: num(l.quantity), unit: l.unit, notes: l.notes.trim() || null })
+        .update({ ...common, item: l.item.trim(), quantity: num(l.quantity), unit: l.unit, notes: l.notes.trim() || null, ...imagePatch })
         .eq('id', editing.id)
       err = res.error
+      if (err) await removeImages([uploaded?.path])
+      else if (uploaded || (l.removeImage && !imageProblem)) await removeImages([l.currentImagePath])
     } else {
       const res = await supabase
         .from('purchase_requests' as any)
         .insert(filled.map((l) => ({ ...common, item: l.item.trim(), quantity: num(l.quantity), unit: l.unit, notes: l.notes.trim() || null })))
+        .select('id')
       err = res.error
+      // a imagem de cada item vai depois de criar o pedido (a pasta leva o id da solicitação)
+      const ids = ((res.data ?? []) as unknown as { id: string }[]).map((r) => r.id)
+      if (!err) {
+        for (let i = 0; i < filled.length; i++) {
+          const file = filled[i].image
+          if (!file || !ids[i]) continue
+          try {
+            const up = await uploadItemImage(ids[i], file)
+            const { error: linkErr } = await supabase
+              .from('purchase_requests' as any)
+              .update({ item_image_path: up.path, item_image_name: up.name })
+              .eq('id', ids[i])
+            if (linkErr) {
+              await removeImages([up.path])
+              throw new Error(formatSupabaseError(linkErr))
+            }
+          } catch (e) {
+            imageProblem = e instanceof Error ? e.message : 'Falha no envio da imagem.'
+          }
+        }
+      }
     }
     setSaving(false)
     if (err) {
@@ -260,6 +305,13 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       title: editing ? 'Solicitação atualizada' : filled.length > 1 ? `${filled.length} itens solicitados` : 'Compra solicitada',
       description: editing ? undefined : 'O financeiro recebeu o pedido e vai devolver as cotações para aprovação.',
     })
+    if (imageProblem) {
+      toast({
+        title: 'A imagem não foi enviada',
+        description: `${imageProblem} O pedido foi salvo: edite-o para anexar a imagem de novo.`,
+        variant: 'destructive',
+      })
+    }
     setReqOpen(false)
     fetchAll()
   }
@@ -421,6 +473,19 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                       <div className="font-medium">{r.item}</div>
                       <div className="text-xs text-muted-foreground">{fmtQty(Number(r.quantity))} {r.unit ?? ''}</div>
                       {r.notes && <div className="text-xs mt-0.5 max-w-xs">{r.notes}</div>}
+                      {r.item_image_path && (
+                        <button
+                          type="button"
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          title="Abrir a imagem do item"
+                          onClick={async () => {
+                            const problem = await openImage(r.item_image_path!)
+                            if (problem) toast({ title: 'Imagem do item', description: problem, variant: 'destructive' })
+                          }}
+                        >
+                          <ImageIcon className="h-3 w-3" /> Ver imagem
+                        </button>
+                      )}
                     </TableCell>
                     <TableCell>{r.works?.name?.trim() ?? <span className="text-muted-foreground">Geral</span>}</TableCell>
                     <TableCell className={URGENCY_CLASS[r.urgency]}>{URGENCY_LABEL[r.urgency]}</TableCell>
@@ -575,6 +640,16 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                       )}
                     </div>
                     <StockHint item={l.item} quantity={num(l.quantity)} unit={l.unit} materials={stock} />
+                    <ImageField
+                      label="Imagem do item (opcional)"
+                      file={l.image}
+                      onChange={(f) => setLine(l.key, { image: f })}
+                      currentName={l.currentImageName}
+                      remove={l.removeImage}
+                      onRemoveChange={(v) => setLine(l.key, { removeImage: v })}
+                      disabled={saving}
+                      hint="Ajuda o financeiro a cotar o item certo. JPG, PNG, WEBP ou HEIC; a foto é reduzida antes de enviar."
+                    />
                     <Input placeholder="Observação (marca, medida, para que serve...)" value={l.notes} onChange={(e) => setLine(l.key, { notes: e.target.value })} />
                   </div>
                 ))}

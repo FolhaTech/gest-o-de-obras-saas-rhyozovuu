@@ -16,9 +16,9 @@ interface AuthContextType {
   role: AppRole
   /** Administrador e Financeiro veem valores (R$); Gestor e Prestador não. */
   canSeeValues: boolean
-  /** Financeiro: consulta as áreas liberadas, sem criar, editar nem excluir (só no Faturamento). */
+  /** Financeiro: consulta as áreas liberadas, sem criar, editar nem excluir (só na área Financeiro). */
   readOnly: boolean
-  /** Valores do Faturamento (compras e pagamento da equipe): Admin e Financeiro. */
+  /** Valores da área Financeiro (compras e pagamento da equipe): Admin e Financeiro. */
   canSeeBilling: boolean
   canAccess: (pathname: string) => boolean
   refreshProfile: () => Promise<void>

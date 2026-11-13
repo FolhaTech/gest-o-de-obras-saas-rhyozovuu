@@ -1,5 +1,5 @@
 /**
- * Faturamento > Compras: fluxo de solicitação, cotação, aprovação, compra, pagamento e recebimento.
+ * Financeiro > Compras: fluxo de solicitação, cotação, aprovação, compra, pagamento e recebimento.
  * As regras valem de verdade no banco (gatilho de purchase_requests, migração 24); aqui ficam os textos,
  * a ordem das etapas e as conferências que a tela faz antes de chamar a API.
  *
@@ -368,6 +368,9 @@ export interface PurchaseRequestRow {
   received_by: string | null
   receipt_notes: string | null
   closed_at: string | null
+  /** Imagem do item (bucket privado purchase-images). */
+  item_image_path?: string | null
+  item_image_name?: string | null
   works?: { id: string; name: string } | null
   requester?: { full_name: string | null; email: string | null; role?: string | null } | null
   handler?: { full_name: string | null; email: string | null } | null
@@ -386,4 +389,7 @@ export interface PurchaseQuoteRow {
   notes: string | null
   created_by: string | null
   created_at: string
+  /** Imagem da cotação (bucket privado purchase-images; só Admin e Financeiro leem). */
+  image_path?: string | null
+  image_name?: string | null
 }

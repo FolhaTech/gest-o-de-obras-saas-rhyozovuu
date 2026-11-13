@@ -195,7 +195,7 @@ export default function UsersTab() {
             preços, custos, ROI nem pagamentos.
           </li>
           <li>
-            <strong>Financeiro:</strong> Trabalha no <strong>Faturamento</strong> (cotações, compras,
+            <strong>Financeiro:</strong> Trabalha na área <strong>Financeiro</strong> (cotações, compras,
             pagamentos e recebimento; Pagamento da Equipe). Nas demais áreas só consulta, com valores e sem
             criar, editar ou excluir: Dashboard, Obras, Despesas, Equipes, Materiais e Relatórios. Não acessa
             Planner, Diário de Obra, Manutenção, Veículos, Airbnb, documentos pessoais nem configurações.
@@ -285,7 +285,7 @@ export default function UsersTab() {
                       <SelectContent>
                         <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
                         <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
-                        <SelectItem value="financeiro">Financeiro (Faturamento)</SelectItem>
+                        <SelectItem value="financeiro">Financeiro</SelectItem>
                         <SelectItem value="prestador">
                           Prestador (Planner/Obras/Mat./Diário)
                         </SelectItem>
@@ -387,7 +387,7 @@ export default function UsersTab() {
                 <SelectContent>
                   <SelectItem value="admin">Admin (Acesso Total)</SelectItem>
                   <SelectItem value="gestor">Gestor (como Admin, sem valores)</SelectItem>
-                  <SelectItem value="financeiro">Financeiro (Faturamento)</SelectItem>
+                  <SelectItem value="financeiro">Financeiro</SelectItem>
                   <SelectItem value="prestador">Prestador (Planner/Obras/Mat./Diário)</SelectItem>
                 </SelectContent>
               </Select>

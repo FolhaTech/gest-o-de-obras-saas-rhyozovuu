@@ -1,5 +1,5 @@
 /**
- * Faturamento > Compras: ao pedir um item, mostra quanto dele já existe no estoque (Materiais).
+ * Financeiro > Compras: ao pedir um item, mostra quanto dele já existe no estoque (Materiais).
  * "Estoque" é o estoque geral (materiais sem obra); o que já foi alocado numa obra aparece à parte.
  */
 export interface StockMaterial {
