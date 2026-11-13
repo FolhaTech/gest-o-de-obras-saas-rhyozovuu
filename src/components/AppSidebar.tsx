@@ -34,6 +34,7 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
 import { needsMyAction } from '@/lib/purchases'
+import { addDaysISO, localTodayISO } from '@/lib/team-week'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { InstallAppButton } from '@/components/InstallAppButton'
@@ -77,7 +78,14 @@ export function AppSidebar() {
           .from('purchase_requests' as any)
           .select('id', { count: 'exact', head: true })
           .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_delivery', 'awaiting_release'])
-        if (alive) setNewPurchases(count ?? 0)
+        // pagamentos semanais da equipe com a semana já fechada (sexta em diante), esperando o financeiro pagar
+        const due = await supabase
+          .from('team_payments' as any)
+          .select('id', { count: 'exact', head: true })
+          .eq('source', 'attendance')
+          .eq('status', 'pending')
+          .lte('week_start', addDaysISO(localTodayISO(), -6))
+        if (alive) setNewPurchases((count ?? 0) + (due.count ?? 0))
         return
       }
       const { data } = await supabase

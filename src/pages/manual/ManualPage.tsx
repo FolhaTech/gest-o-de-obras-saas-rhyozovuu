@@ -437,8 +437,24 @@ export default function ManualPage() {
         </Tip>
         <h3 className="text-lg font-semibold text-foreground pt-2">9.2 — Pagamento (Equipe)</h3>
         <Step n={1}>
-          Na aba <strong>Pagamento (Equipe)</strong>, o Admin e o Financeiro lançam o valor a pagar de cada membro da
-          equipe (incluindo prestadores), com o período, a forma de pagamento e a situação (pendente ou pago).
+          <strong>Pagamento semanal pela presença.</strong> Cada vez que o admin marca <strong>Presente</strong> em{' '}
+          <strong>Equipes → Presença</strong>, o valor da semana daquela pessoa aparece e vai somando em{' '}
+          <strong>Faturamento → Pagamento (Equipe)</strong> (dias presentes × diária + extra semanal; um valor negativo no extra é desconto, como um vale). A semana vai de{' '}
+          <strong>sábado a sexta-feira</strong>. Cada pessoa tem o seu pagamento, separado.
+        </Step>
+        <Step n={2}>
+          Na <strong>sexta-feira</strong>, quando a semana fecha, o financeiro paga o valor de cada pessoa com o botão{' '}
+          <strong>“Pagar”</strong> (antes disso o botão fica travado). Mensalistas não entram no pagamento semanal.
+        </Step>
+        <Step n={3}>
+          Se a presença mudar <strong>depois de paga</strong> a semana, aparece só a <strong>diferença</strong> como um
+          novo pagamento (“complemento”). O valor calculado não é editado à mão; só o admin exclui um pagamento
+          calculado. O sistema conta a partir da semana em que este recurso entrou (semanas antigas não viram
+          pendência).
+        </Step>
+        <Step n={4}>
+          Para pagamentos fora da presença (prestadores, avulsos, mensalistas), use <strong>“Novo pagamento”</strong>:
+          o Admin e o Financeiro lançam o valor, o período, a forma de pagamento e a situação (pendente ou pago).
         </Step>
       </Chapter>
 
