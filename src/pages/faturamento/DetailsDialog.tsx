@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { formatCurrency, formatDate } from '@/lib/formatters'
+import { useToast } from '@/hooks/use-toast'
+import { formatCurrency, formatDate, formatSupabaseError } from '@/lib/formatters'
 import {
   PAYMENT_MODE_LABEL,
   STATUS_LABEL,
@@ -20,20 +21,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import InvoiceFileField from './InvoiceFileField'
+import InvoiceLink from './InvoiceLink'
 import PurchaseTimeline from './PurchaseTimeline'
+import { removeInvoiceFiles, uploadInvoice } from './invoice-storage'
 import { STATUS_CLASS, fmtDateTime, fmtQty, who } from './helpers'
 
 interface Props {
   request: PurchaseRequestRow | null
   /** Admin e Financeiro veem as cotações (são valores). */
   canSeeQuotes: boolean
+  /** O Financeiro anexa, troca e remove a foto/PDF da nota. */
+  canManageInvoice?: boolean
+  onChanged?: () => void
   onClose: () => void
 }
 
 /** Andamento da solicitação: linha do tempo, dados do pedido e (para Admin e Financeiro) as cotações de cada rodada. */
-export default function DetailsDialog({ request, canSeeQuotes, onClose }: Props) {
+export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice, onChanged, onClose }: Props) {
+  const { toast } = useToast()
   const [quotes, setQuotes] = useState<PurchaseQuoteRow[]>([])
+  const [invFile, setInvFile] = useState<File | null>(null)
+  const [invBusy, setInvBusy] = useState(false)
   const id = request?.id
+
+  useEffect(() => {
+    setInvFile(null)
+  }, [id])
 
   useEffect(() => {
     setQuotes([])
@@ -51,6 +65,51 @@ export default function DetailsDialog({ request, canSeeQuotes, onClose }: Props)
   }, [id, canSeeQuotes])
 
   if (!request) return null
+
+  const sendInvoice = async () => {
+    if (!invFile) return
+    setInvBusy(true)
+    let up
+    try {
+      up = await uploadInvoice(request.id, invFile)
+    } catch (e) {
+      setInvBusy(false)
+      toast({ title: 'Erro ao enviar a nota fiscal', description: e instanceof Error ? e.message : 'Falha no envio.', variant: 'destructive' })
+      return
+    }
+    const { error } = await supabase
+      .from('purchase_requests' as any)
+      .update({ invoice_file_path: up.path, invoice_file_name: up.name, invoice_file_type: up.type })
+      .eq('id', request.id)
+    if (error) {
+      await removeInvoiceFiles([up.path])
+      setInvBusy(false)
+      toast({ title: 'Erro ao salvar a nota fiscal', description: formatSupabaseError(error), variant: 'destructive' })
+      return
+    }
+    await removeInvoiceFiles([request.invoice_file_path])
+    setInvFile(null)
+    setInvBusy(false)
+    toast({ title: 'Nota fiscal anexada', description: request.item })
+    onChanged?.()
+  }
+
+  const clearInvoice = async () => {
+    if (!confirm('Remover o arquivo da nota fiscal desta solicitação?')) return
+    setInvBusy(true)
+    const old = request.invoice_file_path
+    const { error } = await supabase.from('purchase_requests' as any).update({ invoice_file_path: null }).eq('id', request.id)
+    setInvBusy(false)
+    if (error) {
+      toast({ title: 'Erro ao remover', description: formatSupabaseError(error), variant: 'destructive' })
+      return
+    }
+    await removeInvoiceFiles([old])
+    toast({ title: 'Arquivo da nota removido' })
+    onChanged?.()
+  }
+
+  const showInvoice = canSeeQuotes && (!!request.invoice_number || !!request.invoice_file_path || (!!canManageInvoice && request.status !== 'cancelled'))
   const rounds = [...new Set(quotes.map((q) => q.round))].sort((a, b) => b - a)
 
   return (
@@ -80,6 +139,37 @@ export default function DetailsDialog({ request, canSeeQuotes, onClose }: Props)
           {request.payment_mode && <div><span className="text-muted-foreground">Pagamento:</span> {PAYMENT_MODE_LABEL[request.payment_mode]}</div>}
           {request.invoice_number && <div><span className="text-muted-foreground">Nota fiscal:</span> {request.invoice_number}</div>}
         </div>
+        {showInvoice && (
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Nota fiscal</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              {request.invoice_number && <span><span className="text-muted-foreground">Número:</span> {request.invoice_number}</span>}
+              {request.invoice_file_path ? (
+                <>
+                  <InvoiceLink path={request.invoice_file_path} name={request.invoice_file_name} />
+                  {request.invoice_file_name && <span className="text-xs text-muted-foreground">{request.invoice_file_name}</span>}
+                  {canManageInvoice && (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" disabled={invBusy} onClick={clearInvoice}>
+                      Remover arquivo
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">Nenhum arquivo anexado.</span>
+              )}
+            </div>
+            {canManageInvoice && (
+              <div className="space-y-2">
+                <InvoiceFileField file={invFile} onChange={setInvFile} currentName={request.invoice_file_name} disabled={invBusy} />
+                {invFile && (
+                  <Button type="button" size="sm" disabled={invBusy} onClick={sendInvoice}>
+                    {invBusy ? 'Enviando...' : request.invoice_file_path ? 'Substituir nota fiscal' : 'Enviar nota fiscal'}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {request.notes && <p className="text-sm"><span className="text-muted-foreground">Observação do pedido:</span> {request.notes}</p>}
         {request.admin_notes && (
           <p className="text-sm"><span className="text-muted-foreground">Observação do admin{request.quote_round > 1 && request.status === 'quoting' ? ' (recusa)' : ''}:</span> {request.admin_notes}</p>

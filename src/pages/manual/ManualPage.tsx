@@ -411,7 +411,10 @@ export default function ManualPage() {
         <Step n={4}>
           <strong>Compra (financeiro).</strong> Com a cotação aprovada, o financeiro registra a compra e escolhe o
           pagamento: <strong>antecipado</strong> (antes da entrega) ou <strong>após a entrega</strong>. O valor e o
-          fornecedor são os da cotação aprovada e não mudam.
+          fornecedor são os da cotação aprovada e não mudam. Na compra (e também no recebimento) é possível{' '}
+          <strong>anexar a foto ou o PDF da nota fiscal</strong> (JPG, PNG, WEBP, HEIC ou PDF, até 15 MB). A nota fica em
+          área privada: só o <strong>Admin e o Financeiro</strong> abrem, pelo botão <strong>“Ver nota”</strong> na lista.
+          Para trocar ou remover o arquivo depois, use o olho (<strong>“Ver andamento”</strong>).
         </Step>
         <Step n={5}>
           <strong>Pagamento e entrega.</strong> No pagamento <strong>antecipado</strong>, o financeiro libera o
@@ -420,7 +423,8 @@ export default function ManualPage() {
         </Step>
         <Step n={6}>
           <strong>Recebimento / encerramento (financeiro).</strong> Antecipado: o financeiro recebe e confere, e a compra
-          se encerra. Após a entrega: depois de receber e conferir, o financeiro libera o pagamento e encerra.
+          se encerra. Após a entrega: depois de receber e conferir, o financeiro libera o pagamento e encerra. Se a nota
+          chegou com a entrega, anexe a foto ou o PDF nesse passo.
         </Step>
         <Tip>
           Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
