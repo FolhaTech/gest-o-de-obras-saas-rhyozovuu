@@ -38,7 +38,7 @@ export default function ObraDetail() {
   const { id } = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState('visao-geral')
   // Prestador não vê o financeiro da obra e não edita/exclui a obra
-  const { role, canSeeValues } = useAuth()
+  const { role, canSeeValues, readOnly } = useAuth()
   const isPrestador = role === 'prestador'
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -262,7 +262,8 @@ export default function ObraDetail() {
             </p>
           </div>
         </div>
-        {!isPrestador && (
+        {/* Financeiro só consulta: sem editar nem excluir a obra */}
+        {!isPrestador && !readOnly && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-2" onClick={openEdit}>
               <Edit className="h-4 w-4" /> Editar

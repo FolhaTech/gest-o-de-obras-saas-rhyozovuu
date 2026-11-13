@@ -22,7 +22,7 @@ function FullOverview({
   onAddNote: () => void
   onNavigateToRevenues?: () => void
 }) {
-  const { canSeeValues } = useAuth()
+  const { canSeeValues, readOnly } = useAuth()
   const {
     data: despesas,
     loading: loadingDespesas,
@@ -147,9 +147,12 @@ function FullOverview({
                 <div className="text-center py-8 mt-2 text-muted-foreground border rounded-lg bg-muted/20">
                   <NotebookPen className="h-10 w-10 mx-auto mb-3 opacity-20" />
                   <p className="text-sm">Nenhuma nota registrada.</p>
-                  <Button variant="link" onClick={onAddNote} className="mt-2">
-                    Adicionar primeira nota
-                  </Button>
+                  {/* Financeiro só consulta: sem atalho para criar nota */}
+                  {!readOnly && (
+                    <Button variant="link" onClick={onAddNote} className="mt-2">
+                      Adicionar primeira nota
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4 mt-2">

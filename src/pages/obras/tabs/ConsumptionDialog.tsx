@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { WorkService, CompositionHistory, ConsumptionTracking } from '@/types'
 
 export default function ConsumptionDialog({
@@ -26,6 +27,8 @@ export default function ConsumptionDialog({
   onOpenChange: (v: boolean) => void
 }) {
   const { toast } = useToast()
+  // Financeiro só consulta: não lança consumo.
+  const { readOnly } = useAuth()
   const [trackings, setTrackings] = useState<ConsumptionTracking[]>([])
   const [consumptions, setConsumptions] = useState<Record<string, string>>({})
 
@@ -60,6 +63,8 @@ export default function ConsumptionDialog({
       toast({ title: 'Erro ao registrar', variant: 'destructive' })
     }
   }
+
+  if (readOnly) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -43,8 +43,9 @@ export default function StagesTab({ obraId }: { obraId: string }) {
   } = useDataFilter<Stage>('work_stages', 'work_id', obraId)
   const { toast } = useToast()
   // Prestador só visualiza as etapas (o banco também bloqueia alterações).
-  const { role } = useAuth()
-  const canEdit = role !== 'prestador'
+  // Financeiro também só consulta (readOnly).
+  const { role, readOnly } = useAuth()
+  const canEdit = role !== 'prestador' && !readOnly
   // Responsável = pessoa da Equipe
   const { data: teamMembers } = useData<{ id: string; name: string; provider_id?: string | null }>('team_members')
 
@@ -320,9 +321,12 @@ export default function StagesTab({ obraId }: { obraId: string }) {
         ))
       )}
 
+      {/* Financeiro não lê o Planner (RLS): sem a seção de tarefas do Planner */}
+      {!readOnly && (
       <div className="pt-6 border-t">
         <PlannerTasksSection obraId={obraId} />
       </div>
+      )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">

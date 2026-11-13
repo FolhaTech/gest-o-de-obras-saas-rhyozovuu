@@ -14,7 +14,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters'
 import { useAuth } from '@/hooks/use-auth'
 import { useData } from '@/hooks/use-data'
 import { Equipe, WorkerGroup } from '@/types'
-import { Plus, UserCheck, UserMinus, Edit, Trash, Filter, Layers, Search } from 'lucide-react'
+import { Plus, UserCheck, UserMinus, Edit, Trash, Filter, Layers, Search, Eye } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +36,7 @@ import { useToast } from '@/hooks/use-toast'
 import WorkerDetailSheet from './WorkerDetailSheet'
 
 export default function WorkersTab() {
-  const { canSeeValues } = useAuth() // pagamento (diária/mensal e valor) só para o administrador
+  const { canSeeValues, readOnly } = useAuth() // pagamento (diária/mensal e valor) só para o administrador
   const { data: equipes, loading, refetch } = useData<Equipe>('team_members')
   const { data: groups, refetch: refetchGroups } = useData<WorkerGroup>('worker_groups')
   const { toast } = useToast()
@@ -192,6 +192,7 @@ export default function WorkersTab() {
         </div>
 
         {/* Modal de Criação */}
+        {!readOnly && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button
@@ -371,6 +372,7 @@ export default function WorkersTab() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="rounded-md border bg-card">
@@ -444,6 +446,13 @@ export default function WorkersTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
+                    {readOnly ? (
+                      // Financeiro: abre a ficha só para consulta (sem editar nem excluir)
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(eq)} title="Ver ficha">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(eq)}>
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -455,6 +464,8 @@ export default function WorkersTab() {
                     >
                       <Trash className="h-4 w-4" />
                     </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               )

@@ -428,7 +428,7 @@ try {
   ok('...mas não altera obra', (await attempt("update works set notes = 'x' where id = $1", [work])).rowCount === 0)
   ok('...nem cria obra', (await attempt("insert into works (name) values ('x')")).error?.code === '42501')
   ok('...nem lê veículos (só equipe interna)', Number((await one('select count(*) n from vehicles')).n) === 0)
-  ok('...nem lê despesas', Number((await one('select count(*) n from expenses')).n) === 0)
+  ok('...e só consulta despesas (não grava)', (await attempt("insert into expenses (description, value) values ('x', 1)")).error?.code === '42501')
 
   // ---------------------------------------------------------------- pagamento da equipe
   const pay = await attempt("insert into team_payments (member_id, reference, payment_amount, period_start, period_end) values ($1, 'SEMANA TESTE', 350.75, '2026-11-09', '2026-11-15') returning id, member_name, status, paid_at, payment_amount", [member.id])

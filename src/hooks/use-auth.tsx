@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/types'
-import { AppRole, normalizeRole, canAccessPath, canSeeValuesFor, canSeeBillingFor } from '@/lib/roles'
+import { AppRole, normalizeRole, canAccessPath, canSeeValuesFor, canSeeBillingFor, isReadOnlyFor } from '@/lib/roles'
 
 export type Profile = Database['public']['Tables']['profiles']['Row'] & {
   /** Membro da equipe vinculado ao usuário (definido por um administrador). */
@@ -14,8 +14,10 @@ interface AuthContextType {
   session: Session | null
   profile: Profile | null
   role: AppRole
-  /** Só o administrador vê valores (R$); Gestor e Prestador não. */
+  /** Administrador e Financeiro veem valores (R$); Gestor e Prestador não. */
   canSeeValues: boolean
+  /** Financeiro: consulta as áreas liberadas, sem criar, editar nem excluir (só no Faturamento). */
+  readOnly: boolean
   /** Valores do Faturamento (compras e pagamento da equipe): Admin e Financeiro. */
   canSeeBilling: boolean
   canAccess: (pathname: string) => boolean
@@ -145,6 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const canAccess = (pathname: string) => canAccessPath(role, pathname)
   const canSeeValues = canSeeValuesFor(role)
   const canSeeBilling = canSeeBillingFor(role)
+  const readOnly = isReadOnlyFor(role)
 
   return (
     <AuthContext.Provider
@@ -154,6 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         profile,
         role,
         canSeeValues,
+        readOnly,
         canSeeBilling,
         canAccess,
         refreshProfile,

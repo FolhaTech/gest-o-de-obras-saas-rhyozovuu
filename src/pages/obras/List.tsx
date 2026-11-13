@@ -72,7 +72,7 @@ export default function ObrasList() {
     await Promise.allSettled([refetchObras(), refetchExpenses(), refetchRevenues()])
   }
 
-  const { user, canSeeValues } = useAuth()
+  const { user, canSeeValues, readOnly } = useAuth()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [creatingSample, setCreatingSample] = useState(false)
@@ -269,6 +269,9 @@ export default function ObrasList() {
           >
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
+          {/* Financeiro só consulta: sem criar obra */}
+          {!readOnly && (
+            <>
           <Button
             variant="secondary"
             size="sm"
@@ -400,6 +403,8 @@ export default function ObrasList() {
               </form>
             </DialogContent>
           </Dialog>
+            </>
+          )}
         </div>
       </div>
 
@@ -443,9 +448,11 @@ export default function ObrasList() {
             </div>
             <CardTitle className="text-lg">Nenhuma obra cadastrada</CardTitle>
             <CardDescription className="max-w-sm mx-auto mt-1">
-              Comece criando seu primeiro projeto de construção ou gere uma obra de demonstração
-              completa para testar o sistema.
+              {readOnly
+                ? 'Ainda não há obras cadastradas.'
+                : 'Comece criando seu primeiro projeto de construção ou gere uma obra de demonstração completa para testar o sistema.'}
             </CardDescription>
+            {!readOnly && (
             <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
               <Button onClick={() => setOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" /> Cadastrar Primeira Obra
@@ -464,6 +471,7 @@ export default function ObrasList() {
                 {creatingSample ? 'Criando...' : 'Criar Obra de Exemplo'}
               </Button>
             </div>
+            )}
           </CardHeader>
         </Card>
       ) : (

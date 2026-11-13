@@ -51,7 +51,7 @@ export default function DespesasList() {
   const { data: despesas, loading, refetch } = useData<Despesa>('expenses', '*, works(name)')
   const { data: works } = useData<Obra>('works', 'id, name')
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth() // o Financeiro só consulta as despesas
 
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState(initialFormState)
@@ -240,6 +240,7 @@ export default function DespesasList() {
           <h1 className="text-3xl font-bold tracking-tight">Despesas Financeiras</h1>
           <p className="text-muted-foreground">Controle de custos por obra e categoria.</p>
         </div>
+        {!readOnly && (
         <div className="flex items-center gap-2">
           <input
             type="file"
@@ -410,6 +411,7 @@ export default function DespesasList() {
             </DialogContent>
           </Dialog>
         </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -432,13 +434,13 @@ export default function DespesasList() {
               <TableHead>Obra</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead className="text-right">Valor (R$)</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              {!readOnly && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {despesas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={readOnly ? 5 : 6} className="text-center py-6 text-muted-foreground">
                   Nenhuma despesa registrada.
                 </TableCell>
               </TableRow>
@@ -476,6 +478,7 @@ export default function DespesasList() {
                   </span>
                 </TableCell>
                 <TableCell className="text-right font-bold">{formatCurrency(d.value)}</TableCell>
+                {!readOnly && (
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openEdit(d)}>
@@ -491,12 +494,14 @@ export default function DespesasList() {
                     </Button>
                   </div>
                 </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
+      {!readOnly && (
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
@@ -623,6 +628,7 @@ export default function DespesasList() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

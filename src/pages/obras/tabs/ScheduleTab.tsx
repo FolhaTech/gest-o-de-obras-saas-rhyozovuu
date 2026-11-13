@@ -57,8 +57,9 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
 
   const { toast } = useToast()
   // Prestador acompanha o cronograma de todos, mas não altera nada (o banco também bloqueia).
-  const { role } = useAuth()
-  const canEdit = role !== 'prestador'
+  // Financeiro também só consulta (readOnly).
+  const { role, readOnly } = useAuth()
+  const canEdit = role !== 'prestador' && !readOnly
   const { data: teamMembers } = useData<{ id: string; name: string; provider_id?: string | null }>('team_members')
 
   const EMPTY_FORM = {

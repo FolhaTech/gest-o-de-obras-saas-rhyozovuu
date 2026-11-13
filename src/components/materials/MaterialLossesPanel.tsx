@@ -93,10 +93,11 @@ const total = (l: Pick<Loss, 'quantity' | 'unit_cost'>) => Number(l.quantity) * 
  * Controle de perdas de materiais. Com obraId, mostra e registra só as perdas dessa obra;
  * sem obraId (página Materiais), mostra todas e permite escolher a obra.
  * Gestor e Prestador registram e veem as perdas, mas não veem valores em dinheiro.
+ * O Financeiro só consulta (com valores): sem registrar, editar nem excluir.
  */
 export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
   const { toast } = useToast()
-  const { user, role, canSeeValues } = useAuth()
+  const { user, role, canSeeValues, readOnly } = useAuth()
   const showMoney = canSeeValues // valores (R$) só para o administrador
 
   const [losses, setLosses] = useState<Loss[]>([])
@@ -170,7 +171,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
     return { count: visible.length, value, topReason: top ? REASONS[top[0] as Reason] : '-' }
   }, [visible, showMoney])
 
-  const canManage = (l: Loss) => role !== 'prestador' || l.created_by === user?.id
+  const canManage = (l: Loss) => !readOnly && (role !== 'prestador' || l.created_by === user?.id)
 
   const openCreate = () => {
     setEditingId(null)
@@ -265,9 +266,11 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
           <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
-          <Button size="sm" onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Registrar perda
-          </Button>
+          {!readOnly && (
+            <Button size="sm" onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Registrar perda
+            </Button>
+          )}
         </div>
       </div>
 
@@ -344,9 +347,11 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
         <div className="text-center py-12 border rounded-lg bg-card space-y-3">
           <PackageX className="h-10 w-10 mx-auto text-muted-foreground opacity-60" />
           <p className="text-sm text-muted-foreground">Nenhuma perda registrada.</p>
-          <Button size="sm" onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Registrar perda
-          </Button>
+          {!readOnly && (
+            <Button size="sm" onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Registrar perda
+            </Button>
+          )}
         </div>
       ) : (
         <div className="rounded-md border bg-card overflow-x-auto">
@@ -360,7 +365,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
                 {showMoney && <TableHead className="text-right">Valor perdido</TableHead>}
                 <TableHead>Motivo</TableHead>
                 <TableHead>Registrado por</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                {!readOnly && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -388,6 +393,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
                   <TableCell className="text-sm">
                     {l.reporter?.full_name || l.reporter?.email || '-'}
                   </TableCell>
+                  {!readOnly && (
                   <TableCell className="text-right whitespace-nowrap">
                     {canManage(l) && (
                       <>
@@ -400,6 +406,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
                       </>
                     )}
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -407,6 +414,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
         </div>
       )}
 
+      {!readOnly && (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -549,6 +557,7 @@ export default function MaterialLossesPanel({ obraId }: { obraId?: string }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

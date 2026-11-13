@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AllocatedItemsPanel from './AllocatedItemsPanel'
 
@@ -67,6 +68,8 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
   const [editingItem, setEditingItem] = useState<ConsolidateItem | null>(null)
   const [editConsumption, setEditConsumption] = useState('')
   const { toast } = useToast()
+  // Financeiro só consulta: sem lançar nem ajustar consumo.
+  const { readOnly } = useAuth()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -401,6 +404,8 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
           </p>
         </div>
 
+        {!readOnly && (
+        <>
         <Dialog open={openEdit} onOpenChange={setOpenEdit}>
           <DialogContent>
             <DialogHeader>
@@ -508,6 +513,8 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
             </form>
           </DialogContent>
         </Dialog>
+        </>
+        )}
       </div>
 
       <Tabs
@@ -572,6 +579,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                               })}{' '}
                               kg
                             </span>
+                            {!readOnly && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -581,6 +589,7 @@ export default function MaterialsTab({ obraId, workArea }: { obraId: string; wor
                             >
                               <Edit2 className="h-4 w-4 text-muted-foreground" />
                             </Button>
+                            )}
                           </div>
                           {needsStockArea && (
                             <div className="text-xs font-normal mt-1 flex flex-col items-end">

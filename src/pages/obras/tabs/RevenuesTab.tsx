@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataFilter } from '@/hooks/use-data'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { Receita, Despesa, Obra } from '@/types'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Database, RefreshCw, WifiOff } from 'lucide-react'
@@ -45,6 +46,8 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
   )
 
   const { toast } = useToast()
+  // Financeiro só consulta: sem adicionar nem excluir receitas.
+  const { readOnly } = useAuth()
 
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -163,6 +166,7 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Histórico de Receitas</h3>
+        {!readOnly && (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <Button onClick={() => setIsOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" /> Adicionar Receita
@@ -224,6 +228,7 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="border rounded-md bg-card">
@@ -234,19 +239,19 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
               <TableHead>Origem</TableHead>
               <TableHead>Descrição</TableHead>
               <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="w-[100px] text-right">Ações</TableHead>
+              {!readOnly && <TableHead className="w-[100px] text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-4">
+                <TableCell colSpan={readOnly ? 4 : 5} className="text-center py-4">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : receitas?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={readOnly ? 4 : 5} className="text-center py-8 text-muted-foreground">
                   Nenhuma receita registrada para esta obra.
                 </TableCell>
               </TableRow>
@@ -263,6 +268,7 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
                   <TableCell className="text-right text-green-600 font-medium">
                     {formatCurrency(receita.value)}
                   </TableCell>
+                  {!readOnly && (
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
@@ -273,6 +279,7 @@ export default function RevenuesTab({ obraId, obra }: { obraId: string; obra?: O
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

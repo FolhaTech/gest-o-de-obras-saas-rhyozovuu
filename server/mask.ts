@@ -1,5 +1,5 @@
 /**
- * Valores (R$) só para o administrador (o Financeiro vê apenas os do Faturamento: BILLING_KEYS).
+ * Valores (R$) para o administrador e para o Financeiro (que só consulta: ele não grava nada fora do Faturamento).
  * As tabelas de valor puro (receitas, despesas, Airbnb, valores dos itens alocados) são fechadas por RLS.
  * Nas tabelas mistas (obras, materiais, equipe, contratos...) a coluna de valor não pode ser escondida por
  * linha, então a API remove essas chaves das respostas e das gravações de quem não é administrador, e recusa
@@ -34,7 +34,7 @@ export const VALUE_KEYS = new Set([
 ])
 /**
  * Valores do Faturamento (solicitações de compra e pagamento da equipe): Admin e Financeiro.
- * O Financeiro vê SÓ estes; os valores gerais acima (obras, materiais, equipe...) ficam escondidos dele também.
+ * O Financeiro também vê os valores gerais acima (obras, materiais, equipe...), só para consulta.
  */
 export const BILLING_KEYS = new Set([
   'quoted_value', // purchase_requests: valor cotado
@@ -69,7 +69,7 @@ export async function tierOf(caller: Caller): Promise<Tier> {
 
 const hidden = (tier: Tier) => (k: string) => {
   if (tier === 'admin') return false
-  if (tier === 'financeiro') return VALUE_KEYS.has(k) // vê só os valores do Faturamento (e a chave PIX, para pagar)
+  if (tier === 'financeiro') return false // consulta tudo o que a RLS libera, com valores e a chave PIX (para pagar)
   return VALUE_KEYS.has(k) || BILLING_KEYS.has(k) || (tier === 'restrito' && PRESTADOR_ONLY_KEYS.has(k))
 }
 

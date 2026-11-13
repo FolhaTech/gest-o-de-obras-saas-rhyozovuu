@@ -19,9 +19,29 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+
+// Selo de leitura (financeiro): mostra Presente/Ausente sem permitir marcar
+function PresenceBadge({ present, className }: { present: boolean; className?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'gap-1 text-xs font-semibold',
+        present
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+          : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
+        className,
+      )}
+    >
+      {present ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+      {present ? 'Presente' : 'Ausente'}
+    </Badge>
+  )
+}
 
 export default function AttendanceTab() {
-  const { canSeeValues } = useAuth() // valores (diária, extra, total) só para o administrador
+  const { canSeeValues, readOnly } = useAuth() // valores (diária, extra, total) só para o administrador
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [workers, setWorkers] = useState<Equipe[]>([])
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -330,6 +350,9 @@ export default function AttendanceTab() {
                       <div className="text-xs text-muted-foreground">{worker.role}</div>
                     </TableCell>
                     <TableCell className="text-center">
+                      {readOnly ? (
+                        <PresenceBadge present={isPresentToday} />
+                      ) : (
                       <div className="inline-flex rounded-md border p-1 bg-muted/40 gap-1 w-full max-w-[200px]">
                         <Button
                           type="button"
@@ -372,6 +395,7 @@ export default function AttendanceTab() {
                           Ausente
                         </Button>
                       </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-center font-bold">{totalDays}</TableCell>
                     {canSeeValues && (
@@ -382,7 +406,10 @@ export default function AttendanceTab() {
                     </TableCell>
                     )}
                     {canSeeValues && (
-                    <TableCell>
+                    <TableCell className={readOnly ? 'text-right' : undefined}>
+                      {readOnly ? (
+                        extraVal ? formatCurrency(extraVal) : '-'
+                      ) : (
                       <Input
                         type="number"
                         step="0.01"
@@ -391,15 +418,20 @@ export default function AttendanceTab() {
                         onBlur={(e) => handleExtraChange(worker.id, e.target.value, 'extra_value')}
                         placeholder="0.00"
                       />
+                      )}
                     </TableCell>
                     )}
                     <TableCell>
+                      {readOnly ? (
+                        <span className="text-sm text-muted-foreground">{extra?.notes || '-'}</span>
+                      ) : (
                       <Input
                         className="h-9"
                         defaultValue={extra?.notes || ''}
                         onBlur={(e) => handleExtraChange(worker.id, e.target.value, 'notes')}
                         placeholder="Observações..."
                       />
+                      )}
                     </TableCell>
                     {canSeeValues && (
                     <TableCell className="text-right font-bold text-primary">
@@ -452,6 +484,9 @@ export default function AttendanceTab() {
                     </div>
                   </div>
 
+                  {readOnly ? (
+                    <PresenceBadge present={isPresentToday} className="h-10 w-full justify-center text-sm" />
+                  ) : (
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
@@ -492,6 +527,7 @@ export default function AttendanceTab() {
                       AUSENTE
                     </Button>
                   </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3 pt-2 text-sm">
                     <div className="space-y-1">
@@ -515,6 +551,11 @@ export default function AttendanceTab() {
                       {canSeeValues && (
                       <div className="flex-1 space-y-1">
                         <label className="text-xs text-muted-foreground">Extra Semanal (R$)</label>
+                        {readOnly ? (
+                          <div className="font-semibold text-sm">
+                            {extraVal ? formatCurrency(extraVal) : '-'}
+                          </div>
+                        ) : (
                         <Input
                           type="number"
                           step="0.01"
@@ -525,16 +566,21 @@ export default function AttendanceTab() {
                           }
                           placeholder="0.00"
                         />
+                        )}
                       </div>
                       )}
                       <div className="flex-[2] space-y-1">
                         <label className="text-xs text-muted-foreground">Notas</label>
+                        {readOnly ? (
+                          <div className="text-sm text-muted-foreground">{extra?.notes || '-'}</div>
+                        ) : (
                         <Input
                           className="h-10"
                           defaultValue={extra?.notes || ''}
                           onBlur={(e) => handleExtraChange(worker.id, e.target.value, 'notes')}
                           placeholder="Obs..."
                         />
+                        )}
                       </div>
                     </div>
                   </div>
