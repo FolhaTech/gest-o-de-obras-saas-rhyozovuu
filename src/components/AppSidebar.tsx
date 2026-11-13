@@ -54,7 +54,7 @@ const allMenuItems: MenuItem[] = [
   { title: 'Materiais', url: '/materiais', icon: Package },
   { title: 'Manutenção', url: '/manutencao', icon: Hammer },
   { title: 'Veículos', url: '/veiculos', icon: Car },
-  { title: 'Faturamento', url: '/faturamento', icon: Wallet },
+  { title: 'Financeiro', url: '/faturamento', icon: Wallet },
   { title: 'Despesas', url: '/despesas', icon: Receipt },
   { title: 'Airbnb', url: '/airbnb', icon: Building2 },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
@@ -66,7 +66,7 @@ export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
   const [newPurchases, setNewPurchases] = useState(0)
-  // contador do Faturamento para quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e
+  // contador da área Financeiro para quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e
   // admin (aprovar as cotações dos pedidos que abriu, ou de quem não é admin)
   const seesPurchases = role === 'financeiro' || role === 'admin'
   useEffect(() => {

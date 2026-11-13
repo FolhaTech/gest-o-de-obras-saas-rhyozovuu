@@ -36,7 +36,7 @@ export default function AccessDenied() {
               <p className="font-medium text-foreground">Como financeiro, suas seções autorizadas são:</p>
               <ul className="list-disc list-inside space-y-1 pl-1">
                 <li>
-                  <strong className="text-foreground">Faturamento:</strong> Compras (cotações, compra,
+                  <strong className="text-foreground">Financeiro:</strong> Compras (cotações, compra,
                   pagamento e recebimento) e Pagamento da Equipe
                 </li>
                 <li>
@@ -80,7 +80,7 @@ export default function AccessDenied() {
             <>
               <Button asChild variant="default" className="w-full sm:w-auto gap-2">
                 <Link to="/faturamento">
-                  <Wallet className="h-4 w-4" /> Ir para Faturamento
+                  <Wallet className="h-4 w-4" /> Ir para Financeiro
                 </Link>
               </Button>
               <Button asChild variant="outline" className="w-full sm:w-auto gap-2">

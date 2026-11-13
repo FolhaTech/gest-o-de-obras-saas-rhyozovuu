@@ -14,6 +14,7 @@ import {
 } from '@/lib/purchases'
 import { Button } from '@/components/ui/button'
 import { fmtQty, who } from './helpers'
+import StorageImage from './StorageImage'
 
 interface Props {
   /** Solicitações que o usuário logado pode aprovar ou recusar (cotações enviadas pelo financeiro). */
@@ -65,7 +66,8 @@ export default function ApprovalPanel({ requests, quotes, onChanged, onReject }:
         return (
           <div key={r.id} className="space-y-2 rounded-md border bg-card p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
+              {r.item_image_path && <StorageImage path={r.item_image_path} alt={`Imagem do item: ${r.item}`} size={64} />}
+              <div className="min-w-0 flex-1">
                 <div className="font-medium">
                   {r.item} <span className="font-normal text-muted-foreground">· {fmtQty(Number(r.quantity))} {r.unit ?? ''}</span>
                 </div>
@@ -87,7 +89,8 @@ export default function ApprovalPanel({ requests, quotes, onChanged, onReject }:
               <div className="divide-y rounded-md border">
                 {list.map((q) => (
                   <div key={q.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm">
-                    <div className="space-y-0.5">
+                    {q.image_path && <StorageImage path={q.image_path} alt={`Imagem da cotação de ${q.supplier}`} />}
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="font-medium">
                         {q.supplier}
                         {best?.id === q.id && list.length > 1 && (

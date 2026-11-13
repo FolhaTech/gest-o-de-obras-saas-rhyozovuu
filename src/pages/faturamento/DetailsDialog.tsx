@@ -26,6 +26,7 @@ import InvoiceLink from './InvoiceLink'
 import PurchaseTimeline from './PurchaseTimeline'
 import { removeInvoiceFiles, uploadInvoice } from './invoice-storage'
 import { STATUS_CLASS, fmtDateTime, fmtQty, who } from './helpers'
+import StorageImage from './StorageImage'
 
 interface Props {
   request: PurchaseRequestRow | null
@@ -125,6 +126,13 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
 
         <PurchaseTimeline r={request} quoteCount={currentRound(quotes, request.quote_round).length} />
 
+        {request.item_image_path && (
+          <div className="flex items-start gap-3">
+            <StorageImage path={request.item_image_path} alt={`Imagem do item: ${request.item}`} size={96} />
+            <p className="text-xs text-muted-foreground">Imagem do item pedido. Clique para ampliar.</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div><span className="text-muted-foreground">Quantidade:</span> {fmtQty(Number(request.quantity))} {request.unit ?? ''}</div>
           <div><span className="text-muted-foreground">Obra:</span> {request.works?.name?.trim() ?? 'Geral'}</div>
@@ -188,7 +196,8 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
                 <div className="divide-y">
                   {quotes.filter((q) => q.round === rd).sort((a, b) => Number(a.quoted_value) - Number(b.quoted_value)).map((q) => (
                     <div key={q.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm">
-                      <div>
+                      {q.image_path && <StorageImage path={q.image_path} alt={`Imagem da cotação de ${q.supplier}`} size={48} />}
+                      <div className="min-w-0 flex-1">
                         <span className="font-medium">{q.supplier}</span>
                         {request.approved_quote_id === q.id && <Badge className="ml-2 bg-emerald-600 text-[10px] hover:bg-emerald-600">aprovada</Badge>}
                         <div className="text-xs text-muted-foreground">

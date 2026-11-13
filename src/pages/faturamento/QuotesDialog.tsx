@@ -31,6 +31,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtDateTime, fmtQty, who } from './helpers'
+import ImageField from './ImageField'
+import StorageImage from './StorageImage'
+import { removeImages, uploadQuoteImage } from './image-storage'
 
 interface Props {
   request: PurchaseRequestRow | null
@@ -38,7 +41,20 @@ interface Props {
   onChanged: () => void
 }
 
-const EMPTY = { id: '', supplier: '', quoted_value: '', delivery_days: '', payment_mode: 'after_delivery' as PaymentMode, payment_terms: '', notes: '' }
+const EMPTY = {
+  id: '',
+  supplier: '',
+  quoted_value: '',
+  delivery_days: '',
+  payment_mode: 'after_delivery' as PaymentMode,
+  payment_terms: '',
+  notes: '',
+  // imagem da cotação: a escolhida (ainda não enviada) e a que já está salva
+  image: null as File | null,
+  currentImageName: null as string | null,
+  currentImagePath: null as string | null,
+  removeImage: false,
+}
 
 /**
  * Financeiro: lança as cotações do item (mínimo 3 fornecedores diferentes) e envia para o admin que abriu a
@@ -113,13 +129,55 @@ export default function QuotesDialog({ request, onClose, onChanged }: Props) {
       notes: form.notes.trim() || null,
     }
     setSaving(true)
-    const res = form.id
-      ? await supabase.from('purchase_quotes' as any).update(body).eq('id', form.id)
-      : await supabase.from('purchase_quotes' as any).insert({ ...body, request_id: request.id })
+    let quoteId = form.id
+    let error: unknown = null
+    let imageProblem: string | null = null
+    if (form.id) {
+      // imagem nova: envia primeiro (a pasta leva o id da cotação); a antiga sai só depois de salvar
+      let uploaded: { path: string; name: string } | null = null
+      try {
+        if (form.image) uploaded = await uploadQuoteImage(request.id, form.id, form.image)
+      } catch (e) {
+        imageProblem = e instanceof Error ? e.message : 'Falha no envio da imagem.'
+      }
+      const imagePatch = uploaded
+        ? { image_path: uploaded.path, image_name: uploaded.name }
+        : form.removeImage && !imageProblem
+          ? { image_path: null, image_name: null }
+          : {}
+      const res = await supabase.from('purchase_quotes' as any).update({ ...body, ...imagePatch }).eq('id', form.id)
+      error = res.error
+      if (error) await removeImages([uploaded?.path])
+      else if (uploaded || (form.removeImage && !imageProblem)) await removeImages([form.currentImagePath])
+    } else {
+      const res = await supabase.from('purchase_quotes' as any).insert({ ...body, request_id: request.id }).select('id').single()
+      error = res.error
+      quoteId = (res.data as unknown as { id: string } | null)?.id ?? ''
+      // a imagem vai depois de criar a cotação (a pasta leva o id dela)
+      if (!error && form.image && quoteId) {
+        try {
+          const up = await uploadQuoteImage(request.id, quoteId, form.image)
+          const { error: linkErr } = await supabase.from('purchase_quotes' as any).update({ image_path: up.path, image_name: up.name }).eq('id', quoteId)
+          if (linkErr) {
+            await removeImages([up.path])
+            throw new Error(formatSupabaseError(linkErr))
+          }
+        } catch (e) {
+          imageProblem = e instanceof Error ? e.message : 'Falha no envio da imagem.'
+        }
+      }
+    }
     setSaving(false)
-    if (res.error) {
-      toast({ title: 'Erro ao salvar a cotação', description: formatSupabaseError(res.error), variant: 'destructive' })
+    if (error) {
+      toast({ title: 'Erro ao salvar a cotação', description: formatSupabaseError(error), variant: 'destructive' })
       return
+    }
+    if (imageProblem) {
+      toast({
+        title: 'A imagem não foi enviada',
+        description: `${imageProblem} A cotação foi salva: edite-a para anexar a imagem de novo.`,
+        variant: 'destructive',
+      })
     }
     setForm(EMPTY)
     await load()
@@ -194,7 +252,8 @@ export default function QuotesDialog({ request, onClose, onChanged }: Props) {
           <div className="space-y-2">
             {current.map((q) => (
               <div key={q.id} className="flex items-start justify-between gap-3 rounded-md border p-3 text-sm">
-                <div className="space-y-0.5">
+                {q.image_path && <StorageImage path={q.image_path} alt={`Imagem da cotação de ${q.supplier}`} />}
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="font-medium">
                     {q.supplier}
                     {best?.id === q.id && current.length > 1 && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">menor valor</span>}
@@ -209,7 +268,7 @@ export default function QuotesDialog({ request, onClose, onChanged }: Props) {
                 </div>
                 {editable && (
                   <div className="flex shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => setForm({ id: q.id, supplier: q.supplier, quoted_value: String(q.quoted_value).replace('.', ','), delivery_days: q.delivery_days === null ? '' : String(q.delivery_days), payment_mode: q.payment_mode, payment_terms: q.payment_terms ?? '', notes: q.notes ?? '' })}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => setForm({ id: q.id, supplier: q.supplier, quoted_value: String(q.quoted_value).replace('.', ','), delivery_days: q.delivery_days === null ? '' : String(q.delivery_days), payment_mode: q.payment_mode, payment_terms: q.payment_terms ?? '', notes: q.notes ?? '', image: null, currentImageName: q.image_name ?? (q.image_path ? 'imagem' : null), currentImagePath: q.image_path ?? null, removeImage: false })}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" title="Remover" onClick={() => remove(q)}>
@@ -259,6 +318,16 @@ export default function QuotesDialog({ request, onClose, onChanged }: Props) {
               <Label htmlFor="qd-notes">Observação</Label>
               <Textarea id="qd-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Marca, frete, validade da proposta..." />
             </div>
+            <ImageField
+              label="Imagem da cotação (opcional)"
+              file={form.image}
+              onChange={(f) => setForm({ ...form, image: f })}
+              currentName={form.currentImageName}
+              remove={form.removeImage}
+              onRemoveChange={(v) => setForm({ ...form, removeImage: v })}
+              disabled={saving}
+              hint="Foto do produto ou da proposta do fornecedor. Só o admin e o financeiro veem. A foto é reduzida antes de enviar."
+            />
             <div className="flex gap-2">
               <Button type="submit" size="sm" className="gap-1.5" disabled={saving}>
                 <Plus className="h-4 w-4" /> {form.id ? 'Salvar cotação' : 'Adicionar cotação'}

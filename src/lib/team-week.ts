@@ -1,5 +1,5 @@
 /**
- * Faturamento > Pagamento (Equipe): pagamento semanal calculado pela presença.
+ * Financeiro > Pagamento (Equipe): pagamento semanal calculado pela presença.
  * A semana vai de sábado a sexta (a mesma da tela de Presença). O banco calcula e guarda o valor (migração 26);
  * aqui ficam as datas, os textos e o agrupamento por semana e por pessoa.
  */

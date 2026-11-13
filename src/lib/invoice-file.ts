@@ -1,5 +1,5 @@
 /**
- * Faturamento > Compras: foto ou PDF da nota fiscal. O arquivo fica no bucket PRIVADO "purchase-invoices", na pasta
+ * Financeiro > Compras: foto ou PDF da nota fiscal. O arquivo fica no bucket PRIVADO "purchase-invoices", na pasta
  * da solicitação ("<id da solicitação>/<arquivo>"). As regras valem de novo no banco (migração 25).
  */
 export const INVOICE_BUCKET = 'purchase-invoices'
@@ -52,13 +52,13 @@ export function validateInvoiceFile(file: FileLike): string | null {
 }
 
 /** Nome sem acento nem símbolos, que não quebra o caminho no storage. Mantém a extensão. */
-export function safeFileName(name: string): string {
+export function safeFileName(name: string, fallback = 'nota'): string {
   const cleaned = (name ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^A-Za-z0-9._-]+/g, '_')
     .replace(/^[._]+/, '')
-  if (!cleaned) return 'nota'
+  if (!cleaned) return fallback
   const ext = extensionOf(cleaned)
   if (cleaned.length <= 80) return cleaned
   const base = cleaned.slice(0, cleaned.length - (ext ? ext.length + 1 : 0))
