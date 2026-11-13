@@ -30,16 +30,13 @@ import AccessDenied from './pages/AccessDenied'
 import NotFound from './pages/NotFound'
 
 /**
- * Redireciona a rota raiz ("/"): prestadores vão direto para /obras (não têm dashboard) e o financeiro para
- * /faturamento. Admin e Gestor acessam a tela principal (Index).
+ * Redireciona a rota raiz ("/"): prestadores vão direto para /obras (não têm dashboard). Admin, Gestor e
+ * Financeiro (só consulta) acessam a tela principal (Index).
  */
 function HomeRoute() {
   const { role } = useAuth()
   if (role === 'prestador') {
     return <Navigate to="/obras" replace />
-  }
-  if (role === 'financeiro') {
-    return <Navigate to="/faturamento" replace />
   }
   return <Index />
 }
@@ -71,19 +68,23 @@ const App = () => (
                 <Route path="/materiais" element={<MateriaisList />} />
                 <Route path="/manutencao" element={<ManutencaoList />} />
                 <Route path="/faturamento" element={<FaturamentoList />} />
+                <Route path="/equipes" element={<EquipesList />} />
+                <Route path="/relatorios" element={<RelatoriosList />} />
                 <Route path="/manual" element={<ManualPage />} />
+              </Route>
+
+              {/* Despesas: o Administrador e o Financeiro (só consulta); o Gestor não vê valores */}
+              <Route element={<RoleRoute allowedRoles={['admin', 'financeiro']} />}>
+                <Route path="/despesas" element={<DespesasList />} />
               </Route>
 
               {/* Seções exclusivas para Admin e Gestor: protegidas por RoleRoute */}
               <Route element={<RoleRoute allowedRoles={['admin', 'gestor']} />}>
-                <Route path="/equipes" element={<EquipesList />} />
                 <Route path="/veiculos" element={<VeiculosList />} />
-                {/* Páginas 100% financeiras: só o Administrador (o Gestor não vê valores) */}
+                {/* Airbnb: 100% financeiro, só o Administrador */}
                 <Route element={<RoleRoute allowedRoles={['admin']} />}>
-                  <Route path="/despesas" element={<DespesasList />} />
                   <Route path="/airbnb" element={<AirbnbPage />} />
                 </Route>
-                <Route path="/relatorios" element={<RelatoriosList />} />
                 <Route path="/configuracoes" element={<ConfiguracoesList />} />
               </Route>
 

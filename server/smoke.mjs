@@ -262,10 +262,13 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   await db.query("insert into public.team_payments (member_id, reference, payment_amount) values ($1, 'smoke-pagamento', 321)", [smkMember])
   // presença de uma pessoa só do teste, numa semana futura (sempre aberta): a contagem da semana vira pagamento pendente
   await db.query("delete from public.team_payments where member_name = 'smoke-semana'") // sobra de um teste interrompido
-  await db.query("delete from public.team_members where name = 'smoke-semana'")
+  await db.query("delete from public.expenses where description like 'smoke-%'")
+await db.query("delete from public.team_members where name = 'smoke-semana'")
   const wkMember = (await db.query("insert into public.team_members (name, daily_cost, payment_type, status) values ('smoke-semana', 120, 'daily', 'active') returning id")).rows[0].id
   const wkDates = (await db.query("select (public.team_week_start(public.today_br()) + 14)::text d1, (public.team_week_start(public.today_br()) + 15)::text d2")).rows[0]
   await db.query('insert into public.attendance_records (worker_id, date, is_present) values ($1, $2, true), ($1, $3, true)', [wkMember, wkDates.d1, wkDates.d2])
+  await db.query("delete from public.expenses where description like 'smoke-%'") // sobra de um teste interrompido
+  await db.query("insert into public.expenses (description, value) values ('smoke-despesa', 321.5)")
   const wkSel = () => sb.from('team_payments').select('id, member_name, payment_amount, status, source, week_days, week_rate, week_extra').eq('member_name', 'smoke-semana')
   const wkAdmin = await wkSel()
   ok('admin vê o pagamento semanal calculado pela presença (2 dias x 120)', !wkAdmin.error && wkAdmin.data.length === 1 && Number(wkAdmin.data[0].payment_amount) === 240 && wkAdmin.data[0].week_days === 2 && Number(wkAdmin.data[0].week_rate) === 120 && wkAdmin.data[0].source === 'attendance' && wkAdmin.data[0].status === 'pending', wkAdmin.error?.message ?? JSON.stringify(wkAdmin.data))
@@ -415,6 +418,8 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('o gestor não descobre o valor de cotação por filtro', quotesGFilter.error?.code === '42501', quotesGFilter.error?.code)
   const payG = await sb.from('team_payments').select('id')
   ok('o gestor não enxerga o pagamento da equipe', !payG.error && payG.data.length === 0)
+  const expG = await sb.from('expenses').select('id').eq('description', 'smoke-despesa')
+  ok('o gestor não enxerga despesas', !expG.error && expG.data.length === 0, expG.error?.message)
   const wkG = await sb.from('team_payments').select('id, week_rate').eq('member_name', 'smoke-semana')
   ok('o gestor não enxerga o pagamento semanal nem a diária', !wkG.error && wkG.data.length === 0, wkG.error?.message)
 
@@ -425,9 +430,25 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const payF = await sb.from('team_payments').select('reference, payment_amount').eq('reference', 'smoke-pagamento')
   ok('o financeiro vê o pagamento da equipe com o valor', !payF.error && payF.data.length === 1 && Number(payF.data[0].payment_amount) === 321, payF.error?.message)
   const worksF = await sb.from('works').select('*').limit(2)
-  ok('o financeiro NÃO vê os valores gerais das obras', !worksF.error && worksF.data.length > 0 && worksF.data.every((w) => w.name && !('contracted_value' in w) && !('budget_planned' in w)), worksF.error?.message)
+  ok('o financeiro vê os valores das obras (só consulta)', !worksF.error && worksF.data.length > 0 && worksF.data.every((w) => w.name && 'contracted_value' in w && 'budget_planned' in w), worksF.error?.message)
+  const worksFUp = await sb.from('works').update({ notes: 'smoke-fin' }).eq('id', worksF.data?.[0]?.id).select('id')
+  ok('o financeiro NÃO altera obra', !worksFUp.error ? worksFUp.data.length === 0 : true, worksFUp.error?.message)
+  const expF = await sb.from('expenses').select('description, value').eq('description', 'smoke-despesa')
+  ok('o financeiro lê despesas com o valor (só consulta)', !expF.error && expF.data.length === 1 && Number(expF.data[0].value) === 321.5, expF.error?.message)
+  const expFIns = await sb.from('expenses').insert({ description: 'smoke-fin-nao-pode', value: 1 }).select('id')
+  ok('o financeiro NÃO cria despesa', !!expFIns.error, expFIns.error?.message)
+  const expFDel = await sb.from('expenses').delete().eq('description', 'smoke-despesa').select('id')
+  ok('o financeiro NÃO exclui despesa', !expFDel.error ? expFDel.data.length === 0 : true, expFDel.error?.message)
+  const attF = await sb.from('attendance_records').select('id').limit(1)
+  ok('o financeiro lê a presença da equipe', !attF.error && attF.data.length === 1, attF.error?.message)
+  const attFIns = await sb.from('attendance_records').insert({ worker_id: wkMember, date: '2026-01-02', is_present: true }).select('id')
+  ok('o financeiro NÃO marca presença', !!attFIns.error, attFIns.error?.message)
+  const docsF = await sb.from('team_member_documents').select('id')
+  ok('o financeiro NÃO lê documentos pessoais da equipe', !docsF.error && docsF.data.length === 0, docsF.error?.message)
+  const airF = await sb.from('airbnb_properties').select('id')
+  ok('o financeiro NÃO lê o Airbnb', !airF.error && airF.data.length === 0, airF.error?.message)
   const memF = await sb.from('team_members').select('*').limit(2)
-  ok('o financeiro NÃO vê a diária e o salário da equipe', !memF.error && memF.data.length > 0 && memF.data.every((m) => !('daily_cost' in m) && !('fixed_salary' in m)))
+  ok('o financeiro vê a diária e o salário da equipe (para conferir o pagamento)', !memF.error && memF.data.length > 0 && memF.data.every((m) => 'daily_cost' in m && 'fixed_salary' in m), memF.error?.message)
   const memPix = await sb.from('team_members').select('id, name, pix_key').limit(2)
   ok('o financeiro vê a chave PIX (para pagar)', !memPix.error && memPix.data.length > 0 && memPix.data.every((m) => 'pix_key' in m), memPix.error?.message)
   const quotesF = await sb.from('purchase_quotes').select('supplier, quoted_value').eq('request_id', reqId)
@@ -569,6 +590,7 @@ await db.query("delete from public.house_maintenances where performed_by = 'smok
 await db.query("delete from public.materials where name like 'smoke-mat%'") // as movimentações saem em cascata
 await db.query("delete from public.purchase_requests where item like 'smoke-%'")
 await db.query("delete from public.team_payments where reference like 'smoke-%' or member_name like 'smoke-%'")
+await db.query("delete from public.expenses where description like 'smoke-%'")
 await db.query("delete from public.team_members where name = 'smoke-semana'") // a presença sai em cascata
 await db.query("delete from public.vehicles where plate like 'SMK%'") // manutenções e abastecimentos saem em cascata
 await db.query("delete from public.work_goals where title = 'smoke-meta'")

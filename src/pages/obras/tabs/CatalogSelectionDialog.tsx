@@ -14,6 +14,7 @@ import { Plus, AlertCircle, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 
@@ -37,6 +38,8 @@ export function CatalogSelectionDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [consumptions, setConsumptions] = useState<Record<string, string>>({})
   const { toast } = useToast()
+  // Financeiro só consulta: não vincula materiais do catálogo.
+  const { readOnly } = useAuth()
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen)
@@ -81,6 +84,8 @@ export function CatalogSelectionDialog({
   const filtered = catalogMaterials.filter((m) =>
     m.name.toLowerCase().includes(search.toLowerCase()),
   )
+
+  if (readOnly) return null
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

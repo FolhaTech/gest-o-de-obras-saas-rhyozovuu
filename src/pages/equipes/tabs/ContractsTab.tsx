@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 import { ExternalContract, ServiceProvider } from '@/types'
 import { Plus, Edit, Trash, CheckCircle2, Clock } from 'lucide-react'
 import {
@@ -34,6 +35,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters'
 import { Badge } from '@/components/ui/badge'
 
 export default function ContractsTab() {
+  const { readOnly } = useAuth() // financeiro só consulta: sem criar, editar nem excluir
   const {
     data: contracts,
     loading,
@@ -212,6 +214,7 @@ export default function ContractsTab() {
 
   return (
     <div className="space-y-4">
+      {!readOnly && (
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -232,6 +235,7 @@ export default function ContractsTab() {
           </DialogContent>
         </Dialog>
       </div>
+      )}
 
       <div className="rounded-md border bg-card">
         <Table>
@@ -242,7 +246,7 @@ export default function ContractsTab() {
               <TableHead>Valor Total</TableHead>
               <TableHead>Prazo</TableHead>
               <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              {!readOnly && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -288,6 +292,7 @@ export default function ContractsTab() {
                     </Badge>
                   )}
                 </TableCell>
+                {!readOnly && (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                     <Edit className="h-4 w-4" />
@@ -301,12 +306,14 @@ export default function ContractsTab() {
                     <Trash className="h-4 w-4" />
                   </Button>
                 </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
+      {!readOnly && (
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -320,6 +327,7 @@ export default function ContractsTab() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

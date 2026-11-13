@@ -29,6 +29,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import {
   Trash,
   Plus,
@@ -174,6 +175,8 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
   const [isTableMissing, setIsTableMissing] = useState(false)
   const [isNetworkError, setIsNetworkError] = useState(false)
   const { toast } = useToast()
+  // Financeiro só consulta: sem adicionar nem remover serviços.
+  const { readOnly } = useAuth()
 
   const [open, setOpen] = useState(false)
   const [selectedService, setSelectedService] = useState('')
@@ -532,9 +535,12 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
         <div>
           <h3 className="text-lg font-medium">Serviços Planejados</h3>
           <p className="text-sm text-muted-foreground">
-            Adicione serviços para calcular automaticamente as necessidades de insumos.
+            {readOnly
+              ? 'Serviços planejados e as necessidades de insumos de cada um.'
+              : 'Adicione serviços para calcular automaticamente as necessidades de insumos.'}
           </p>
         </div>
+        {!readOnly && (
         <div className="flex gap-2">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -798,6 +804,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
             </DialogContent>
           </Dialog>
         </div>
+        )}
       </div>
 
       <div className="rounded-md border bg-card">
@@ -809,7 +816,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
               <TableHead className="text-right">Qtd Planejada</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="text-center">Composição</TableHead>
-              <TableHead className="w-[80px]"></TableHead>
+              {!readOnly && <TableHead className="w-[80px]"></TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -826,6 +833,7 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                     densities={densities}
                   />
                 </TableCell>
+                {!readOnly && (
                 <TableCell className="text-right">
                   <Button
                     variant="ghost"
@@ -836,11 +844,12 @@ export default function WorkServicesTab({ obraId }: { obraId: string }) {
                     <Trash className="h-4 w-4" />
                   </Button>
                 </TableCell>
+                )}
               </TableRow>
             ))}
             {services.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={readOnly ? 5 : 6} className="text-center py-4 text-muted-foreground">
                   Nenhum serviço lançado nesta obra.
                 </TableCell>
               </TableRow>

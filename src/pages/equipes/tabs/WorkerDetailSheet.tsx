@@ -44,6 +44,16 @@ interface WorkerDetailSheetProps {
   onUpdated: () => void
 }
 
+// Campo somente leitura (financeiro): mostra o dado como texto, sem input
+function ReadOnlyField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium break-words">{value || '-'}</div>
+    </div>
+  )
+}
+
 export default function WorkerDetailSheet({
   open,
   onOpenChange,
@@ -51,7 +61,7 @@ export default function WorkerDetailSheet({
   onUpdated,
 }: WorkerDetailSheetProps) {
   const { toast } = useToast()
-  const { canSeeValues } = useAuth() // pagamento só para o administrador
+  const { canSeeValues, readOnly } = useAuth() // pagamento só para o administrador
 
   // Groups State
   const [groups, setGroups] = useState<WorkerGroup[]>([])
@@ -80,7 +90,7 @@ export default function WorkerDetailSheet({
         pix_key: worker.pix_key || '',
         admission_date: worker.admission_date || '',
       })
-      loadDocs()
+      if (!readOnly) loadDocs() // financeiro não lê documentos pessoais (RLS)
       loadTimeline()
       loadGroups()
     }
@@ -165,7 +175,7 @@ export default function WorkerDetailSheet({
       })
     })
 
-    docRes.data?.forEach((d) => {
+    if (!readOnly) docRes.data?.forEach((d) => {
       events.push({
         id: `doc-${d.id}`,
         date: d.created_at,
@@ -298,15 +308,49 @@ export default function WorkerDetailSheet({
 
         <Tabs defaultValue="cadastro" className="flex-1 flex flex-col min-h-0">
           <div className="px-6 pt-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className={`grid w-full ${readOnly ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <TabsTrigger value="cadastro">Cadastro</TabsTrigger>
-              <TabsTrigger value="documentos">Documentos</TabsTrigger>
+              {!readOnly && <TabsTrigger value="documentos">Documentos</TabsTrigger>}
               <TabsTrigger value="historico">Linha do Tempo</TabsTrigger>
             </TabsList>
           </div>
 
           <ScrollArea className="flex-1 p-6">
             <TabsContent value="cadastro" className="m-0 space-y-4">
+              {readOnly ? (
+                // Financeiro: dados do cadastro só para consulta
+                <div className="grid grid-cols-2 gap-4">
+                  <ReadOnlyField label="Nome" value={worker.name} />
+                  <ReadOnlyField label="Função" value={worker.role} />
+                  <ReadOnlyField label="Telefone" value={worker.phone} />
+                  <ReadOnlyField label="Chave PIX" value={worker.pix_key} />
+                  <ReadOnlyField
+                    label="Data de Admissão"
+                    value={worker.admission_date ? formatDate(worker.admission_date) : ''}
+                  />
+                  <ReadOnlyField
+                    label="Equipe / Tipo"
+                    value={worker.type === 'outsourced' ? 'Terceirizada' : 'Própria'}
+                  />
+                  <ReadOnlyField
+                    label="Grupo"
+                    value={groups.find((g) => g.id === worker.group_id)?.name || 'Sem grupo'}
+                  />
+                  <ReadOnlyField
+                    label="Status"
+                    value={worker.status === 'active' ? 'Ativo' : 'Inativo'}
+                  />
+                  {canSeeValues && (
+                    <ReadOnlyField
+                      label="Tipo Pagamento"
+                      value={worker.payment_type === 'monthly' ? 'Mensal' : 'Diária'}
+                    />
+                  )}
+                  {canSeeValues && (
+                    <ReadOnlyField label="Valor (R$)" value={formatCurrency(worker.daily_cost || 0)} />
+                  )}
+                </div>
+              ) : (
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -438,8 +482,10 @@ export default function WorkerDetailSheet({
                   Atualizar Cadastro
                 </Button>
               </form>
+              )}
             </TabsContent>
 
+            {!readOnly && (
             <TabsContent value="documentos" className="m-0 space-y-6">
               <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 text-center relative overflow-hidden group">
                 <UploadCloud className="w-10 h-10 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
@@ -517,6 +563,7 @@ export default function WorkerDetailSheet({
                 )}
               </div>
             </TabsContent>
+            )}
 
             <TabsContent value="historico" className="m-0 space-y-4 pb-10">
               <h4 className="font-medium">Atividades (Últimos 12 meses)</h4>

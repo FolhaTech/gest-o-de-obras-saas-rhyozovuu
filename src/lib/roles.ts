@@ -46,9 +46,18 @@ export function getRoleLabel(role: AppRole | string | null | undefined): string 
   }
 }
 
-/** Valores (R$, preços, custos, receitas, ROI): só o administrador. O Gestor tem as mesmas permissões, sem valores. */
+/**
+ * Valores (R$, preços, custos, receitas, ROI): o administrador e o Financeiro (que só consulta). O Gestor tem as
+ * mesmas permissões do administrador, sem valores.
+ */
 export function canSeeValuesFor(role: AppRole | string | null | undefined): boolean {
-  return normalizeRole(role) === 'admin'
+  const r = normalizeRole(role)
+  return r === 'admin' || r === 'financeiro'
+}
+
+/** Só consulta: o Financeiro vê as áreas liberadas a ele, mas não cria, edita nem exclui (só no Faturamento). */
+export function isReadOnlyFor(role: AppRole | string | null | undefined): boolean {
+  return normalizeRole(role) === 'financeiro'
 }
 
 /** Valores do Faturamento (compras e pagamento da equipe): Administrador e Financeiro. */
@@ -57,14 +66,17 @@ export function canSeeBillingFor(role: AppRole | string | null | undefined): boo
   return r === 'admin' || r === 'financeiro'
 }
 
-/** Páginas que só existem para quem vê valores (despesas e Airbnb são 100% financeiras). */
+/** Páginas que só existem para quem vê valores (despesas e Airbnb são 100% financeiras): o Gestor não entra. */
 const VALUE_ONLY_PATHS = ['/despesas', '/airbnb']
 
 /** Rotas do Prestador (colaborador): Obras, Planner, Materiais, Diário de Obra, Manutenção das casas e Faturamento > Compras. */
 const PRESTADOR_PATHS = ['/planner', '/obras', '/materiais', '/diario-obra', '/manutencao', '/faturamento']
 
-/** Rotas do Financeiro: só o Faturamento (compras solicitadas e pagamento da equipe). */
-const FINANCEIRO_PATHS = ['/faturamento']
+/**
+ * Rotas do Financeiro: o Faturamento (compras e pagamento da equipe) e, só para consulta, Dashboard, Obras, Despesas,
+ * Equipes, Materiais e Relatórios. Fora: Planner, Diário de Obra, Manutenção, Veículos, Airbnb e Configurações.
+ */
+const FINANCEIRO_PATHS = ['/', '/faturamento', '/obras', '/despesas', '/equipes', '/materiais', '/relatorios']
 
 const underPath = (clean: string, base: string) => clean === base || clean.startsWith(base + '/')
 
@@ -72,7 +84,8 @@ const underPath = (clean: string, base: string) => clean === base || clean.start
  * Rotas permitidas para cada papel.
  * Admin: acesso irrestrito. Gestor: tudo, menos as páginas financeiras (despesas e Airbnb).
  * Prestador: Obras, Planner, Materiais, Diário de Obra, Manutenção e Faturamento (só Compras).
- * Financeiro: Faturamento. Manual do Sistema: qualquer papel.
+ * Financeiro: Faturamento (edita) e Dashboard, Obras, Despesas, Equipes, Materiais e Relatórios (só consulta).
+ * Manual do Sistema: qualquer papel.
  */
 export function canAccessPath(
   role: AppRole | string | null | undefined,

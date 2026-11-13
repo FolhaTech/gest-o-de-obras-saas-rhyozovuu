@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { formatDate, formatSupabaseError } from '@/lib/formatters'
 import { PlannerAttachment, PlannerTask, PlannerTaskPriority, PlannerTaskStatus } from '@/types'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +70,8 @@ function StatusIcon({ status }: { status: PlannerTaskStatus }) {
  */
 export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   const { toast } = useToast()
+  // Financeiro não lê o Planner (RLS): a seção inteira some para ele.
+  const { readOnly } = useAuth()
   const [tasks, setTasks] = useState<PlannerTask[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -117,8 +120,8 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
   }, [obraId, showGeneral])
 
   useEffect(() => {
-    fetchTasks()
-  }, [fetchTasks])
+    if (!readOnly) fetchTasks()
+  }, [fetchTasks, readOnly])
 
   const handleLinkToWork = async (taskId: string) => {
     const { error: linkError } = await supabase
@@ -169,6 +172,8 @@ export default function PlannerTasksSection({ obraId }: { obraId: string }) {
       : 0
     return { total, done, progress }
   }, [tasks, obraId])
+
+  if (readOnly) return null
 
   return (
     <div className="space-y-4">

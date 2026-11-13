@@ -59,6 +59,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/23_compras_so_financeiro.sql  # Compr
 psql "$ADMIN_URL/gestao_obras" -f db/azure/24_compras_fluxo_cotacao.sql  # Compras em etapas: cotações (mín. 3 fornecedores) -> aprovação do admin -> compra -> pagamento antecipado/após a entrega -> recebimento; tabela purchase_quotes; teste: node db/azure/test-faturamento.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/25_compras_nota_fiscal_arquivo.sql  # Compras: foto/PDF da nota fiscal em bucket PRIVADO "purchase-invoices" (Admin e Financeiro leem, só o Financeiro envia; PDF/imagem até 15 MB); colunas invoice_file_*; excluir a solicitação apaga os arquivos; teste: node db/azure/test-faturamento.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/26_pagamento_semanal_equipe.sql  # Pagamento (Equipe): a presença (sábado a sexta) vira pagamento pendente por pessoa e semana, pago na sexta; complemento se a presença mudar depois de paga; teste: node db/azure/test-pagamento-semanal.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/27_financeiro_consulta.sql  # Financeiro consulta (só leitura, com valores) Dashboard, Obras, Despesas, Equipes, Materiais e Relatórios; segue sem escrever fora do Faturamento; teste: node db/azure/test-financeiro-consulta.mjs
 ```
 
 ## Desenvolvimento local

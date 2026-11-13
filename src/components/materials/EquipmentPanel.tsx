@@ -147,11 +147,14 @@ const num = (v: string) => Number((v || '0').replace(',', '.'))
  *  - manutenção a cada 6 meses (configurável por equipamento);
  *  - a partir de 5 manutenções, avisa para movimentar o equipamento ou comprar outro.
  * Admin e Gestor cadastram e registram manutenções; o Prestador só consulta. Valores (R$) só para o Admin.
+ * O Financeiro só consulta (com valores e histórico), sem cadastrar, editar, movimentar nem excluir.
  */
 export default function EquipmentPanel() {
   const { toast } = useToast()
-  const { role, canSeeValues } = useAuth()
-  const canManage = role !== 'prestador'
+  const { role, canSeeValues, readOnly } = useAuth()
+  const canManage = role !== 'prestador' && !readOnly
+  // o histórico de manutenções é só leitura: o Financeiro também consulta (o Prestador não)
+  const canViewHistory = role !== 'prestador'
 
   const [items, setItems] = useState<Equipment[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
@@ -461,7 +464,7 @@ export default function EquipmentPanel() {
                 <TableHead>Próxima</TableHead>
                 <TableHead>Situação</TableHead>
                 {canSeeValues && <TableHead className="text-right">Valor da compra</TableHead>}
-                {canManage && <TableHead className="text-right">Ações</TableHead>}
+                {canViewHistory && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -523,23 +526,29 @@ export default function EquipmentPanel() {
                   {canSeeValues && (
                     <TableCell className="text-right">{eq.purchase_value ? formatCurrency(Number(eq.purchase_value)) : '-'}</TableCell>
                   )}
-                  {canManage && (
+                  {canViewHistory && (
                     <TableCell className="text-right whitespace-nowrap">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Registrar manutenção" onClick={() => { setMaintTarget(eq); setMaintForm(emptyMaintenance()) }}>
-                        <Wrench className="h-4 w-4" />
-                      </Button>
+                      {canManage && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Registrar manutenção" onClick={() => { setMaintTarget(eq); setMaintForm(emptyMaintenance()) }}>
+                          <Wrench className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Histórico de manutenções" onClick={() => setHistoryTarget(eq.id)}>
                         <History className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Movimentar (trocar de obra/local)" onClick={() => { setMoveTarget(eq); setMoveWork(eq.work_id ?? NO_WORK) }}>
-                        <ArrowRightLeft className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(eq)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" title="Excluir" onClick={() => handleDelete(eq)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canManage && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Movimentar (trocar de obra/local)" onClick={() => { setMoveTarget(eq); setMoveWork(eq.work_id ?? NO_WORK) }}>
+                            <ArrowRightLeft className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(eq)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" title="Excluir" onClick={() => handleDelete(eq)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
@@ -549,7 +558,8 @@ export default function EquipmentPanel() {
         </div>
       )}
 
-      {/* Novo / editar equipamento */}
+      {/* Novo / editar equipamento (o Financeiro só consulta: sem os diálogos que gravam) */}
+      {canManage && (<>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -693,6 +703,8 @@ export default function EquipmentPanel() {
         </DialogContent>
       </Dialog>
 
+      </>)}
+
       {/* Histórico */}
       <Dialog open={!!historyEq} onOpenChange={(o) => !o && setHistoryTarget(null)}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
@@ -722,9 +734,11 @@ export default function EquipmentPanel() {
                           .join(' · ') || ' '}
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive shrink-0" title="Excluir" onClick={() => handleDeleteMaintenance(m.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canManage && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive shrink-0" title="Excluir" onClick={() => handleDeleteMaintenance(m.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
             </div>
@@ -733,6 +747,7 @@ export default function EquipmentPanel() {
       </Dialog>
 
       {/* Movimentar */}
+      {canManage && (
       <Dialog open={!!moveTarget} onOpenChange={(o) => !o && setMoveTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -762,6 +777,7 @@ export default function EquipmentPanel() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

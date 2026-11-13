@@ -148,8 +148,8 @@ export function useRentedLateCount() {
  */
 export default function RentedMaterialsPanel({ obraId }: { obraId?: string }) {
   const { toast } = useToast()
-  const { canSeeValues, role } = useAuth() // valores (R$) só para o administrador
-  const canManage = role !== 'prestador' // o Prestador só consulta
+  const { canSeeValues, role, readOnly } = useAuth() // valores (R$) só para o administrador
+  const canManage = role !== 'prestador' && !readOnly // o Prestador e o Financeiro só consultam
   const [items, setItems] = useState<RentedMaterial[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
   const [workFilter, setWorkFilter] = useState('all')
@@ -518,6 +518,7 @@ export default function RentedMaterialsPanel({ obraId }: { obraId?: string }) {
         </div>
       )}
 
+      {canManage && (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -669,6 +670,7 @@ export default function RentedMaterialsPanel({ obraId }: { obraId?: string }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

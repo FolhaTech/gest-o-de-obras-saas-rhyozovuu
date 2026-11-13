@@ -18,7 +18,7 @@ import { Database, RefreshCw, WifiOff } from 'lucide-react'
 import { isMissingTableError } from '@/hooks/use-data'
 
 export default function NotesTab({ obraId }: { obraId: string }) {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
   const { toast } = useToast()
   const {
     data: notes,
@@ -146,6 +146,8 @@ export default function NotesTab({ obraId }: { obraId: string }) {
         </Alert>
       )}
 
+      {/* Financeiro só consulta: sem formulário de nova nota */}
+      {!readOnly && (
       <Card>
         <CardHeader>
           <CardTitle>Nova Nota</CardTitle>
@@ -230,6 +232,7 @@ export default function NotesTab({ obraId }: { obraId: string }) {
           </form>
         </CardContent>
       </Card>
+      )}
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold tracking-tight">Histórico de Notas</h3>

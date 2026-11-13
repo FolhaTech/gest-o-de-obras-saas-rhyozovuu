@@ -476,7 +476,7 @@ export default function ManualPage() {
             ],
             [
               'Financeiro',
-              'Acessa somente o Faturamento: recebe as solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a compra, libera o pagamento (antecipado ou após a entrega), recebe e confere e encerra. Também controla o Pagamento (Equipe). Quem solicitou acompanha o pedido, que fica “Pendente pelo financeiro” até o início das cotações.',
+              'No Faturamento trabalha de verdade: recebe as solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a compra, libera o pagamento (antecipado ou após a entrega), recebe e confere e encerra; também controla o Pagamento (Equipe). Nas demais áreas só consulta, com valores (R$) e sem botões de criar, editar ou excluir: Dashboard, Obras, Despesas, Equipes (presença e diárias), Materiais e Relatórios. Não acessa Planner, Diário de Obra, Manutenção, Veículos, Airbnb, documentos pessoais da equipe, usuários nem configurações.',
             ],
             [
               'Prestador (colaborador)',

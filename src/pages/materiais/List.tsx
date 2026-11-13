@@ -37,8 +37,8 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 
 export default function MateriaisList() {
-  const { canSeeValues, role } = useAuth() // preço unitário só para o administrador
-  const canManage = role !== 'prestador' // o Prestador só consulta o estoque
+  const { canSeeValues, role, readOnly } = useAuth() // preço unitário só para o administrador
+  const canManage = role !== 'prestador' && !readOnly // o Prestador e o Financeiro só consultam o estoque
   const [materiais, setMateriais] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
@@ -448,7 +448,7 @@ export default function MateriaisList() {
                 <TableHead>Unidade</TableHead>
                 <TableHead className="text-right">Qtd Atual</TableHead>
                 <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                {!readOnly && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -492,6 +492,7 @@ export default function MateriaisList() {
                         </Badge>
                       )}
                     </TableCell>
+                    {!readOnly && (
                     <TableCell className="text-right flex items-center justify-end gap-1">
                       {canManage && (<>
                       <Button
@@ -512,12 +513,13 @@ export default function MateriaisList() {
                       </Button>
                       </>)}
                     </TableCell>
+                    )}
                   </TableRow>
                 )
               })}
               {filteredMaterials.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={readOnly ? 5 : 6} className="text-center py-6 text-muted-foreground">
                     Nenhum material encontrado.
                   </TableCell>
                 </TableRow>
@@ -528,6 +530,7 @@ export default function MateriaisList() {
       </Tabs>
       )}
 
+      {canManage && (
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -659,6 +662,7 @@ export default function MateriaisList() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ShieldAlert, CalendarDays, Briefcase, BookOpen, Package } from 'lucide-react'
+import { ShieldAlert, CalendarDays, Briefcase, BookOpen, Package, Wallet, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -15,6 +15,7 @@ import { getRoleLabel } from '@/lib/roles'
 export default function AccessDenied() {
   const { role } = useAuth()
   const roleLabel = getRoleLabel(role)
+  const isFinanceiro = role === 'financeiro'
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
@@ -30,6 +31,21 @@ export default function AccessDenied() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4 text-center">
+          {isFinanceiro ? (
+            <div className="rounded-lg bg-muted/60 p-4 text-left text-sm text-muted-foreground space-y-2">
+              <p className="font-medium text-foreground">Como financeiro, suas seções autorizadas são:</p>
+              <ul className="list-disc list-inside space-y-1 pl-1">
+                <li>
+                  <strong className="text-foreground">Faturamento:</strong> Compras (cotações, compra,
+                  pagamento e recebimento) e Pagamento da Equipe
+                </li>
+                <li>
+                  <strong className="text-foreground">Consulta, com valores:</strong> Dashboard, Obras,
+                  Despesas, Equipes, Materiais e Relatórios
+                </li>
+              </ul>
+            </div>
+          ) : (
           <div className="rounded-lg bg-muted/60 p-4 text-left text-sm text-muted-foreground space-y-2">
             <p className="font-medium text-foreground">
               Como prestador, suas seções autorizadas são:
@@ -53,12 +69,28 @@ export default function AccessDenied() {
               </li>
             </ul>
           </div>
+          )}
           <p className="text-xs text-muted-foreground">
             Se você necessita de permissão para visualizar finanças, equipes, relatórios ou
             configurações, solicite ao Administrador ou Gestor do sistema.
           </p>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row flex-wrap gap-2 justify-center pt-2">
+          {isFinanceiro ? (
+            <>
+              <Button asChild variant="default" className="w-full sm:w-auto gap-2">
+                <Link to="/faturamento">
+                  <Wallet className="h-4 w-4" /> Ir para Faturamento
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto gap-2">
+                <Link to="/">
+                  <Home className="h-4 w-4" /> Ir para o Dashboard
+                </Link>
+              </Button>
+            </>
+          ) : (
+          <>
           <Button asChild variant="default" className="w-full sm:w-auto gap-2">
             <Link to="/planner">
               <CalendarDays className="h-4 w-4" /> Ir para Planner
@@ -79,6 +111,8 @@ export default function AccessDenied() {
               <BookOpen className="h-4 w-4" /> Diário de Obra
             </Link>
           </Button>
+          </>
+          )}
         </CardFooter>
       </Card>
     </div>

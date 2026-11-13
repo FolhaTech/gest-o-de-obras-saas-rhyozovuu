@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 import { Equipe, WorkerGroup } from '@/types'
 import { Plus, Edit, Trash2, Users2, Database, AlertCircle, Layers } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -159,6 +160,7 @@ function GroupFormDialog({ open, onOpenChange, initialData, onSuccess }: GroupFo
 }
 
 export default function GroupsTab() {
+  const { readOnly } = useAuth() // financeiro só consulta: sem criar, editar nem excluir
   const {
     data: groups,
     loading,
@@ -271,9 +273,11 @@ export default function GroupsTab() {
           </p>
         </div>
 
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Grupo
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Grupo
+          </Button>
+        )}
       </div>
 
       <div className="rounded-md border bg-card">
@@ -284,7 +288,7 @@ export default function GroupsTab() {
               <TableHead>Descrição</TableHead>
               <TableHead className="text-center">Integrantes</TableHead>
               <TableHead>Data de Criação</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              {!readOnly && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -324,6 +328,7 @@ export default function GroupsTab() {
                     <TableCell className="text-sm text-muted-foreground">
                       {group.created_at ? formatDate(group.created_at) : '—'}
                     </TableCell>
+                    {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
@@ -346,6 +351,7 @@ export default function GroupsTab() {
                         </Button>
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 )
               })
@@ -355,6 +361,7 @@ export default function GroupsTab() {
       </div>
 
       {/* Info card explicativo sobre exclusão segura */}
+      {!readOnly && (
       <div className="flex items-start gap-2 text-xs text-muted-foreground p-3 rounded-lg bg-muted/40">
         <AlertCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <span>
@@ -362,9 +369,10 @@ export default function GroupsTab() {
           apenas passam a ficar sem grupo atribuído.
         </span>
       </div>
+      )}
 
       {/* Modal Criar */}
-      {createOpen && (
+      {!readOnly && createOpen && (
         <GroupFormDialog
           open={createOpen}
           onOpenChange={setCreateOpen}
@@ -376,7 +384,7 @@ export default function GroupsTab() {
       )}
 
       {/* Modal Editar */}
-      {editingGroup && (
+      {!readOnly && editingGroup && (
         <GroupFormDialog
           open={!!editingGroup}
           onOpenChange={(open) => !open && setEditingGroup(null)}

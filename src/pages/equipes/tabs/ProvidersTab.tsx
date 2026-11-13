@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 import { ServiceProvider } from '@/types'
 import { Plus, Edit, Trash } from 'lucide-react'
 import {
@@ -25,6 +26,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 
 export default function ProvidersTab() {
+  const { readOnly } = useAuth() // financeiro só consulta: sem criar, editar nem excluir
   const { data: providers, loading, refetch } = useData<ServiceProvider>('service_providers')
   const { toast } = useToast()
 
@@ -163,6 +165,7 @@ export default function ProvidersTab() {
 
   return (
     <div className="space-y-4">
+      {!readOnly && (
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -183,6 +186,7 @@ export default function ProvidersTab() {
           </DialogContent>
         </Dialog>
       </div>
+      )}
 
       <div className="rounded-md border bg-card">
         <Table>
@@ -192,7 +196,7 @@ export default function ProvidersTab() {
               <TableHead>Serviço</TableHead>
               <TableHead>Contato</TableHead>
               <TableHead>Equipe / Qualidade</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              {!readOnly && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -220,6 +224,7 @@ export default function ProvidersTab() {
                     Quali: {p.quality_rating || '-'}
                   </div>
                 </TableCell>
+                {!readOnly && (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
                     <Edit className="h-4 w-4" />
@@ -233,12 +238,14 @@ export default function ProvidersTab() {
                     <Trash className="h-4 w-4" />
                   </Button>
                 </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
+      {!readOnly && (
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -252,6 +259,7 @@ export default function ProvidersTab() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   )
 }

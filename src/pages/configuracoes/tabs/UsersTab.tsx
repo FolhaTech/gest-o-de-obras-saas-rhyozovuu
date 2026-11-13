@@ -195,10 +195,10 @@ export default function UsersTab() {
             preços, custos, ROI nem pagamentos.
           </li>
           <li>
-            <strong>Financeiro:</strong> Acessa somente o <strong>Faturamento</strong>: recebe as
-            solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a
-            compra, libera o pagamento (antecipado ou após a entrega) e recebe e confere a entrega. Também
-            controla o Pagamento (Equipe). Não acessa obras, estoque nem os demais valores.
+            <strong>Financeiro:</strong> Trabalha no <strong>Faturamento</strong> (cotações, compras,
+            pagamentos e recebimento; Pagamento da Equipe). Nas demais áreas só consulta, com valores e sem
+            criar, editar ou excluir: Dashboard, Obras, Despesas, Equipes, Materiais e Relatórios. Não acessa
+            Planner, Diário de Obra, Manutenção, Veículos, Airbnb, documentos pessoais nem configurações.
           </li>
           <li>
             <strong>Prestador:</strong> Acesso a Planner, Obras, Materiais e Diário de Obras (as
