@@ -7,6 +7,8 @@ import { formatCurrency, formatDate, formatSupabaseError } from '@/lib/formatter
 import {
   MIN_QUOTES,
   PAYMENT_MODE_LABEL,
+  approverText,
+  cheapest,
   STATUS_LABEL,
   URGENCY_LABEL,
   canCancel,
@@ -21,6 +23,7 @@ import {
   needsMyAction,
   sortRequests,
   waitingText,
+  type PurchaseQuoteRow,
   type PurchaseRequestRow,
   type PurchaseStatus,
   type Urgency,
@@ -55,6 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { StockMaterial } from '@/lib/stock-hint'
+import ApprovalPanel from './ApprovalPanel'
 import DecisionDialog from './DecisionDialog'
 import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
@@ -79,12 +83,6 @@ interface Line {
 let lineKey = 0
 const newLine = (): Line => ({ key: ++lineKey, item: '', quantity: '1', unit: 'un', notes: '' })
 
-interface QuoteLite {
-  request_id: string
-  round: number
-  supplier: string
-}
-
 /**
  * Faturamento > Compras. Fluxo: o usuário solicita; o financeiro cota (3 ou mais fornecedores) e envia ao admin que
  * abriu; o admin aprova (ou recusa e o financeiro refaz); o financeiro compra, escolhe o pagamento (antecipado ou
@@ -98,7 +96,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const seesAll = role !== 'prestador'
 
   const [items, setItems] = useState<PurchaseRequestRow[]>([])
-  const [quotes, setQuotes] = useState<QuoteLite[]>([])
+  const [quotes, setQuotes] = useState<PurchaseQuoteRow[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
   const [stock, setStock] = useState<StockMaterial[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,7 +126,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       supabase.from('works').select('id, name').order('name'),
       supabase.from('materials').select('name, unit_of_measure, unidade_nativa, stock_quantity, work_id').order('name'),
       // as cotações são valores: só Admin e Financeiro leem (para os outros a lista vem vazia)
-      supabase.from('purchase_quotes' as any).select('request_id, round, supplier'),
+      supabase.from('purchase_quotes' as any).select('*').order('created_at', { ascending: true }),
     ])
     if (rRes.error) {
       setError(formatSupabaseError(rRes.error))
@@ -136,7 +134,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       setError(null)
       setItems((rRes.data ?? []) as unknown as PurchaseRequestRow[])
     }
-    setQuotes(qRes.error ? [] : ((qRes.data ?? []) as unknown as QuoteLite[]))
+    setQuotes(qRes.error ? [] : ((qRes.data ?? []) as unknown as PurchaseQuoteRow[]))
     setWorks((wRes.data ?? []) as { id: string; name: string }[])
     setStock((mRes.data ?? []) as unknown as StockMaterial[])
     setLoading(false)
@@ -155,12 +153,22 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     onTodoCount?.(todoCount)
   }, [todoCount, onTodoCount])
 
-  // cotações da rodada atual de cada solicitação (fornecedores diferentes)
-  const quoteCount = useMemo(() => {
-    const out: Record<string, number> = {}
-    for (const r of items) out[r.id] = distinctSuppliers(currentRound(quotes.filter((q) => q.request_id === r.id), r.quote_round))
+  // cotações da rodada atual de cada solicitação
+  const roundQuotes = useMemo(() => {
+    const out: Record<string, PurchaseQuoteRow[]> = {}
+    for (const r of items) out[r.id] = currentRound(quotes.filter((q) => q.request_id === r.id), r.quote_round)
     return out
   }, [items, quotes])
+  const quoteCount = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const r of items) out[r.id] = distinctSuppliers(roundQuotes[r.id] ?? [])
+    return out
+  }, [items, roundQuotes])
+  // solicitações em que este admin precisa aprovar uma cotação
+  const toApprove = useMemo(
+    () => (isAdmin ? sortRequests(items.filter((r) => canDecide(r, user?.id, role, r.requester?.role))) : []),
+    [items, isAdmin, user?.id, role],
+  )
 
   const visible = useMemo(() => {
     const t = search.trim().toLowerCase()
@@ -324,17 +332,17 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
           Você tem {minePending} solicitação(ões) <strong>pendente(s) pelo financeiro</strong>. Elas ficam com o financeiro até ele iniciar as cotações.
         </div>
       )}
-      {(isFinance || isAdmin) && todoCount > 0 && (
+      {isFinance && todoCount > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0" />
-            {isAdmin
-              ? `${todoCount} solicitação(ões) com cotações aguardando a sua aprovação.`
-              : `${todoCount} solicitação(ões) aguardando a sua ação.`}
+            {todoCount} solicitação(ões) aguardando a sua ação.
           </span>
           <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setStatusFilter('mine')}>Ver</Button>
         </div>
       )}
+
+      {isAdmin && <ApprovalPanel requests={toApprove} quotes={quotes} onChanged={fetchAll} onReject={setDecideId} />}
 
       <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 ${canSeeBilling ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
         {cards.map((c) => (
@@ -425,7 +433,9 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         {r.status === 'requested' && <Clock className="h-3 w-3" />}
                         {STATUS_LABEL[r.status]}
                       </Badge>
-                      <div className="mt-1 max-w-[14rem] text-[11px] leading-tight text-muted-foreground">{waitingText(r.status, r.payment_mode)}</div>
+                      <div className="mt-1 max-w-[14rem] text-[11px] leading-tight text-muted-foreground">
+                        {r.status === 'quotes_sent' ? approverText(who(r.requester), r.requester?.role) : waitingText(r.status, r.payment_mode)}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.supplier && <div>{r.supplier}</div>}
@@ -441,11 +451,16 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                           {quoteCount[r.id] ?? 0}/{MIN_QUOTES} cotações{r.quote_round > 1 ? ` · rodada ${r.quote_round}` : ''}
                         </div>
                       )}
+                      {canSeeBilling && r.status === 'quotes_sent' && (roundQuotes[r.id] ?? []).length > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {(roundQuotes[r.id] ?? []).length} cotações enviadas · menor {formatCurrency(Number(cheapest(roundQuotes[r.id] ?? [])?.quoted_value))} ({cheapest(roundQuotes[r.id] ?? [])?.supplier})
+                        </div>
+                      )}
                       {r.status === 'quoting' && r.quote_round > 1 && r.admin_notes && (
                         <div className="text-xs text-rose-700 max-w-xs">Recusa do admin: {r.admin_notes}</div>
                       )}
                       {r.finance_notes && <div className="text-xs max-w-xs">{r.finance_notes}</div>}
-                      {!r.supplier && !r.finance_notes && !r.invoice_number && !hasValue && !(canSeeBilling && (r.status === 'requested' || r.status === 'quoting')) && (
+                      {!r.supplier && !r.finance_notes && !r.invoice_number && !hasValue && !(canSeeBilling && (r.status === 'requested' || r.status === 'quoting' || r.status === 'quotes_sent')) && (
                         <span className="text-xs text-muted-foreground">{r.status === 'requested' ? 'Aguardando o financeiro' : '-'}</span>
                       )}
                     </TableCell>

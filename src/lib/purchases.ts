@@ -97,6 +97,15 @@ export function waitingText(status: string, mode?: string | null): string {
   }
 }
 
+/**
+ * Quem aprova as cotações, em texto: o admin que abriu a solicitação; se quem abriu não é admin, qualquer admin.
+ */
+export function approverText(requesterName: string, requesterRole?: string | null): string {
+  return norm(requesterRole) === 'admin'
+    ? `Aguardando ${requesterName} (admin que abriu) aprovar uma das cotações`
+    : 'Aguardando um admin aprovar uma das cotações'
+}
+
 /** Próxima situação do caminho feliz do financeiro (nulo se quem age é outro ou terminou). */
 export function nextFinanceStatus(status: string, mode?: string | null): PurchaseStatus | null {
   switch (status) {
