@@ -392,7 +392,8 @@ export default function ManualPage() {
           <strong>Solicitação.</strong> Em <strong>Faturamento → Compras</strong>, clique em{' '}
           <strong>“Solicitar compra”</strong> e informe o item, a quantidade, a obra, a urgência e o prazo. O pedido
           fica <strong>“Pendente pelo financeiro”</strong>. Quem pediu pode editar ou cancelar enquanto estiver nessa
-          situação.
+          situação. Ao digitar o item, o sistema mostra <strong>quanto dele já existe no estoque</strong> (Materiais) e
+          avisa quando o estoque já cobre o pedido, para conferir antes de comprar.
         </Step>
         <Step n={2}>
           <strong>Cotações (financeiro).</strong> O financeiro lança <strong>3 ou mais cotações de fornecedores

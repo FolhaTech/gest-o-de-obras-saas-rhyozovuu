@@ -54,10 +54,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import type { StockMaterial } from '@/lib/stock-hint'
 import DecisionDialog from './DecisionDialog'
 import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
 import QuotesDialog from './QuotesDialog'
+import StockHint from './StockHint'
 import { STATUS_CLASS, URGENCY_CLASS, fmtQty, todayISO, who } from './helpers'
 
 const SELECT =
@@ -98,7 +100,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const [items, setItems] = useState<PurchaseRequestRow[]>([])
   const [quotes, setQuotes] = useState<QuoteLite[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
-  const [catalog, setCatalog] = useState<string[]>([])
+  const [stock, setStock] = useState<StockMaterial[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -124,7 +126,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     const [rRes, wRes, mRes, qRes] = await Promise.all([
       supabase.from('purchase_requests' as any).select(SELECT).order('created_at', { ascending: false }),
       supabase.from('works').select('id, name').order('name'),
-      supabase.from('materials').select('name').order('name'),
+      supabase.from('materials').select('name, unit_of_measure, unidade_nativa, stock_quantity, work_id').order('name'),
       // as cotações são valores: só Admin e Financeiro leem (para os outros a lista vem vazia)
       supabase.from('purchase_quotes' as any).select('request_id, round, supplier'),
     ])
@@ -136,7 +138,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     }
     setQuotes(qRes.error ? [] : ((qRes.data ?? []) as unknown as QuoteLite[]))
     setWorks((wRes.data ?? []) as { id: string; name: string }[])
-    setCatalog(((mRes.data ?? []) as { name: string }[]).map((m) => m.name))
+    setStock((mRes.data ?? []) as unknown as StockMaterial[])
     setLoading(false)
   }, [])
 
@@ -174,6 +176,9 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     })
     return sortRequests(list)
   }, [items, statusFilter, workFilter, search, mine])
+
+  // nomes do cadastro de Materiais para sugerir ao digitar o item
+  const catalog = useMemo(() => [...new Set(stock.map((m) => m.name.trim()).filter(Boolean))], [stock])
 
   const monthPrefix = today.slice(0, 7)
   const count = (...st: PurchaseStatus[]) => items.filter((r) => st.includes(r.status)).length
@@ -548,6 +553,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         </Button>
                       )}
                     </div>
+                    <StockHint item={l.item} quantity={num(l.quantity)} unit={l.unit} materials={stock} />
                     <Input placeholder="Observação (marca, medida, para que serve...)" value={l.notes} onChange={(e) => setLine(l.key, { notes: e.target.value })} />
                   </div>
                 ))}
