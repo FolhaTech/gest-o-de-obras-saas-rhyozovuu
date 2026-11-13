@@ -258,15 +258,20 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   // solicitação de compra e pagamento da equipe de teste (Faturamento), com valores
   const smkMember = (await db.query('select id from public.team_members order by name limit 1')).rows[0].id
   const reqId = (await db.query("insert into public.purchase_requests (item, quantity, unit, requested_by, status, supplier, quoted_value, final_value) values ('smoke-compra', 3, 'un', $1, 'quoting', 'Loja Smoke', 150, 140) returning id", [smokeUserId])).rows[0].id
+  await db.query("insert into public.purchase_quotes (request_id, supplier, quoted_value, round) values ($1, 'smoke-fornecedor', 77, 1)", [reqId])
   await db.query("insert into public.team_payments (member_id, reference, payment_amount) values ($1, 'smoke-pagamento', 321)", [smkMember])
   const reqSel = () => sb.from('purchase_requests').select('id, item, status, supplier, quoted_value, final_value').eq('id', reqId)
   const reqAdmin = await reqSel()
   ok('admin lê a solicitação de compra com os valores', !reqAdmin.error && reqAdmin.data.length === 1 && Number(reqAdmin.data[0].quoted_value) === 150 && Number(reqAdmin.data[0].final_value) === 140, reqAdmin.error?.message)
+  const quotesAdmin = await sb.from('purchase_quotes').select('supplier, quoted_value').eq('request_id', reqId)
+  ok('admin lê as cotações com os valores', !quotesAdmin.error && quotesAdmin.data.length === 1 && Number(quotesAdmin.data[0].quoted_value) === 77, quotesAdmin.error?.message)
   // pedido de OUTRO usuário (o admin não é o solicitante): ele não atende, só o financeiro
   const otherUser = (await db.query('select id from public.profiles where id <> $1 order by email limit 1', [smokeUserId])).rows[0].id
   const reqOther = (await db.query("insert into public.purchase_requests (item, quantity, requested_by) values ('smoke-compra-outro', 1, $1) returning id", [otherUser])).rows[0].id
   const admAtend = await sb.from('purchase_requests').update({ status: 'approved', supplier: 'Admin' }).eq('id', reqOther).select('id')
-  ok('o admin NÃO atende o pedido de outro usuário (só o financeiro atende)', !admAtend.error && admAtend.data.length === 0, admAtend.error?.message)
+  ok('o admin NÃO pula o fluxo (aprovar exige as cotações enviadas pelo financeiro)', !!admAtend.error && /não permitida/.test(admAtend.error.message), admAtend.error?.message)
+  const admQuote = await sb.from('purchase_quotes').insert({ request_id: reqOther, supplier: 'Admin', quoted_value: 1 }).select('id')
+  ok('o admin NÃO lança cotação (só o financeiro)', !!admQuote.error, admQuote.error?.message)
   const reqOtherRow = (await db.query('select status, supplier from public.purchase_requests where id = $1', [reqOther])).rows[0]
   ok('...e o pedido continua pendente pelo financeiro', reqOtherRow.status === 'requested' && reqOtherRow.supplier === null)
   const payAdmin = await sb.from('team_payments').select('reference, payment_amount').eq('reference', 'smoke-pagamento')
@@ -292,7 +297,11 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const newReq = await sb.from('purchase_requests').insert({ item: 'smoke-pedido', quantity: 2, unit: 'un', status: 'approved', supplier: 'Fornecedor Falso', quoted_value: 9, final_value: 9 }).select('id, status, supplier, quoted_value').single()
   ok('o prestador solicita compra e a parte do financeiro é ignorada (situação "solicitada")', !newReq.error && newReq.data.status === 'requested' && newReq.data.supplier === null && !('quoted_value' in newReq.data), newReq.error?.message)
   const reqEdit = await sb.from('purchase_requests').update({ status: 'approved' }).eq('id', newReq.data?.id).select('id')
-  ok('o prestador não aprova a própria solicitação', !!reqEdit.error && /cancelá-la/.test(reqEdit.error.message), reqEdit.error?.message)
+  ok('o prestador não aprova a própria solicitação', !!reqEdit.error && /não permitida/.test(reqEdit.error.message), reqEdit.error?.message)
+  const quotesP = await sb.from('purchase_quotes').select('id')
+  ok('o prestador não enxerga as cotações (são valores)', !quotesP.error && quotesP.data.length === 0, quotesP.error?.message)
+  const quoteP = await sb.from('purchase_quotes').insert({ request_id: newReq.data?.id, supplier: 'Intruso', quoted_value: 1 }).select('id')
+  ok('o prestador não lança cotação', !!quoteP.error, quoteP.error?.message)
   const payP = await sb.from('team_payments').select('id')
   ok('o prestador não enxerga o pagamento da equipe', !payP.error && payP.data.length === 0)
   // manutenção da casa: o colaborador faz check-in, lança material (baixa no estoque) e faz check-out
@@ -391,6 +400,10 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('o gestor vê a solicitação de compra, sem os valores', !reqG.error && reqG.data.length === 1 && reqG.data[0].item === 'smoke-compra' && !('quoted_value' in reqG.data[0]) && !('final_value' in reqG.data[0]), reqG.error?.message)
   const reqGFilter = await sb.from('purchase_requests').select('id').gt('quoted_value', 100)
   ok('o gestor não descobre o valor cotado por filtro', reqGFilter.error?.code === '42501', reqGFilter.error?.code)
+  const quotesG = await sb.from('purchase_quotes').select('id')
+  ok('o gestor não enxerga as cotações', !quotesG.error && quotesG.data.length === 0, quotesG.error?.message)
+  const quotesGFilter = await sb.from('purchase_quotes').select('id').gt('quoted_value', 10)
+  ok('o gestor não descobre o valor de cotação por filtro', quotesGFilter.error?.code === '42501', quotesGFilter.error?.code)
   const payG = await sb.from('team_payments').select('id')
   ok('o gestor não enxerga o pagamento da equipe', !payG.error && payG.data.length === 0)
 
@@ -406,8 +419,79 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('o financeiro NÃO vê a diária e o salário da equipe', !memF.error && memF.data.length > 0 && memF.data.every((m) => !('daily_cost' in m) && !('fixed_salary' in m)))
   const memPix = await sb.from('team_members').select('id, name, pix_key').limit(2)
   ok('o financeiro vê a chave PIX (para pagar)', !memPix.error && memPix.data.length > 0 && memPix.data.every((m) => 'pix_key' in m), memPix.error?.message)
-  const atend = await sb.from('purchase_requests').update({ status: 'purchased', final_value: 138, supplier: 'Loja Smoke 2' }).eq('id', reqId).select('status, final_value, handled_by, purchased_at').single()
-  ok('o financeiro atende: marca como comprada e registra o valor', !atend.error && atend.data.status === 'purchased' && Number(atend.data.final_value) === 138 && atend.data.handled_by === smokeUserId && !!atend.data.purchased_at, atend.error?.message)
+  const quotesF = await sb.from('purchase_quotes').select('supplier, quoted_value').eq('request_id', reqId)
+  ok('o financeiro lê as cotações com os valores', !quotesF.error && quotesF.data.length === 1 && Number(quotesF.data[0].quoted_value) === 77, quotesF.error?.message)
+  // fluxo: o financeiro cota (3 fornecedores), o admin aprova, o financeiro compra, recebe, libera o pagamento
+  const flowId = newReq.data?.id
+  const flowStatus = async () => (await db.query('select * from public.purchase_requests where id = $1', [flowId])).rows[0]
+  const fq1 = await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: 'Smoke A', quoted_value: 120, payment_mode: 'advance', delivery_days: 5 }).select('id, round, supplier').single()
+  ok('o financeiro lança a primeira cotação (rodada 1)', !fq1.error && fq1.data.round === 1, fq1.error?.message)
+  ok('...e a solicitação entra em cotação', (await flowStatus()).status === 'quoting')
+  const fqDup = await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: ' smoke a ', quoted_value: 100 }).select('id')
+  ok('não repete o fornecedor na mesma rodada', !!fqDup.error && fqDup.error.code === '23505', fqDup.error?.code)
+  await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: 'Smoke B', quoted_value: 110, payment_mode: 'after_delivery' })
+  const fTooFew = await sb.from('purchase_requests').update({ status: 'quotes_sent' }).eq('id', flowId).select('id')
+  ok('com 2 cotações não envia ao admin (mínimo 3)', !!fTooFew.error && /ao menos 3/.test(fTooFew.error.message), fTooFew.error?.message)
+  const fq3 = await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: 'Smoke C', quoted_value: 130, payment_mode: 'after_delivery' }).select('id').single()
+  const fSend = await sb.from('purchase_requests').update({ status: 'quotes_sent' }).eq('id', flowId).select('status').single()
+  ok('com 3 fornecedores diferentes o financeiro envia ao admin', !fSend.error && fSend.data.status === 'quotes_sent', fSend.error?.message)
+  const fLate = await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: 'Smoke D', quoted_value: 1 }).select('id')
+  ok('depois de enviadas não entram mais cotações', !!fLate.error, fLate.error?.message)
+  const fSelfApprove = await sb.from('purchase_requests').update({ status: 'approved', approved_quote_id: fq3.data?.id }).eq('id', flowId).select('id')
+  ok('o financeiro não aprova a cotação', !!fSelfApprove.error && /Somente o administrador/.test(fSelfApprove.error.message), fSelfApprove.error?.message)
+
+  // admin (quem abriu o pedido) recusa e depois aprova
+  await db.query("update public.profiles set role = 'admin' where id = $1", [smokeUserId])
+  const aNoWhy = await sb.from('purchase_requests').update({ status: 'quoting' }).eq('id', flowId).select('id')
+  ok('o admin só recusa com o motivo', !!aNoWhy.error && /motivo da recusa/.test(aNoWhy.error.message), aNoWhy.error?.message)
+  const aRej = await sb.from('purchase_requests').update({ status: 'quoting', admin_notes: 'smoke: refazer' }).eq('id', flowId).select('status, quote_round, admin_notes').single()
+  ok('o admin recusa: volta ao financeiro, nova rodada e motivo guardado', !aRej.error && aRej.data.status === 'quoting' && aRej.data.quote_round === 2 && aRej.data.admin_notes === 'smoke: refazer', aRej.error?.message)
+  await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
+  const r2 = []
+  for (const [n, v, m] of [['Smoke A', 100, 'after_delivery'], ['Smoke B', 105, 'advance'], ['Smoke E', 99, 'after_delivery']]) {
+    r2.push(await sb.from('purchase_quotes').insert({ request_id: flowId, supplier: n, quoted_value: v, payment_mode: m }).select('id, round').single())
+  }
+  ok('rodada 2: o mesmo fornecedor cota de novo', r2.every((x) => !x.error && x.data.round === 2), r2.find((x) => x.error)?.error?.message)
+  const fSend2 = await sb.from('purchase_requests').update({ status: 'quotes_sent' }).eq('id', flowId).select('status').single()
+  ok('rodada 2: envia de novo ao admin', !fSend2.error && fSend2.data.status === 'quotes_sent', fSend2.error?.message)
+  await db.query("update public.profiles set role = 'admin' where id = $1", [smokeUserId])
+  const aOld = await sb.from('purchase_requests').update({ status: 'approved', approved_quote_id: fq3.data?.id }).eq('id', flowId).select('id')
+  ok('cotação de rodada antiga não vale', !!aOld.error && /Escolha uma das cotações/.test(aOld.error.message), aOld.error?.message)
+  const aOk = await sb.from('purchase_requests').update({ status: 'approved', approved_quote_id: r2[2].data?.id }).eq('id', flowId).select('status, supplier, quoted_value, final_value, payment_mode, approver_id').single()
+  ok('o admin aprova: copia fornecedor, valor e pagamento da cotação', !aOk.error && aOk.data.status === 'approved' && aOk.data.supplier === 'Smoke E' && Number(aOk.data.final_value) === 99 && aOk.data.payment_mode === 'after_delivery' && aOk.data.approver_id === smokeUserId, aOk.error?.message)
+  const aQuotes = await sb.from('purchase_quotes').select('id, round').eq('request_id', flowId)
+  ok('o admin vê as cotações das duas rodadas (histórico)', !aQuotes.error && aQuotes.data.length === 6, String(aQuotes.data?.length))
+
+  // financeiro compra, recebe e confere, libera o pagamento (após a entrega)
+  await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
+  const fBadMode = await sb.from('purchase_requests').update({ status: 'awaiting_payment' }).eq('id', flowId).select('id')
+  ok('pagamento após a entrega não vai para "aguardando pagamento"', !!fBadMode.error && /Pagamento antecipado vai para/.test(fBadMode.error.message), fBadMode.error?.message)
+  const fBuy = await sb.from('purchase_requests').update({ status: 'awaiting_delivery', invoice_number: 'NF-SMK' }).eq('id', flowId).select('status, purchased_at, handled_by').single()
+  ok('o financeiro faz a compra (aguardando entrega, data gravada)', !fBuy.error && fBuy.data.status === 'awaiting_delivery' && !!fBuy.data.purchased_at && fBuy.data.handled_by === smokeUserId, fBuy.error?.message)
+  const fPayEarly = await sb.from('purchase_requests').update({ status: 'closed' }).eq('id', flowId).select('id')
+  ok('após a entrega: não paga nem encerra antes de receber e conferir', !!fPayEarly.error, fPayEarly.error?.message)
+  const fRcv = await sb.from('purchase_requests').update({ status: 'awaiting_release', receipt_notes: 'smoke: conferido' }).eq('id', flowId).select('status, received_by, receipt_notes').single()
+  ok('o financeiro recebe e confere: liberar pagamento', !fRcv.error && fRcv.data.status === 'awaiting_release' && fRcv.data.received_by === smokeUserId, fRcv.error?.message)
+  const fRel = await sb.from('purchase_requests').update({ status: 'closed' }).eq('id', flowId).select('status, payment_released_by, closed_at').single()
+  ok('o financeiro libera o pagamento e encerra', !fRel.error && fRel.data.status === 'closed' && fRel.data.payment_released_by === smokeUserId && !!fRel.data.closed_at, fRel.error?.message)
+  // pagamento antecipado: libera antes da entrega
+  const advId = (await db.query("insert into public.purchase_requests (item, quantity, requested_by) values ('smoke-antecipado', 1, $1) returning id", [smokeUserId])).rows[0].id
+  const advQ = []
+  for (const [n, v] of [['Adv A', 50], ['Adv B', 40], ['Adv C', 45]]) {
+    advQ.push((await sb.from('purchase_quotes').insert({ request_id: advId, supplier: n, quoted_value: v, payment_mode: 'advance' }).select('id').single()).data?.id)
+  }
+  await sb.from('purchase_requests').update({ status: 'quotes_sent' }).eq('id', advId)
+  await db.query("update public.profiles set role = 'admin' where id = $1", [smokeUserId])
+  await sb.from('purchase_requests').update({ status: 'approved', approved_quote_id: advQ[1] }).eq('id', advId)
+  await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
+  const aBuy = await sb.from('purchase_requests').update({ status: 'awaiting_payment' }).eq('id', advId).select('status').single()
+  ok('antecipado: a compra fica aguardando a liberação do pagamento', !aBuy.error && aBuy.data.status === 'awaiting_payment', aBuy.error?.message)
+  const aPay = await sb.from('purchase_requests').update({ status: 'awaiting_delivery' }).eq('id', advId).select('status, payment_released_by').single()
+  ok('antecipado: o financeiro libera o pagamento antes da entrega', !aPay.error && aPay.data.status === 'awaiting_delivery' && aPay.data.payment_released_by === smokeUserId, aPay.error?.message)
+  const aClose = await sb.from('purchase_requests').update({ status: 'closed', receipt_notes: 'ok' }).eq('id', advId).select('status, closed_at').single()
+  ok('antecipado: receber e conferir encerra a compra', !aClose.error && aClose.data.status === 'closed' && !!aClose.data.closed_at, aClose.error?.message)
+  const fDel = await sb.from('purchase_requests').delete().eq('id', advId).select('id')
+  ok('o financeiro não exclui solicitação (só o admin)', !fDel.error && fDel.data.length === 0, fDel.error?.message)
   const newPay = await sb.from('team_payments').insert({ member_id: smkMember, reference: 'smoke-pagamento-2', payment_amount: 50 }).select('member_name, status').single()
   ok('o financeiro lança pagamento da equipe', !newPay.error && newPay.data.status === 'pending' && !!newPay.data.member_name, newPay.error?.message)
   const finWork = await sb.from('works').insert({ name: 'smoke-nao-pode' }).select('id')

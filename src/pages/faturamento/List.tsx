@@ -6,13 +6,14 @@ import PurchasesPanel from './PurchasesPanel'
 import TeamPaymentsPanel from './TeamPaymentsPanel'
 
 /**
- * Faturamento: Compras (qualquer usuário solicita o que precisa ser comprado; o Financeiro atende) e
+ * Faturamento: Compras (solicitação, cotações do financeiro, aprovação do admin, compra, pagamento e recebimento) e
  * Pagamento (Equipe) (só Admin e Financeiro).
  */
 export default function FaturamentoList() {
   const { role, canSeeBilling } = useAuth()
-  const [newCount, setNewCount] = useState(0)
-  const isFinance = role === 'financeiro' // só o financeiro atende: o contador de pendentes é dele
+  const [todoCount, setTodoCount] = useState(0)
+  // contador de quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e admin (aprovar cotações)
+  const hasTurn = role === 'financeiro' || role === 'admin'
 
   return (
     <div className="space-y-6">
@@ -25,8 +26,8 @@ export default function FaturamentoList() {
         <TabsList>
           <TabsTrigger value="compras" className="gap-2">
             <ShoppingCart className="h-4 w-4" /> Compras
-            {isFinance && newCount > 0 && (
-              <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold leading-4 text-white">{newCount}</span>
+            {hasTurn && todoCount > 0 && (
+              <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold leading-4 text-white">{todoCount}</span>
             )}
           </TabsTrigger>
           {canSeeBilling && (
@@ -36,7 +37,7 @@ export default function FaturamentoList() {
           )}
         </TabsList>
         <TabsContent value="compras" className="mt-4">
-          <PurchasesPanel onNewCount={setNewCount} />
+          <PurchasesPanel onTodoCount={setTodoCount} />
         </TabsContent>
         {canSeeBilling && (
           <TabsContent value="pagamento" className="mt-4">
