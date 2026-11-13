@@ -40,6 +40,8 @@ export const BILLING_KEYS = new Set([
   'quoted_value', // purchase_requests: valor cotado
   'final_value', // purchase_requests: valor da compra
   'payment_amount', // team_payments: valor a pagar / pago
+  'week_rate', // team_payments calculado pela presença: diária da semana
+  'week_extra', // team_payments calculado pela presença: extra semanal
 ])
 /** Escondida só do Prestador (o Gestor tem as mesmas permissões do administrador). */
 export const PRESTADOR_ONLY_KEYS = new Set(['pix_key'])

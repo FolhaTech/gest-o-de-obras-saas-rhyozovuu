@@ -57,6 +57,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/21_manutencao_casas.sql  # Manutenç�
 psql "$ADMIN_URL/gestao_obras" -f db/azure/22_faturamento.sql  # papel Financeiro, Faturamento > Compras (solicitações) e Pagamento (Equipe); teste: node db/azure/test-faturamento.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/23_compras_so_financeiro.sql  # Compras: só o Financeiro atende (o Admin acompanha); quem pediu vê "pendente pelo financeiro"; teste: node db/azure/test-faturamento.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/24_compras_fluxo_cotacao.sql  # Compras em etapas: cotações (mín. 3 fornecedores) -> aprovação do admin -> compra -> pagamento antecipado/após a entrega -> recebimento; tabela purchase_quotes; teste: node db/azure/test-faturamento.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/26_pagamento_semanal_equipe.sql  # Pagamento (Equipe): a presença (sábado a sexta) vira pagamento pendente por pessoa e semana, pago na sexta; complemento se a presença mudar depois de paga; teste: node db/azure/test-pagamento-semanal.mjs
 ```
 
 ## Desenvolvimento local

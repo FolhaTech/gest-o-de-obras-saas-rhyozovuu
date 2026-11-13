@@ -33,6 +33,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { useAuth } from '@/hooks/use-auth'
+import { isWeekPayable } from '@/lib/team-week'
+import WeeklyPayments, { type WeeklyRow } from './WeeklyPayments'
 
 interface Payment {
   id: string
@@ -47,6 +50,11 @@ interface Payment {
   status: 'pending' | 'paid'
   paid_at: string | null
   notes: string | null
+  source?: 'manual' | 'attendance'
+  week_start?: string | null
+  week_days?: number | null
+  week_rate?: number | null
+  week_extra?: number | null
   works?: { id: string; name: string } | null
 }
 interface Member {
@@ -80,8 +88,9 @@ const emptyForm = () => ({
 })
 
 /** Faturamento > Pagamento (Equipe): pagamentos aos membros da equipe e prestadores. Só Admin e Financeiro. */
-export default function TeamPaymentsPanel() {
+export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: number) => void }) {
   const { toast } = useToast()
+  const { role } = useAuth()
   const [items, setItems] = useState<Payment[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
@@ -122,15 +131,25 @@ export default function TeamPaymentsPanel() {
 
   const memberOf = (id: string | null) => members.find((m) => m.id === id)
 
+  // pagamentos calculados pela presença (semana de sábado a sexta) e os lançados à mão
+  const weekly = useMemo(() => items.filter((p) => p.source === 'attendance'), [items])
+  const manual = useMemo(() => items.filter((p) => p.source !== 'attendance'), [items])
+
   const visible = useMemo(() => {
     const t = search.trim().toLowerCase()
-    return items.filter((p) => {
+    return manual.filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false
       if (memberFilter !== 'all' && p.member_id !== memberFilter) return false
       if (!t) return true
       return p.member_name.toLowerCase().includes(t) || p.reference.toLowerCase().includes(t) || (p.works?.name ?? '').toLowerCase().includes(t)
     })
-  }, [items, statusFilter, memberFilter, search])
+  }, [manual, statusFilter, memberFilter, search])
+
+  const dueNow = weekly.filter((p) => p.status === 'pending' && p.week_start && isWeekPayable(p.week_start.slice(0, 10), today))
+  const dueTotal = dueNow.reduce((s, p) => s + Number(p.payment_amount), 0)
+  useEffect(() => {
+    onDueCount?.(dueNow.length)
+  }, [dueNow.length, onDueCount])
 
   const pending = items.filter((p) => p.status === 'pending')
   const pendingTotal = pending.reduce((s, p) => s + Number(p.payment_amount), 0)
@@ -202,7 +221,9 @@ export default function TeamPaymentsPanel() {
   }
 
   const markPaid = async (p: Payment) => {
-    const { error: err } = await supabase.from('team_payments' as any).update({ status: 'paid' }).eq('id', p.id)
+    // forma de pagamento: a que já está no lançamento; senão PIX quando a pessoa tem chave PIX
+    const method = p.payment_method ?? (memberOf(p.member_id)?.pix_key ? 'PIX' : null)
+    const { error: err } = await supabase.from('team_payments' as any).update({ status: 'paid', payment_method: method }).eq('id', p.id)
     if (err) {
       toast({ title: 'Erro ao registrar o pagamento', description: formatSupabaseError(err), variant: 'destructive' })
       return
@@ -244,10 +265,11 @@ export default function TeamPaymentsPanel() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           { label: 'Pagamentos pendentes', value: String(pending.length), cls: pending.length ? 'text-amber-600' : '' },
           { label: 'Total a pagar', value: formatCurrency(pendingTotal), cls: '' },
+          { label: 'Semana fechada: a pagar', value: formatCurrency(dueTotal), cls: dueNow.length ? 'text-rose-600' : '' },
           { label: 'Pagos no mês', value: String(paidMonth.length), cls: '' },
           { label: 'Valor pago no mês', value: formatCurrency(paidMonthTotal), cls: 'text-emerald-600' },
         ].map((c) => (
@@ -258,6 +280,20 @@ export default function TeamPaymentsPanel() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <WeeklyPayments
+        payments={weekly as unknown as WeeklyRow[]}
+        today={today}
+        pixOf={(id) => memberOf(id)?.pix_key}
+        canDelete={role === 'admin'}
+        onPay={(p) => markPaid(p as unknown as Payment)}
+        onDelete={(p) => handleDelete(p as unknown as Payment)}
+      />
+
+      <div>
+        <h2 className="text-base font-semibold">Outros pagamentos</h2>
+        <p className="text-sm text-muted-foreground">Lançamentos feitos à mão (prestadores, avulsos, mensalistas...).</p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-3">
@@ -282,10 +318,10 @@ export default function TeamPaymentsPanel() {
         </Select>
       </div>
 
-      {items.length === 0 ? (
+      {manual.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-card space-y-3">
           <Wallet className="h-10 w-10 mx-auto text-muted-foreground opacity-60" />
-          <p className="text-sm text-muted-foreground">Nenhum pagamento da equipe lançado ainda.</p>
+          <p className="text-sm text-muted-foreground">Nenhum pagamento lançado à mão ainda.</p>
           <Button size="sm" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" /> Novo pagamento</Button>
         </div>
       ) : (

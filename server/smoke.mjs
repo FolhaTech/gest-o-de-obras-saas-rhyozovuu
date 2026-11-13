@@ -260,6 +260,15 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   const reqId = (await db.query("insert into public.purchase_requests (item, quantity, unit, requested_by, status, supplier, quoted_value, final_value) values ('smoke-compra', 3, 'un', $1, 'quoting', 'Loja Smoke', 150, 140) returning id", [smokeUserId])).rows[0].id
   await db.query("insert into public.purchase_quotes (request_id, supplier, quoted_value, round) values ($1, 'smoke-fornecedor', 77, 1)", [reqId])
   await db.query("insert into public.team_payments (member_id, reference, payment_amount) values ($1, 'smoke-pagamento', 321)", [smkMember])
+  // presença de uma pessoa só do teste, numa semana futura (sempre aberta): a contagem da semana vira pagamento pendente
+  await db.query("delete from public.team_payments where member_name = 'smoke-semana'") // sobra de um teste interrompido
+  await db.query("delete from public.team_members where name = 'smoke-semana'")
+  const wkMember = (await db.query("insert into public.team_members (name, daily_cost, payment_type, status) values ('smoke-semana', 120, 'daily', 'active') returning id")).rows[0].id
+  const wkDates = (await db.query("select (public.team_week_start(public.today_br()) + 14)::text d1, (public.team_week_start(public.today_br()) + 15)::text d2")).rows[0]
+  await db.query('insert into public.attendance_records (worker_id, date, is_present) values ($1, $2, true), ($1, $3, true)', [wkMember, wkDates.d1, wkDates.d2])
+  const wkSel = () => sb.from('team_payments').select('id, member_name, payment_amount, status, source, week_days, week_rate, week_extra').eq('member_name', 'smoke-semana')
+  const wkAdmin = await wkSel()
+  ok('admin vê o pagamento semanal calculado pela presença (2 dias x 120)', !wkAdmin.error && wkAdmin.data.length === 1 && Number(wkAdmin.data[0].payment_amount) === 240 && wkAdmin.data[0].week_days === 2 && Number(wkAdmin.data[0].week_rate) === 120 && wkAdmin.data[0].source === 'attendance' && wkAdmin.data[0].status === 'pending', wkAdmin.error?.message ?? JSON.stringify(wkAdmin.data))
   const reqSel = () => sb.from('purchase_requests').select('id, item, status, supplier, quoted_value, final_value').eq('id', reqId)
   const reqAdmin = await reqSel()
   ok('admin lê a solicitação de compra com os valores', !reqAdmin.error && reqAdmin.data.length === 1 && Number(reqAdmin.data[0].quoted_value) === 150 && Number(reqAdmin.data[0].final_value) === 140, reqAdmin.error?.message)
@@ -406,6 +415,8 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('o gestor não descobre o valor de cotação por filtro', quotesGFilter.error?.code === '42501', quotesGFilter.error?.code)
   const payG = await sb.from('team_payments').select('id')
   ok('o gestor não enxerga o pagamento da equipe', !payG.error && payG.data.length === 0)
+  const wkG = await sb.from('team_payments').select('id, week_rate').eq('member_name', 'smoke-semana')
+  ok('o gestor não enxerga o pagamento semanal nem a diária', !wkG.error && wkG.data.length === 0, wkG.error?.message)
 
   // ---- papel Financeiro: valores do Faturamento sim; valores gerais e áreas da equipe interna não
   await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
@@ -494,6 +505,14 @@ const bigName = `smoke/big-${Date.now()}.jpg`
   ok('o financeiro não exclui solicitação (só o admin)', !fDel.error && fDel.data.length === 0, fDel.error?.message)
   const newPay = await sb.from('team_payments').insert({ member_id: smkMember, reference: 'smoke-pagamento-2', payment_amount: 50 }).select('member_name, status').single()
   ok('o financeiro lança pagamento da equipe', !newPay.error && newPay.data.status === 'pending' && !!newPay.data.member_name, newPay.error?.message)
+  const wkFin = await wkSel()
+  ok('o financeiro vê o pagamento semanal com dias, diária e valor', !wkFin.error && wkFin.data.length === 1 && Number(wkFin.data[0].payment_amount) === 240 && Number(wkFin.data[0].week_rate) === 120, wkFin.error?.message)
+  const wkEdit = await sb.from('team_payments').update({ payment_amount: 1, week_days: 99 }).eq('id', wkFin.data?.[0]?.id).select('payment_amount, week_days').single()
+  ok('o financeiro não altera o valor calculado', !wkEdit.error && Number(wkEdit.data.payment_amount) === 240 && wkEdit.data.week_days === 2, wkEdit.error?.message)
+  const wkPay = await sb.from('team_payments').update({ status: 'paid' }).eq('id', wkFin.data?.[0]?.id).select('id')
+  ok('semana aberta não se paga antes de fechar', !!wkPay.error && /ainda não fechou/.test(wkPay.error.message), wkPay.error?.message)
+  const wkDel = await sb.from('team_payments').delete().eq('id', wkFin.data?.[0]?.id).select('id')
+  ok('o financeiro não exclui pagamento calculado (só o admin)', !!wkDel.error && /só o administrador exclui/.test(wkDel.error.message), wkDel.error?.message)
   const finWork = await sb.from('works').insert({ name: 'smoke-nao-pode' }).select('id')
   ok('o financeiro não cria obra (não é equipe interna)', !!finWork.error, finWork.error?.message)
   const finVeh = await sb.from('vehicles').select('id')
@@ -516,7 +535,8 @@ await db.query("delete from public.equipment where name like 'smoke-equip%'")
 await db.query("delete from public.house_maintenances where performed_by = 'smoke-man'")
 await db.query("delete from public.materials where name like 'smoke-mat%'") // as movimentações saem em cascata
 await db.query("delete from public.purchase_requests where item like 'smoke-%'")
-await db.query("delete from public.team_payments where reference like 'smoke-%'")
+await db.query("delete from public.team_payments where reference like 'smoke-%' or member_name like 'smoke-%'")
+await db.query("delete from public.team_members where name = 'smoke-semana'") // a presença sai em cascata
 await db.query("delete from public.vehicles where plate like 'SMK%'") // manutenções e abastecimentos saem em cascata
 await db.query("delete from public.work_goals where title = 'smoke-meta'")
 await db.query("delete from public.work_stages where name like 'smoke-%'") // o card espelho sai em cascata
