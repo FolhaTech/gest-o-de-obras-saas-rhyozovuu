@@ -402,7 +402,9 @@ export default function ManualPage() {
           admin que abriu a solicitação (se quem pediu não é admin, qualquer admin aprova).
         </Step>
         <Step n={3}>
-          <strong>Aprovação do admin.</strong> O admin compara as cotações e <strong>aprova</strong> uma delas. Se{' '}
+          <strong>Aprovação do admin.</strong> Quando o financeiro envia, as cotações aparecem no topo da tela, em{' '}
+          <strong>“Aguardando a sua aprovação”</strong>, para o admin que abriu a solicitação. Ele compara os valores e{' '}
+          <strong>aprova uma delas</strong> com o botão <strong>“Aprovar esta”</strong>. Se{' '}
           <strong>recusar</strong>, precisa informar o motivo: o item volta para o financeiro refazer a cotação (nova
           rodada; as anteriores ficam guardadas no histórico).
         </Step>

@@ -1,6 +1,7 @@
 // Testa as regras de src/lib/purchases.ts. Uso: npx tsx scripts/test-purchase-rules.ts
 import {
   MIN_QUOTES,
+  approverText,
   STATUS_LABEL,
   buildSteps,
   byValue,
@@ -100,6 +101,9 @@ ok('o solicitante edita só enquanto pendente', canEditRequest({ status: 'reques
 ok('financeiro: a vez dele em tudo o que está com ele, menos a aprovação', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_delivery', 'awaiting_release'].every((s) => needsMyAction({ status: s, requested_by: 'pre1' }, 'fin', 'financeiro')) && !needsMyAction({ status: 'quotes_sent', requested_by: 'pre1' }, 'fin', 'financeiro') && !needsMyAction({ status: 'closed', requested_by: 'pre1' }, 'fin', 'financeiro') && !needsMyAction({ status: 'cancelled', requested_by: 'pre1' }, 'fin', 'financeiro'))
 ok('admin: a vez só nas cotações que ele aprova', needsMyAction(abriuAdmin, 'adm1', 'admin', 'admin') && !needsMyAction(abriuAdmin, 'adm2', 'admin', 'admin') && needsMyAction(abriuPrestador, 'adm2', 'admin', 'prestador') && !needsMyAction({ status: 'quoting', requested_by: 'pre1' }, 'adm1', 'admin', 'prestador'))
 ok('gestor e prestador nunca têm a vez', !needsMyAction(abriuPrestador, 'ges', 'gestor') && !needsMyAction({ status: 'requested', requested_by: 'pre1' }, 'pre1', 'prestador'))
+
+ok('texto de quem aprova: o admin que abriu', approverText('Jeferson', 'admin') === 'Aguardando Jeferson (admin que abriu) aprovar uma das cotações' && approverText('Jeferson', ' Admin ').includes('Jeferson'))
+ok('texto de quem aprova: pedido de quem não é admin vai para qualquer admin', approverText('Maria', 'prestador') === 'Aguardando um admin aprovar uma das cotações' && approverText('Maria') === 'Aguardando um admin aprovar uma das cotações' && approverText('Zé', 'gestor').includes('um admin'))
 
 // ---------------------------------------------------------------- valor digitado
 ok('valor com vírgula', parseMoney('1234,56') === 1234.56 && parseMoney('0,5') === 0.5 && parseMoney('480') === 480)
