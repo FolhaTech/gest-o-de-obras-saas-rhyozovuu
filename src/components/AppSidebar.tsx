@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
+import { needsMyAction } from '@/lib/purchases'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { InstallAppButton } from '@/components/InstallAppButton'
@@ -64,23 +65,35 @@ export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
   const [newPurchases, setNewPurchases] = useState(0)
-  const seesPurchases = role === 'financeiro' // só o financeiro atende: o contador de pendentes é dele
+  // contador do Faturamento para quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e
+  // admin (aprovar as cotações dos pedidos que abriu, ou de quem não é admin)
+  const seesPurchases = role === 'financeiro' || role === 'admin'
   useEffect(() => {
     if (!seesPurchases) return
     let alive = true
-    const load = () =>
-      supabase
+    const load = async () => {
+      if (role === 'financeiro') {
+        const { count } = await supabase
+          .from('purchase_requests' as any)
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_delivery', 'awaiting_release'])
+        if (alive) setNewPurchases(count ?? 0)
+        return
+      }
+      const { data } = await supabase
         .from('purchase_requests' as any)
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'requested')
-        .then(({ count }) => alive && setNewPurchases(count ?? 0))
+        .select('id, status, requested_by, requester:requested_by(role)')
+        .eq('status', 'quotes_sent')
+      const rows = (data ?? []) as unknown as { status: string; requested_by: string | null; requester?: { role?: string | null } | null }[]
+      if (alive) setNewPurchases(rows.filter((r) => needsMyAction(r, user?.id, role, r.requester?.role)).length)
+    }
     load()
     const t = setInterval(load, 60_000) // confere a cada minuto
     return () => {
       alive = false
       clearInterval(t)
     }
-  }, [seesPurchases, pathname])
+  }, [seesPurchases, role, user?.id, pathname])
   const { isMobile, setOpenMobile } = useSidebar()
 
   const userName =

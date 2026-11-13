@@ -1,17 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Clock, Edit2, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { Clock, Edit2, Eye, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, formatDate, formatSupabaseError } from '@/lib/formatters'
 import {
-  FINANCE_STATUSES,
+  MIN_QUOTES,
+  PAYMENT_MODE_LABEL,
   STATUS_LABEL,
   URGENCY_LABEL,
+  canCancel,
+  canDecide,
+  canEditRequest,
+  currentRound,
   daysLate,
+  distinctSuppliers,
+  fulfillAction,
   isBought,
   isOpen,
+  needsMyAction,
   sortRequests,
+  waitingText,
+  type PurchaseRequestRow,
   type PurchaseStatus,
   type Urgency,
 } from '@/lib/purchases'
@@ -44,61 +54,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
-
-interface Request {
-  id: string
-  work_id: string | null
-  item: string
-  quantity: number
-  unit: string | null
-  notes: string | null
-  urgency: Urgency
-  needed_by: string | null
-  status: PurchaseStatus
-  requested_by: string | null
-  supplier: string | null
-  quoted_value?: number | null
-  final_value?: number | null
-  invoice_number: string | null
-  purchased_at: string | null
-  finance_notes: string | null
-  handled_by: string | null
-  created_at: string
-  works?: { id: string; name: string } | null
-  requester?: { full_name: string | null; email: string | null } | null
-  handler?: { full_name: string | null; email: string | null } | null
-}
+import DecisionDialog from './DecisionDialog'
+import DetailsDialog from './DetailsDialog'
+import FulfillDialog from './FulfillDialog'
+import QuotesDialog from './QuotesDialog'
+import { STATUS_CLASS, URGENCY_CLASS, fmtQty, todayISO, who } from './helpers'
 
 const SELECT =
-  '*, works:work_id(id, name), requester:requested_by(full_name, email), handler:handled_by(full_name, email)'
+  '*, works:work_id(id, name), requester:requested_by(full_name, email, role), handler:handled_by(full_name, email), approver:approver_id(full_name, email)'
 const NO_WORK = '__none__'
 const UNITS = ['un', 'kg', 'saco', 'm', 'm²', 'm³', 'L', 'cx', 'pç', 'jogo']
 
-const STATUS_CLASS: Record<PurchaseStatus, string> = {
-  requested: 'border-blue-300 bg-blue-50 text-blue-700',
-  quoting: 'border-violet-300 bg-violet-50 text-violet-700',
-  approved: 'border-teal-300 bg-teal-50 text-teal-700',
-  purchased: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-  delivered: 'border-slate-300 bg-slate-50 text-slate-700',
-  rejected: 'border-rose-300 bg-rose-50 text-rose-700',
-  cancelled: 'border-muted bg-muted/40 text-muted-foreground',
-}
-const URGENCY_CLASS: Record<Urgency, string> = {
-  low: 'text-muted-foreground',
-  normal: '',
-  high: 'text-amber-600 font-medium',
-  urgent: 'text-rose-600 font-semibold',
-}
-
-const todayISO = () => {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
 const num = (v: string) => Number((v || '0').replace(',', '.'))
-const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
-const who = (p?: { full_name: string | null; email: string | null } | null) => p?.full_name?.trim() || p?.email || '-'
 
 interface Line {
   key: number
@@ -110,15 +77,26 @@ interface Line {
 let lineKey = 0
 const newLine = (): Line => ({ key: ++lineKey, item: '', quantity: '1', unit: 'un', notes: '' })
 
-/** Faturamento > Compras: qualquer usuário solicita o que precisa ser comprado; o Financeiro atende. */
-export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number) => void }) {
+interface QuoteLite {
+  request_id: string
+  round: number
+  supplier: string
+}
+
+/**
+ * Faturamento > Compras. Fluxo: o usuário solicita; o financeiro cota (3 ou mais fornecedores) e envia ao admin que
+ * abriu; o admin aprova (ou recusa e o financeiro refaz); o financeiro compra, escolhe o pagamento (antecipado ou
+ * após a entrega), libera o pagamento, recebe e confere e encerra.
+ */
+export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: number) => void }) {
   const { toast } = useToast()
   const { user, role, canSeeBilling } = useAuth()
-  const isFinance = role === 'financeiro' // SÓ o financeiro atende as solicitações
-  const isAdmin = role === 'admin' // acompanha (vê tudo e os valores) e exclui, mas não atende
+  const isFinance = role === 'financeiro'
+  const isAdmin = role === 'admin'
   const seesAll = role !== 'prestador'
 
-  const [items, setItems] = useState<Request[]>([])
+  const [items, setItems] = useState<PurchaseRequestRow[]>([])
+  const [quotes, setQuotes] = useState<QuoteLite[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
   const [catalog, setCatalog] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,28 +108,33 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
 
   // nova solicitação / edição
   const [reqOpen, setReqOpen] = useState(false)
-  const [editing, setEditing] = useState<Request | null>(null)
+  const [editing, setEditing] = useState<PurchaseRequestRow | null>(null)
   const [reqForm, setReqForm] = useState({ work_id: NO_WORK, urgency: 'normal' as Urgency, needed_by: '' })
   const [lines, setLines] = useState<Line[]>([newLine()])
-  // atendimento (financeiro)
-  const [handling, setHandling] = useState<Request | null>(null)
-  const [hForm, setHForm] = useState({ status: 'quoting' as PurchaseStatus, supplier: '', quoted_value: '', final_value: '', invoice_number: '', purchased_at: '', finance_notes: '' })
   const [saving, setSaving] = useState(false)
+  // telas do fluxo (guardam só o id; a solicitação vem da lista, sempre atualizada)
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [quotesId, setQuotesId] = useState<string | null>(null)
+  const [decideId, setDecideId] = useState<string | null>(null)
+  const [fulfillId, setFulfillId] = useState<string | null>(null)
 
   const today = todayISO()
 
   const fetchAll = useCallback(async () => {
-    const [rRes, wRes, mRes] = await Promise.all([
+    const [rRes, wRes, mRes, qRes] = await Promise.all([
       supabase.from('purchase_requests' as any).select(SELECT).order('created_at', { ascending: false }),
       supabase.from('works').select('id, name').order('name'),
       supabase.from('materials').select('name').order('name'),
+      // as cotações são valores: só Admin e Financeiro leem (para os outros a lista vem vazia)
+      supabase.from('purchase_quotes' as any).select('request_id, round, supplier'),
     ])
     if (rRes.error) {
       setError(formatSupabaseError(rRes.error))
     } else {
       setError(null)
-      setItems((rRes.data ?? []) as unknown as Request[])
+      setItems((rRes.data ?? []) as unknown as PurchaseRequestRow[])
     }
+    setQuotes(qRes.error ? [] : ((qRes.data ?? []) as unknown as QuoteLite[]))
     setWorks((wRes.data ?? []) as { id: string; name: string }[])
     setCatalog(((mRes.data ?? []) as { name: string }[]).map((m) => m.name))
     setLoading(false)
@@ -161,30 +144,48 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
     fetchAll()
   }, [fetchAll])
 
-  const newCount = items.filter((r) => r.status === 'requested').length
+  const mine = useCallback(
+    (r: PurchaseRequestRow) => needsMyAction(r, user?.id, role, r.requester?.role),
+    [user?.id, role],
+  )
+  const todoCount = items.filter(mine).length
   useEffect(() => {
-    onNewCount?.(newCount)
-  }, [newCount, onNewCount])
+    onTodoCount?.(todoCount)
+  }, [todoCount, onTodoCount])
+
+  // cotações da rodada atual de cada solicitação (fornecedores diferentes)
+  const quoteCount = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const r of items) out[r.id] = distinctSuppliers(currentRound(quotes.filter((q) => q.request_id === r.id), r.quote_round))
+    return out
+  }, [items, quotes])
 
   const visible = useMemo(() => {
     const t = search.trim().toLowerCase()
     const list = items.filter((r) => {
-      if (statusFilter === 'open' ? !isOpen(r.status) : statusFilter !== 'all' && r.status !== statusFilter) return false
+      if (statusFilter === 'open') {
+        if (!isOpen(r.status)) return false
+      } else if (statusFilter === 'mine') {
+        if (!mine(r)) return false
+      } else if (statusFilter !== 'all' && r.status !== statusFilter) return false
       if (workFilter !== 'all' && (workFilter === NO_WORK ? r.work_id !== null : r.work_id !== workFilter)) return false
       if (!t) return true
       return r.item.toLowerCase().includes(t) || (r.works?.name ?? '').toLowerCase().includes(t) || who(r.requester).toLowerCase().includes(t) || (r.supplier ?? '').toLowerCase().includes(t)
     })
     return sortRequests(list)
-  }, [items, statusFilter, workFilter, search])
+  }, [items, statusFilter, workFilter, search, mine])
 
   const monthPrefix = today.slice(0, 7)
-  const count = (st: PurchaseStatus) => items.filter((r) => r.status === st).length
+  const count = (...st: PurchaseStatus[]) => items.filter((r) => st.includes(r.status)).length
   const boughtMonth = items.filter((r) => isBought(r.status) && (r.purchased_at ?? '').startsWith(monthPrefix))
   const boughtMonthValue = boughtMonth.reduce((s, r) => s + (Number(r.final_value) || 0), 0)
   const late = items.filter((r) => daysLate(r, today) > 0).length
-
-  const canEditOwn = (r: Request) => r.requested_by === user?.id && r.status === 'requested'
   const minePending = items.filter((r) => r.requested_by === user?.id && r.status === 'requested').length
+
+  const detail = items.find((r) => r.id === detailId) ?? null
+  const quotesOf = items.find((r) => r.id === quotesId) ?? null
+  const decideOf = items.find((r) => r.id === decideId) ?? null
+  const fulfillOf = items.find((r) => r.id === fulfillId) ?? null
 
   // ---------------------------------------------------------------- solicitar
   const openCreate = () => {
@@ -193,7 +194,7 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
     setLines([newLine()])
     setReqOpen(true)
   }
-  const openEdit = (r: Request) => {
+  const openEdit = (r: PurchaseRequestRow) => {
     setEditing(r)
     setReqForm({ work_id: r.work_id ?? NO_WORK, urgency: r.urgency, needed_by: r.needed_by ?? '' })
     setLines([{ key: ++lineKey, item: r.item, quantity: String(r.quantity), unit: r.unit || 'un', notes: r.notes ?? '' }])
@@ -243,13 +244,13 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
     }
     toast({
       title: editing ? 'Solicitação atualizada' : filled.length > 1 ? `${filled.length} itens solicitados` : 'Compra solicitada',
-      description: editing ? undefined : 'O financeiro recebeu o pedido.',
+      description: editing ? undefined : 'O financeiro recebeu o pedido e vai devolver as cotações para aprovação.',
     })
     setReqOpen(false)
     fetchAll()
   }
 
-  const cancelRequest = async (r: Request) => {
+  const cancelRequest = async (r: PurchaseRequestRow) => {
     if (!confirm(`Cancelar a solicitação de "${r.item}"?`)) return
     const { error: err } = await supabase.from('purchase_requests' as any).update({ status: 'cancelled' }).eq('id', r.id)
     if (err) {
@@ -260,68 +261,14 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
     fetchAll()
   }
 
-  const deleteRequest = async (r: Request) => {
-    if (!confirm(`Excluir a solicitação de "${r.item}"?`)) return
+  const deleteRequest = async (r: PurchaseRequestRow) => {
+    if (!confirm(`Excluir a solicitação de "${r.item}"${r.status === 'requested' ? '' : ' e as cotações dela'}? Isso não pode ser desfeito.`)) return
     const { error: err } = await supabase.from('purchase_requests' as any).delete().eq('id', r.id)
     if (err) {
       toast({ title: 'Erro ao excluir', description: formatSupabaseError(err), variant: 'destructive' })
       return
     }
     toast({ title: 'Solicitação excluída' })
-    fetchAll()
-  }
-
-  // ---------------------------------------------------------------- atender (financeiro)
-  const openHandle = (r: Request) => {
-    setHandling(r)
-    setHForm({
-      status: r.status === 'cancelled' ? 'requested' : r.status === 'requested' ? 'quoting' : r.status,
-      supplier: r.supplier ?? '',
-      quoted_value: r.quoted_value ? String(r.quoted_value) : '',
-      final_value: r.final_value ? String(r.final_value) : '',
-      invoice_number: r.invoice_number ?? '',
-      purchased_at: r.purchased_at ?? '',
-      finance_notes: r.finance_notes ?? '',
-    })
-  }
-
-  const saveHandle = async (ev: React.FormEvent) => {
-    ev.preventDefault()
-    if (!handling) return
-    const quoted = hForm.quoted_value.trim() === '' ? null : num(hForm.quoted_value)
-    const final = hForm.final_value.trim() === '' ? null : num(hForm.final_value)
-    if ((quoted !== null && (Number.isNaN(quoted) || quoted < 0)) || (final !== null && (Number.isNaN(final) || final < 0))) {
-      toast({ title: 'Valor inválido', description: 'Informe valores maiores ou iguais a zero.', variant: 'destructive' })
-      return
-    }
-    if (hForm.status === 'rejected' && !hForm.finance_notes.trim()) {
-      toast({ title: 'Explique a recusa', description: 'Informe o motivo nas observações do financeiro.', variant: 'destructive' })
-      return
-    }
-    if (hForm.purchased_at && hForm.purchased_at > today) {
-      toast({ title: 'Data inválida', description: 'A data da compra não pode estar no futuro.', variant: 'destructive' })
-      return
-    }
-    setSaving(true)
-    const { error: err } = await supabase
-      .from('purchase_requests' as any)
-      .update({
-        status: hForm.status,
-        supplier: hForm.supplier.trim() || null,
-        quoted_value: quoted,
-        final_value: final,
-        invoice_number: hForm.invoice_number.trim() || null,
-        purchased_at: hForm.purchased_at || null,
-        finance_notes: hForm.finance_notes.trim() || null,
-      })
-      .eq('id', handling.id)
-    setSaving(false)
-    if (err) {
-      toast({ title: 'Erro ao salvar', description: formatSupabaseError(err), variant: 'destructive' })
-      return
-    }
-    toast({ title: 'Solicitação atualizada', description: `${handling.item}: ${STATUS_LABEL[hForm.status]}` })
-    setHandling(null)
     fetchAll()
   }
 
@@ -339,23 +286,25 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
   }
 
   const cards = [
-    { label: isFinance ? 'Novas (a atender)' : 'Pendentes pelo financeiro', value: String(count('requested')), cls: count('requested') ? 'text-blue-600' : '' },
+    { label: 'Pendentes pelo financeiro', value: String(count('requested')), cls: count('requested') ? 'text-blue-600' : '' },
     { label: 'Em cotação', value: String(count('quoting')), cls: '' },
-    { label: 'Aprovadas (a comprar)', value: String(count('approved')), cls: count('approved') ? 'text-teal-600' : '' },
+    { label: 'Aprovação do admin', value: String(count('quotes_sent')), cls: count('quotes_sent') ? 'text-amber-600' : '' },
+    { label: 'Aprovadas: a comprar', value: String(count('approved')), cls: count('approved') ? 'text-teal-600' : '' },
+    { label: 'Pagamento / entrega', value: String(count('awaiting_payment', 'awaiting_delivery', 'awaiting_release')), cls: '' },
     { label: 'Compradas no mês', value: String(boughtMonth.length), cls: '' },
     ...(canSeeBilling ? [{ label: 'Valor comprado no mês', value: formatCurrency(boughtMonthValue), cls: '' }] : []),
   ]
 
+  const intro = isFinance
+    ? `Cote cada pedido com ${MIN_QUOTES} ou mais fornecedores e envie ao admin que abriu. Aprovada a cotação, faça a compra, libere o pagamento e receba e confira a entrega.`
+    : isAdmin
+      ? 'Abra a solicitação: o financeiro devolve as cotações para você aprovar ou recusar (recusadas, ele refaz a cotação).'
+      : 'Peça aqui o que precisa ser comprado. A solicitação fica pendente pelo financeiro e você acompanha cada etapa.'
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {isFinance
-            ? 'Solicitações de compra enviadas pelos usuários. Atenda, cote, aprove e registre a compra.'
-            : isAdmin
-              ? 'Acompanhe as solicitações de compra. Quem atende é o financeiro.'
-              : 'Peça aqui o que precisa ser comprado. A solicitação fica pendente pelo financeiro até ele atender.'}
-        </p>
+        <p className="text-sm text-muted-foreground">{intro}</p>
         <Button className="gap-2 shrink-0" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Solicitar compra
         </Button>
@@ -364,14 +313,25 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
       {!seesAll && (
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Você vê somente as solicitações que fez.</div>
       )}
-      {!isFinance && minePending > 0 && (
+      {!isFinance && !isAdmin && minePending > 0 && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 flex items-center gap-2">
           <Clock className="h-4 w-4 shrink-0" />
-          Você tem {minePending} solicitação(ões) <strong>pendente(s) pelo financeiro</strong>. Elas ficam com o financeiro até serem atendidas.
+          Você tem {minePending} solicitação(ões) <strong>pendente(s) pelo financeiro</strong>. Elas ficam com o financeiro até ele iniciar as cotações.
+        </div>
+      )}
+      {(isFinance || isAdmin) && todoCount > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 shrink-0" />
+            {isAdmin
+              ? `${todoCount} solicitação(ões) com cotações aguardando a sua aprovação.`
+              : `${todoCount} solicitação(ões) aguardando a sua ação.`}
+          </span>
+          <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setStatusFilter('mine')}>Ver</Button>
         </div>
       )}
 
-      <div className={`grid grid-cols-2 gap-3 ${canSeeBilling ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+      <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 ${canSeeBilling ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
         {cards.map((c) => (
           <Card key={c.label} className="shadow-none border">
             <CardContent className="p-4">
@@ -389,9 +349,10 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por item, obra, solicitante ou fornecedor..." className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="md:w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="md:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="open">Em aberto</SelectItem>
+            {(isFinance || isAdmin) && <SelectItem value="mine">Aguardando a minha ação</SelectItem>}
             <SelectItem value="all">Todas</SelectItem>
             {(Object.keys(STATUS_LABEL) as PurchaseStatus[]).map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
           </SelectContent>
@@ -424,7 +385,7 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
                 <TableHead>Precisa até</TableHead>
                 {seesAll && <TableHead>Solicitante</TableHead>}
                 <TableHead>Situação</TableHead>
-                <TableHead>Financeiro</TableHead>
+                <TableHead>Cotação / compra</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -436,12 +397,15 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
               )}
               {visible.map((r) => {
                 const lateDays = daysLate(r, today)
+                const fulfill = isFinance ? fulfillAction(r) : null
+                const myTurn = mine(r)
+                const hasValue = canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0)
                 return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={myTurn ? 'bg-amber-50/40' : undefined}>
                     <TableCell className="whitespace-nowrap text-sm">{formatDate(r.created_at.slice(0, 10))}</TableCell>
                     <TableCell>
                       <div className="font-medium">{r.item}</div>
-                      <div className="text-xs text-muted-foreground">{fmt(Number(r.quantity))} {r.unit ?? ''}</div>
+                      <div className="text-xs text-muted-foreground">{fmtQty(Number(r.quantity))} {r.unit ?? ''}</div>
                       {r.notes && <div className="text-xs mt-0.5 max-w-xs">{r.notes}</div>}
                     </TableCell>
                     <TableCell>{r.works?.name?.trim() ?? <span className="text-muted-foreground">Geral</span>}</TableCell>
@@ -456,38 +420,60 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
                         {r.status === 'requested' && <Clock className="h-3 w-3" />}
                         {STATUS_LABEL[r.status]}
                       </Badge>
+                      <div className="mt-1 max-w-[14rem] text-[11px] leading-tight text-muted-foreground">{waitingText(r.status, r.payment_mode)}</div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.supplier && <div>{r.supplier}</div>}
-                      {canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0) && (
+                      {hasValue && (
                         <div className="text-xs font-medium text-primary">
                           {Number(r.final_value) > 0 ? formatCurrency(Number(r.final_value)) : `cotado ${formatCurrency(Number(r.quoted_value))}`}
                         </div>
                       )}
+                      {r.payment_mode && <div className="text-xs text-muted-foreground">{PAYMENT_MODE_LABEL[r.payment_mode]}</div>}
                       {r.invoice_number && <div className="text-xs text-muted-foreground">NF {r.invoice_number}</div>}
+                      {canSeeBilling && (r.status === 'requested' || r.status === 'quoting') && (
+                        <div className="text-xs text-muted-foreground">
+                          {quoteCount[r.id] ?? 0}/{MIN_QUOTES} cotações{r.quote_round > 1 ? ` · rodada ${r.quote_round}` : ''}
+                        </div>
+                      )}
+                      {r.status === 'quoting' && r.quote_round > 1 && r.admin_notes && (
+                        <div className="text-xs text-rose-700 max-w-xs">Recusa do admin: {r.admin_notes}</div>
+                      )}
                       {r.finance_notes && <div className="text-xs max-w-xs">{r.finance_notes}</div>}
-                      {r.handled_by && !isFinance && <div className="text-[10px] text-muted-foreground">por {who(r.handler)}</div>}
-                      {!r.supplier && !r.finance_notes && !r.invoice_number && !(canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0)) && (
+                      {!r.supplier && !r.finance_notes && !r.invoice_number && !hasValue && !(canSeeBilling && (r.status === 'requested' || r.status === 'quoting')) && (
                         <span className="text-xs text-muted-foreground">{r.status === 'requested' ? 'Aguardando o financeiro' : '-'}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      {isFinance && (
-                        <Button variant="outline" size="sm" className="h-8 mr-1" onClick={() => openHandle(r)}>
-                          Atender
+                      {isFinance && (r.status === 'requested' || r.status === 'quoting') && (
+                        <Button size="sm" className="h-8 mr-1" variant={myTurn ? 'default' : 'outline'} onClick={() => setQuotesId(r.id)}>
+                          Cotações
                         </Button>
                       )}
-                      {canEditOwn(r) && (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(r)}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Cancelar solicitação" onClick={() => cancelRequest(r)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </>
+                      {fulfill && (
+                        <Button size="sm" className="h-8 mr-1" onClick={() => setFulfillId(r.id)}>
+                          {fulfill.button}
+                        </Button>
                       )}
-                      {(isFinance || isAdmin || canEditOwn(r)) && (
+                      {canDecide(r, user?.id, role, r.requester?.role) && (
+                        <Button size="sm" className="h-8 mr-1" onClick={() => setDecideId(r.id)}>
+                          Aprovar / recusar
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver andamento" onClick={() => setDetailId(r.id)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {canEditRequest(r, user?.id) && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(r)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canCancel(r, user?.id, role) && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Cancelar solicitação" onClick={() => cancelRequest(r)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {(isAdmin || canEditRequest(r, user?.id)) && (
                         <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" title="Excluir" onClick={() => deleteRequest(r)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -501,12 +487,18 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
         </div>
       )}
 
+      {/* Etapas do fluxo */}
+      <DetailsDialog request={detail} canSeeQuotes={canSeeBilling} onClose={() => setDetailId(null)} />
+      {isFinance && <QuotesDialog request={quotesOf} onClose={() => setQuotesId(null)} onChanged={fetchAll} />}
+      {isAdmin && <DecisionDialog request={decideOf} onClose={() => setDecideId(null)} onChanged={fetchAll} />}
+      {isFinance && <FulfillDialog request={fulfillOf} onClose={() => setFulfillId(null)} onChanged={fetchAll} />}
+
       {/* Solicitar compra */}
       <Dialog open={reqOpen} onOpenChange={setReqOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar solicitação' : 'Solicitar compra'}</DialogTitle>
-            <DialogDescription>Informe o que precisa ser comprado. O financeiro recebe e atende.</DialogDescription>
+            <DialogDescription>Informe o que precisa ser comprado. O financeiro cota e devolve as cotações para aprovação.</DialogDescription>
           </DialogHeader>
           <form onSubmit={saveRequest} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -569,61 +561,6 @@ export default function PurchasesPanel({ onNewCount }: { onNewCount?: (n: number
             <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="outline" disabled={saving} onClick={() => setReqOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={saving}>{saving ? 'Enviando...' : editing ? 'Salvar alterações' : 'Enviar ao financeiro'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Atender (financeiro) */}
-      <Dialog open={!!handling} onOpenChange={(o) => !o && setHandling(null)}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Atender solicitação</DialogTitle>
-            <DialogDescription>
-              {handling && `${handling.item} · ${fmt(Number(handling.quantity))} ${handling.unit ?? ''} · ${handling.works?.name?.trim() ?? 'Geral'} · pedido por ${who(handling.requester)}`}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={saveHandle} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Situação</Label>
-              <Select value={hForm.status} onValueChange={(v) => setHForm({ ...hForm, status: v as PurchaseStatus })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {FINANCE_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hf-sup">Fornecedor</Label>
-                <Input id="hf-sup" value={hForm.supplier} onChange={(e) => setHForm({ ...hForm, supplier: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hf-nf">Nota fiscal</Label>
-                <Input id="hf-nf" value={hForm.invoice_number} onChange={(e) => setHForm({ ...hForm, invoice_number: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hf-q">Valor cotado (R$)</Label>
-                <Input id="hf-q" inputMode="decimal" placeholder="0,00" value={hForm.quoted_value} onChange={(e) => setHForm({ ...hForm, quoted_value: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hf-f">Valor da compra (R$)</Label>
-                <Input id="hf-f" inputMode="decimal" placeholder="0,00" value={hForm.final_value} onChange={(e) => setHForm({ ...hForm, final_value: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hf-d">Data da compra</Label>
-                <Input id="hf-d" type="date" max={today} value={hForm.purchased_at} onChange={(e) => setHForm({ ...hForm, purchased_at: e.target.value })} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="hf-n">Observações do financeiro {hForm.status === 'rejected' && '*'}</Label>
-              <Textarea id="hf-n" rows={2} value={hForm.finance_notes} onChange={(e) => setHForm({ ...hForm, finance_notes: e.target.value })} placeholder={hForm.status === 'rejected' ? 'Motivo da recusa' : 'Prazo de entrega, condições, etc.'} />
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" disabled={saving} onClick={() => setHandling(null)}>Cancelar</Button>
-              <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

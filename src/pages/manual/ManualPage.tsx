@@ -384,6 +384,59 @@ export default function ManualPage() {
 
       <Chapter
         number={9}
+        title="Faturamento (Compras e Pagamento da equipe)"
+        goal="Pedir uma compra, cotar com fornecedores, aprovar, comprar, pagar e receber, tudo com responsável em cada etapa."
+      >
+        <h3 className="text-lg font-semibold text-foreground">9.1 — Compras: do pedido ao recebimento</h3>
+        <Step n={1}>
+          <strong>Solicitação.</strong> Em <strong>Faturamento → Compras</strong>, clique em{' '}
+          <strong>“Solicitar compra”</strong> e informe o item, a quantidade, a obra, a urgência e o prazo. O pedido
+          fica <strong>“Pendente pelo financeiro”</strong>. Quem pediu pode editar ou cancelar enquanto estiver nessa
+          situação.
+        </Step>
+        <Step n={2}>
+          <strong>Cotações (financeiro).</strong> O financeiro lança <strong>3 ou mais cotações de fornecedores
+          diferentes</strong> (valor, prazo de entrega, condições e se o fornecedor pede pagamento antecipado ou após a
+          entrega). O botão <strong>“Enviar ao admin”</strong> só libera com 3 fornecedores e manda as cotações para o
+          admin que abriu a solicitação (se quem pediu não é admin, qualquer admin aprova).
+        </Step>
+        <Step n={3}>
+          <strong>Aprovação do admin.</strong> O admin compara as cotações e <strong>aprova</strong> uma delas. Se{' '}
+          <strong>recusar</strong>, precisa informar o motivo: o item volta para o financeiro refazer a cotação (nova
+          rodada; as anteriores ficam guardadas no histórico).
+        </Step>
+        <Step n={4}>
+          <strong>Compra (financeiro).</strong> Com a cotação aprovada, o financeiro registra a compra e escolhe o
+          pagamento: <strong>antecipado</strong> (antes da entrega) ou <strong>após a entrega</strong>. O valor e o
+          fornecedor são os da cotação aprovada e não mudam.
+        </Step>
+        <Step n={5}>
+          <strong>Pagamento e entrega.</strong> No pagamento <strong>antecipado</strong>, o financeiro libera o
+          pagamento aprovado antes da entrega. No pagamento <strong>após a entrega</strong>, ele primeiro recebe e
+          confere a entrega.
+        </Step>
+        <Step n={6}>
+          <strong>Recebimento / encerramento (financeiro).</strong> Antecipado: o financeiro recebe e confere, e a compra
+          se encerra. Após a entrega: depois de receber e conferir, o financeiro libera o pagamento e encerra.
+        </Step>
+        <Tip>
+          Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
+          vermelho em <strong>Faturamento</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
+          cotar, comprar, pagar ou receber; o admin vê as cotações para aprovar.
+        </Tip>
+        <Tip kind="warn">
+          O admin cancela o pedido até a compra. Depois de comprado, só o fluxo de pagamento e recebimento segue. As
+          cotações e os valores aparecem somente para Admin e Financeiro.
+        </Tip>
+        <h3 className="text-lg font-semibold text-foreground pt-2">9.2 — Pagamento (Equipe)</h3>
+        <Step n={1}>
+          Na aba <strong>Pagamento (Equipe)</strong>, o Admin e o Financeiro lançam o valor a pagar de cada membro da
+          equipe (incluindo prestadores), com o período, a forma de pagamento e a situação (pendente ou pago).
+        </Step>
+      </Chapter>
+
+      <Chapter
+        number={10}
         title="Papéis e permissões (resumo)"
         goal="Ver de forma rápida o que cada tipo de usuário pode acessar."
       >
@@ -392,7 +445,7 @@ export default function ManualPage() {
           rows={[
             [
               'Admin',
-              'Acesso total a todos os módulos: financeiro, configurações, equipes e usuários. É o único que gerencia usuários e permissões.',
+              'Acesso total a todos os módulos: financeiro, configurações, equipes e usuários. É o único que gerencia usuários e permissões. Em Compras, aprova ou recusa as cotações dos pedidos que abriu (e dos pedidos de quem não é admin) e cancela pedidos até a compra.',
             ],
             [
               'Gestor',
@@ -400,7 +453,7 @@ export default function ManualPage() {
             ],
             [
               'Financeiro',
-              'Acessa somente o Faturamento: é o único que atende as solicitações de compra feitas pelos usuários (Faturamento → Compras: cota, aprova e registra a compra) e controla o Pagamento (Equipe). Quem solicitou acompanha o pedido como “Pendente pelo financeiro” até ser atendido.',
+              'Acessa somente o Faturamento: recebe as solicitações de compra, lança 3 ou mais cotações e envia ao admin; depois da aprovação faz a compra, libera o pagamento (antecipado ou após a entrega), recebe e confere e encerra. Também controla o Pagamento (Equipe). Quem solicitou acompanha o pedido, que fica “Pendente pelo financeiro” até o início das cotações.',
             ],
             [
               'Prestador (colaborador)',
