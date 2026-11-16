@@ -28,24 +28,35 @@ export const todayBR = (now = new Date()) => now.toLocaleDateString('en-CA', { t
  * Modelos tentados em ordem (o Google aposenta modelos com frequência: o primeiro pode sair do ar).
  * GEMINI_MODEL, se definido, vai na frente. Cada tentativa tem seu prazo; a função da Vercel dura até 60 s.
  */
-export const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash']
-const ATTEMPT_MS = [32_000, 22_000]
+// o modelo "lite" fica por último: tem cota própria e responde mesmo quando os outros estouraram a cota
+export const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']
+const ATTEMPT_MS = [28_000, 16_000, 14_000]
 
 export function geminiModels(env = process.env.GEMINI_MODEL): string[] {
   const first = env?.trim()
   return [...new Set([...(first ? [first] : []), ...GEMINI_MODELS])].slice(0, ATTEMPT_MS.length)
 }
 
+/** Chave como foi colada na Vercel: sem espaços, quebra de linha nem aspas nas pontas. */
+export const cleanKey = (raw?: string): string => (raw ?? '').trim().replace(/^["']+|["']+$/g, '').trim()
+
+/** Tira chaves (a de verdade e qualquer coisa com cara de chave do Google) de um texto técnico antes de mostrá-lo. */
+export function redact(text: string, key = cleanKey(process.env.GEMINI_API_KEY)): string {
+  let out = text
+  if (key.length >= 8) out = out.split(key).join('[chave]')
+  return out.replace(/AIza[\w-]{20,}|AQ\.[\w-]{20,}/g, '[chave]')
+}
+
 /** Chama o Gemini pedindo JSON no formato de RESPONSE_SCHEMA. Lança Error (sem a chave na mensagem) se falhar. */
 export async function callGemini(prompt: string): Promise<unknown> {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) throw new Error('GEMINI_API_KEY não definida')
+  const key = cleanKey(process.env.GEMINI_API_KEY)
+  if (!key) throw new Error('GEMINI_API_KEY está vazia')
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
   })
-  let lastError = 'Gemini sem resposta'
+  const attempts: string[] = []
   const models = geminiModels()
   for (let i = 0; i < models.length; i++) {
     try {
@@ -56,17 +67,29 @@ export async function callGemini(prompt: string): Promise<unknown> {
         signal: AbortSignal.timeout(ATTEMPT_MS[i]),
       })
       if (!r.ok) {
-        lastError = `Gemini (${models[i]}) respondeu ${r.status}`
-        continue // modelo aposentado, sobrecarregado ou sem cota: tenta o próximo
+        // modelo aposentado, sobrecarregado, chave recusada ou sem cota: guarda o motivo e tenta o próximo
+        const raw = await r.text().catch(() => '')
+        let why = ''
+        try {
+          why = String((JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? '')
+        } catch {
+          why = raw
+        }
+        attempts.push(`${models[i]} respondeu ${r.status}${why ? ': ' + why.replace(/\s+/g, ' ').slice(0, 160) : ''}`)
+        continue
       }
       const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
       const text = (j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('')
+      if (!text.trim()) {
+        attempts.push(`${models[i]} respondeu sem texto`)
+        continue
+      }
       return JSON.parse(text)
     } catch (e) {
-      lastError = `Gemini (${models[i]}): ${(e as Error).name === 'TimeoutError' ? 'demorou demais' : (e as Error).message}`
+      attempts.push(`${models[i]}: ${(e as Error).name === 'TimeoutError' ? 'demorou demais' : (e as Error).message}`)
     }
   }
-  throw new Error(lastError)
+  throw new Error(redact(attempts.join(' | ') || 'Gemini sem resposta', key))
 }
 
 /**
@@ -89,8 +112,10 @@ export async function runAnalysis(
     if (out) return out
     return { ...rules, notice: 'A IA devolveu uma resposta que não deu para usar: esta é a análise por regras.' }
   } catch (e) {
-    console.error('[analyze-schedule] IA falhou:', (e as Error).message)
-    return { ...rules, notice: 'A IA não respondeu agora: esta é a análise por regras. Tente de novo em instantes.' }
+    const detail = redact((e as Error).message ?? '').slice(0, 400)
+    console.error('[analyze-schedule] IA falhou:', detail)
+    // o motivo técnico (sem chave) vai junto, só para o admin e o gestor, que são quem usa esta função
+    return { ...rules, notice: 'A IA não respondeu agora: esta é a análise por regras. Tente de novo em instantes.', detail }
   }
 }
 
@@ -131,5 +156,5 @@ export async function analyzeSchedule(caller: Caller, body: { workId?: unknown }
     if ((e as { code?: string }).code !== '42P01') throw e
   }
 
-  return runAnalysis(data.stages, data.work, todayBR(), notes, process.env.GEMINI_API_KEY ? callGemini : null)
+  return runAnalysis(data.stages, data.work, todayBR(), notes, cleanKey(process.env.GEMINI_API_KEY) ? callGemini : null)
 }
