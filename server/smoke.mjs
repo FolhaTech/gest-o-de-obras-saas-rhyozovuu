@@ -574,7 +574,7 @@ await db.query("delete from public.team_members where name = 'smoke-semana'")
   ok('o financeiro que não pediu a compra NÃO recebe a entrega', !!fRcvNot.error && /Somente quem solicitou/.test(fRcvNot.error.message), fRcvNot.error?.message)
   // quem solicitou (aqui com papel de prestador) recebe e confere
   await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
-  const fRcv = await sb.from('purchase_requests').update({ status: 'awaiting_release', receipt_notes: 'smoke: conferido' })
+  const fRcv = await sb.from('purchase_requests').update({ status: 'awaiting_release', receipt_notes: 'smoke: conferido' }).eq('id', flowId).select('status, received_by, receipt_notes').single()
   ok('quem solicitou (prestador) recebe e confere: vai para liberar o pagamento', !fRcv.error && fRcv.data.status === 'awaiting_release' && fRcv.data.received_by === smokeUserId && fRcv.data.receipt_notes === 'smoke: conferido', fRcv.error?.message)
   await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
   const fRel = await sb.from('purchase_requests').update({ status: 'closed' }).eq('id', flowId).select('status, payment_released_by, closed_at').single()
