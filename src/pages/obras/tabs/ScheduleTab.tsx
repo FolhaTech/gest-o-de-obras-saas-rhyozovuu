@@ -45,6 +45,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useData } from '@/hooks/use-data'
 import { useAuth } from '@/hooks/use-auth'
+import ScheduleAiPanel from './ScheduleAiPanel'
 
 export default function ScheduleTab({ obraId }: { obraId: string }) {
   const {
@@ -60,6 +61,8 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
   // Financeiro também só consulta (readOnly).
   const { role, readOnly } = useAuth()
   const canEdit = role !== 'prestador' && !readOnly
+  // a análise de prioridades com IA é do admin e do gestor (o servidor confere de novo)
+  const canAi = (role === 'admin' || role === 'gestor') && !readOnly
   const { data: teamMembers } = useData<{ id: string; name: string; provider_id?: string | null }>('team_members')
 
   const EMPTY_FORM = {
@@ -356,6 +359,8 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
   }
 
   return (
+    <div className="space-y-4">
+      {canAi && <ScheduleAiPanel obraId={obraId} />}
     <Card className="animate-fade-in-up shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -565,5 +570,6 @@ export default function ScheduleTab({ obraId }: { obraId: string }) {
         </div>
       </CardContent>
     </Card>
+    </div>
   )
 }

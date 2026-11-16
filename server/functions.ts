@@ -1,12 +1,14 @@
 /**
  * Portes das Edge Functions do Supabase que o app chama (supabase.functions.invoke):
- * generate-composition, parse-receipt e set-user-password (só admin). Exigem usuário autenticado.
+ * generate-composition, parse-receipt, set-user-password (só admin), create-user (só admin) e analyze-schedule
+ * (análise de prioridades do Cronograma com o Gemini, só admin e gestor). Exigem usuário autenticado.
  * Usam a API da OpenAI se OPENAI_API_KEY estiver definida; caso contrário, devolvem o mesmo
  * conteúdo de demonstração das funções originais.
  */
 import bcrypt from 'bcryptjs'
 import { decodeSeg, readJson, sendEmpty, sendJson, type Req, type Res, type Route } from './http.js'
 import { withAdmin, type Caller } from './db.js'
+import { analyzeSchedule } from './schedule-ai.js'
 
 async function openaiJson(model: string, messages: unknown[]): Promise<any> {
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -151,6 +153,7 @@ export async function handleFunctions(req: Req, res: Res, caller: Caller, route:
     const body = (await readJson(req)) ?? {}
     if (name === 'generate-composition') return sendJson(res, 200, await generateComposition(body))
     if (name === 'parse-receipt') return sendJson(res, 200, await parseReceipt(body))
+    if (name === 'analyze-schedule') return sendJson(res, 200, await analyzeSchedule(caller, body))
     if (name === 'set-user-password') {
       const out = await setUserPassword(caller, body)
       return sendJson(res, out.status, out.body)
