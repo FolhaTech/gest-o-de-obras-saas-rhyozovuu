@@ -160,6 +160,24 @@ export default function ManualPage() {
           <strong>Serviços</strong>, <strong>Materiais Alocados</strong>, <strong>Receitas</strong>{' '}
           e <strong>Cronograma</strong>.
         </Step>
+        <Step n={4}>
+          Na aba <strong>Cronograma</strong>, o admin e o gestor têm o painel{' '}
+          <strong>“Prioridades com IA”</strong>. Clique em <strong>“Analisar com IA”</strong>: a IA lê as etapas (datas,
+          progresso e atrasos) e sugere <strong>o que fazer primeiro</strong>, <strong>o que pode andar em paralelo</strong>{' '}
+          com equipes diferentes, <strong>o que pode ficar para depois</strong> sem atrasar a entrega, os pontos de
+          atenção, como acelerar e a previsão de término.
+        </Step>
+        <Step n={5}>
+          Se você <strong>não for seguir</strong> uma sugestão, clique em <strong>“Não vou seguir”</strong> e{' '}
+          <strong>informe o motivo</strong> (por exemplo: “falta material” ou “a equipe só chega semana que vem”). A IA
+          guarda o motivo, <strong>se adapta e refaz o plano</strong> na hora. Você também pode informar uma restrição
+          geral no campo de baixo. Tudo o que você informou aparece em <strong>“O que você já informou à IA”</strong>;
+          quando um motivo deixar de valer, remova-o pelo X.
+        </Step>
+        <Tip>
+          A IA só recebe os nomes das etapas, as datas, o progresso e as observações curtas do cronograma: nunca valores
+          em dinheiro nem nomes de pessoas. Se a IA estiver fora do ar, o sistema mostra uma análise por regras, com aviso.
+        </Tip>
         <h3 className="text-lg font-semibold text-foreground pt-2">3.3 — Diário de obras</h3>
         <Step n={1}>
           Abra a obra e vá na aba <strong>Notas</strong> — ou abra o menu{' '}

@@ -16,7 +16,9 @@ navegador ──supabase-js──▶ /rest/v1 /auth/v1 /storage/v1 /functions/v1
   então as **políticas RLS** de `02_schema.sql` continuam sendo a barreira de acesso.
 * `server/auth.ts` – login, cadastro, refresh, `getUser`, troca de senha. Senhas em bcrypt, JWT HS256.
 * `server/storage.ts` – arquivos no próprio Postgres (`storage.objects.data`), com upload em pedaços para > 4 MB.
-* `server/functions.ts` – `generate-composition` e `parse-receipt` (usam `OPENAI_API_KEY` se existir).
+* `server/functions.ts` – `generate-composition` e `parse-receipt` (usam `OPENAI_API_KEY` se existir) e `analyze-schedule`
+  (prioridades do Cronograma com o Gemini, `server/schedule-ai.ts`; sem `GEMINI_API_KEY`, ou se a IA falhar, devolve a
+  análise por regras de `server/schedule-analysis.ts`, com aviso).
 
 ## Variáveis de ambiente (nunca vão para o git)
 
@@ -25,6 +27,8 @@ navegador ──supabase-js──▶ /rest/v1 /auth/v1 /storage/v1 /functions/v1
 | `DATABASE_URL` | Vercel + `.env.local` | `postgres://usuario:senha@host:5432/gestao_obras` (senha com `%`-encoding) |
 | `JWT_SECRET` | Vercel + `.env.local` | 32+ caracteres aleatórios; assina os tokens de login |
 | `OPENAI_API_KEY` | Vercel (opcional) | IA de composição e leitura de nota fiscal |
+| `GEMINI_API_KEY` | Vercel + `.env.local` (opcional) | IA do Cronograma (Prioridades com IA). Sem ela, vale a análise por regras |
+| `GEMINI_MODEL` | Vercel (opcional) | Modelo do Gemini; padrão `gemini-3.5-flash`, com `gemini-3.6-flash` de reserva (o Google aposenta modelos) |
 | `ALLOW_SIGNUP` | Vercel (opcional) | O cadastro aberto vem **fechado**; `true` o abre (não recomendado). Quem cria usuários é o administrador (Configurações → Usuários → Novo usuário) |
 | `VITE_SUPABASE_ANON_KEY` | `.env` (público) | gerada por `node server/gen-anon-key.mjs` |
 
@@ -61,6 +65,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/25_compras_nota_fiscal_arquivo.sql  #
 psql "$ADMIN_URL/gestao_obras" -f db/azure/26_pagamento_semanal_equipe.sql  # Pagamento (Equipe): a presença (sábado a sexta) vira pagamento pendente por pessoa e semana, pago na sexta; complemento se a presença mudar depois de paga; teste: node db/azure/test-pagamento-semanal.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/27_financeiro_consulta.sql  # Financeiro consulta (só leitura, com valores) Dashboard, Obras, Despesas, Equipes, Materiais e Relatórios; segue sem escrever fora do Faturamento; teste: node db/azure/test-financeiro-consulta.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/28_compras_imagem_item.sql  # Compras: imagem do item no pedido e imagem em cada cotação (bucket PRIVADO "purchase-images": quem vê o pedido vê a do item; só Admin e Financeiro veem a da cotação); teste: node db/azure/test-compras-imagem.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/29_cronograma_ia_observacoes.sql  # Cronograma com IA: observações do responsável (motivo de não seguir uma sugestão; a IA se adapta); só Admin e Gestor; teste: node db/azure/test-cronograma-ia.mjs
 ```
 
 ## Desenvolvimento local
