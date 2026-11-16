@@ -4,7 +4,7 @@
  * a ordem das etapas e as conferências que a tela faz antes de chamar a API.
  *
  *   1 Solicitação · 2 Cotações (financeiro) · 3 Aprovação do admin · 4 Compra · 5 Pagamento / entrega
- *   · 6 Recebimento / encerramento (financeiro)
+ *   · 6 Recebimento / encerramento (quem solicitou recebe e confere; o financeiro libera o pagamento)
  */
 export type PurchaseStatus =
   | 'requested'
@@ -41,8 +41,8 @@ export const PAYMENT_MODE_LABEL: Record<PaymentMode, string> = {
 
 /** O que cada forma de pagamento significa no caminho da compra. */
 export const PAYMENT_MODE_HELP: Record<PaymentMode, string> = {
-  advance: 'O financeiro libera o pagamento antes da entrega. Depois recebe e confere, e a compra se encerra.',
-  after_delivery: 'O financeiro recebe e confere a entrega primeiro. Só depois libera o pagamento e encerra.',
+  advance: 'O financeiro libera o pagamento antes da entrega. Depois, quem solicitou recebe e confere, e a compra se encerra.',
+  after_delivery: 'Quem solicitou recebe e confere a entrega primeiro. Só depois o financeiro libera o pagamento e encerra.',
 }
 
 export const URGENCY_LABEL: Record<Urgency, string> = {
@@ -55,7 +55,7 @@ export const URGENCY_LABEL: Record<Urgency, string> = {
 const URGENCY_RANK: Record<Urgency, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
 
 /** Quem precisa agir. */
-export type Actor = 'financeiro' | 'admin'
+export type Actor = 'financeiro' | 'admin' | 'solicitante'
 
 /** Ainda não terminou (nem encerrada nem cancelada). */
 export const isOpen = (s: string): boolean => s !== 'closed' && s !== 'cancelled'
@@ -67,6 +67,7 @@ export const isBought = (s: string): boolean =>
 /** Quem tem a próxima ação (nulo quando terminou). */
 export function waitingOn(status: string): Actor | null {
   if (status === 'quotes_sent') return 'admin'
+  if (status === 'awaiting_delivery') return 'solicitante' // quem pediu recebe e confere a entrega
   if (isOpen(status)) return 'financeiro'
   return null
 }
@@ -85,7 +86,7 @@ export function waitingText(status: string, mode?: string | null): string {
     case 'awaiting_payment':
       return 'Financeiro libera o pagamento antecipado'
     case 'awaiting_delivery':
-      return mode === 'advance' ? 'Pago antes da entrega: financeiro recebe e confere' : 'Financeiro recebe e confere a entrega'
+      return mode === 'advance' ? 'Pago antes da entrega: o solicitante recebe e confere' : 'Solicitante recebe e confere a entrega'
     case 'awaiting_release':
       return 'Financeiro libera o pagamento e encerra'
     case 'closed':
@@ -117,14 +118,32 @@ export function nextFinanceStatus(status: string, mode?: string | null): Purchas
       return mode === 'advance' ? 'awaiting_payment' : 'awaiting_delivery'
     case 'awaiting_payment':
       return 'awaiting_delivery'
-    case 'awaiting_delivery':
-      return mode === 'after_delivery' ? 'awaiting_release' : 'closed'
     case 'awaiting_release':
       return 'closed'
     default:
-      return null
+      return null // (a entrega é recebida por quem solicitou: nextReceiveStatus)
   }
 }
+
+/** Situação depois que quem solicitou recebe e confere: antecipado encerra; após a entrega vai para o financeiro pagar. */
+export const nextReceiveStatus = (mode?: string | null): PurchaseStatus => (mode === 'after_delivery' ? 'awaiting_release' : 'closed')
+
+/**
+ * Recebe e confere a entrega: quem solicitou a compra (se a solicitação ficou sem solicitante, o financeiro).
+ * O banco confere de novo.
+ */
+export function canReceive(
+  r: { status: string; requested_by: string | null },
+  userId: string | null | undefined,
+  role?: string | null,
+): boolean {
+  if (r.status !== 'awaiting_delivery') return false
+  if (r.requested_by !== null) return r.requested_by === (userId ?? null)
+  return norm(role) === 'financeiro'
+}
+
+/** Título e botão da etapa de quem recebe a entrega (o solicitante). */
+export const RECEIVE_ACTION = { title: 'Receber e conferir a entrega', button: 'Receber e conferir' } as const
 
 /** Título e botão da etapa do financeiro depois da aprovação (nulo se não há ação dele nessa situação). */
 export function fulfillAction(r: { status: string }): { title: string; button: string } | null {
@@ -133,8 +152,6 @@ export function fulfillAction(r: { status: string }): { title: string; button: s
       return { title: 'Registrar a compra', button: 'Comprar' }
     case 'awaiting_payment':
       return { title: 'Liberar o pagamento antecipado', button: 'Liberar pagamento' }
-    case 'awaiting_delivery':
-      return { title: 'Receber e conferir a entrega', button: 'Receber e conferir' }
     case 'awaiting_release':
       return { title: 'Liberar o pagamento e encerrar', button: 'Liberar pagamento' }
     default:
@@ -149,7 +166,7 @@ export const STEP_TITLES = [
   'Aprovação do admin',
   'Compra',
   'Pagamento / entrega',
-  'Recebimento / encerramento',
+  'Recebimento / encerramento (solicitante)',
 ] as const
 
 /** Etapa atual (1 a 6); 0 = cancelada; 7 = tudo concluído. */
@@ -260,8 +277,8 @@ export function canCancel(
 }
 
 /**
- * É a vez deste usuário agir? Financeiro: tudo o que está com ele (menos a aprovação). Admin: as cotações que ele
- * pode aprovar ou recusar. Os demais papéis nunca agem.
+ * É a vez deste usuário agir? Financeiro: tudo o que está com ele (menos a aprovação e o recebimento). Admin: as
+ * cotações que ele pode aprovar ou recusar. Qualquer usuário: receber e conferir a entrega do que ele mesmo pediu.
  */
 export function needsMyAction(
   r: { status: string; requested_by: string | null },
@@ -269,6 +286,7 @@ export function needsMyAction(
   role: string | null | undefined,
   requesterRole?: string | null,
 ): boolean {
+  if (canReceive(r, userId, role)) return true
   if (norm(role) === 'financeiro') return waitingOn(r.status) === 'financeiro'
   return canDecide(r, userId, role, requesterRole)
 }
@@ -331,6 +349,23 @@ export function daysLate(r: { status: string; needed_by?: string | null }, today
   return diff > 0 ? diff : 0
 }
 
+/**
+ * Dias de atraso da ENTREGA (a data combinada pelo financeiro na compra): vale enquanto a compra não chegou
+ * (aguardando pagamento antecipado ou aguardando entrega). 0 se não há data ou ainda está no prazo.
+ */
+export function deliveryDaysLate(r: { status: string; delivery_date?: string | null }, today: string): number {
+  if (!r.delivery_date || (r.status !== 'awaiting_payment' && r.status !== 'awaiting_delivery')) return 0
+  const diff = Math.round((Date.parse(today) - Date.parse(r.delivery_date)) / 86_400_000)
+  return diff > 0 ? diff : 0
+}
+
+/** Data de entrega sugerida na compra: hoje + o prazo (em dias) da cotação aprovada; nulo se a cotação não tem prazo. */
+export function suggestedDeliveryDate(today: string, deliveryDays?: number | null): string | null {
+  if (deliveryDays === null || deliveryDays === undefined || !Number.isFinite(deliveryDays) || deliveryDays < 0) return null
+  const ms = Date.parse(today) + Math.round(deliveryDays) * 86_400_000
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
 // ---------------------------------------------------------------- linhas vindas da API
 export interface PurchaseRequestRow {
   id: string
@@ -352,6 +387,8 @@ export interface PurchaseRequestRow {
   invoice_file_name?: string | null
   invoice_file_type?: string | null
   purchased_at: string | null
+  /** Data de entrega combinada na compra (o financeiro informa). */
+  delivery_date?: string | null
   finance_notes: string | null
   handled_by: string | null
   created_at: string
@@ -375,6 +412,7 @@ export interface PurchaseRequestRow {
   requester?: { full_name: string | null; email: string | null; role?: string | null } | null
   handler?: { full_name: string | null; email: string | null } | null
   approver?: { full_name: string | null; email: string | null } | null
+  receiver?: { full_name: string | null; email: string | null } | null
 }
 
 export interface PurchaseQuoteRow {

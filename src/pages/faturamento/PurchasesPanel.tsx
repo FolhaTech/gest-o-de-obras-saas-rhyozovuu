@@ -13,6 +13,8 @@ import {
   URGENCY_LABEL,
   canCancel,
   canDecide,
+  canReceive,
+  deliveryDaysLate,
   canEditRequest,
   currentRound,
   daysLate,
@@ -62,6 +64,7 @@ import ApprovalPanel from './ApprovalPanel'
 import DecisionDialog from './DecisionDialog'
 import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
+import ReceiveDialog from './ReceiveDialog'
 import InvoiceLink from './InvoiceLink'
 import QuotesDialog from './QuotesDialog'
 import ImageField from './ImageField'
@@ -70,7 +73,7 @@ import { openImage, removeImages, uploadItemImage } from './image-storage'
 import { STATUS_CLASS, URGENCY_CLASS, fmtQty, todayISO, who } from './helpers'
 
 const SELECT =
-  '*, works:work_id(id, name), requester:requested_by(full_name, email, role), handler:handled_by(full_name, email), approver:approver_id(full_name, email)'
+  '*, works:work_id(id, name), requester:requested_by(full_name, email, role), handler:handled_by(full_name, email), approver:approver_id(full_name, email), receiver:received_by(full_name, email)'
 const NO_WORK = '__none__'
 const UNITS = ['un', 'kg', 'saco', 'm', 'm²', 'm³', 'L', 'cx', 'pç', 'jogo']
 
@@ -126,6 +129,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const [quotesId, setQuotesId] = useState<string | null>(null)
   const [decideId, setDecideId] = useState<string | null>(null)
   const [fulfillId, setFulfillId] = useState<string | null>(null)
+  const [receiveId, setReceiveId] = useState<string | null>(null)
 
   const today = todayISO()
 
@@ -202,12 +206,16 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const boughtMonth = items.filter((r) => isBought(r.status) && (r.purchased_at ?? '').startsWith(monthPrefix))
   const boughtMonthValue = boughtMonth.reduce((s, r) => s + (Number(r.final_value) || 0), 0)
   const late = items.filter((r) => daysLate(r, today) > 0).length
+  const deliveryLate = items.filter((r) => deliveryDaysLate(r, today) > 0).length
+  // entregas que esperam este usuário receber e conferir (ele pediu a compra)
+  const toReceive = items.filter((r) => canReceive(r, user?.id, role))
   const minePending = items.filter((r) => r.requested_by === user?.id && r.status === 'requested').length
 
   const detail = items.find((r) => r.id === detailId) ?? null
   const quotesOf = items.find((r) => r.id === quotesId) ?? null
   const decideOf = items.find((r) => r.id === decideId) ?? null
   const fulfillOf = items.find((r) => r.id === fulfillId) ?? null
+  const receiveOf = items.find((r) => r.id === receiveId) ?? null
 
   // ---------------------------------------------------------------- solicitar
   const openCreate = () => {
@@ -385,11 +393,20 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
           Você tem {minePending} solicitação(ões) <strong>pendente(s) pelo financeiro</strong>. Elas ficam com o financeiro até ele iniciar as cotações.
         </div>
       )}
-      {isFinance && todoCount > 0 && (
+      {toReceive.length > 0 && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 shrink-0" />
+            {toReceive.length} entrega(s) que você pediu esperam você <strong>receber e conferir</strong>.
+          </span>
+          <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setStatusFilter('mine')}>Ver</Button>
+        </div>
+      )}
+      {isFinance && todoCount - toReceive.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0" />
-            {todoCount} solicitação(ões) aguardando a sua ação.
+            {todoCount - toReceive.length} solicitação(ões) aguardando a sua ação.
           </span>
           <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setStatusFilter('mine')}>Ver</Button>
         </div>
@@ -408,6 +425,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
         ))}
       </div>
       {late > 0 && <p className="text-xs text-rose-600 font-medium">{late} solicitação(ões) com o prazo "precisa até" vencido.</p>}
+      {deliveryLate > 0 && <p className="text-xs text-rose-600 font-medium">{deliveryLate} entrega(s) atrasada(s) em relação à data combinada com o fornecedor.</p>}
 
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -418,7 +436,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
           <SelectTrigger className="md:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="open">Em aberto</SelectItem>
-            {(isFinance || isAdmin) && <SelectItem value="mine">Aguardando a minha ação</SelectItem>}
+            <SelectItem value="mine">Aguardando a minha ação</SelectItem>
             <SelectItem value="all">Todas</SelectItem>
             {(Object.keys(STATUS_LABEL) as PurchaseStatus[]).map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
           </SelectContent>
@@ -511,6 +529,12 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         </div>
                       )}
                       {r.payment_mode && <div className="text-xs text-muted-foreground">{PAYMENT_MODE_LABEL[r.payment_mode]}</div>}
+                      {r.delivery_date && (
+                        <div className="text-xs text-muted-foreground">
+                          Entrega prevista {formatDate(r.delivery_date)}
+                          {deliveryDaysLate(r, today) > 0 && <span className="ml-1 font-medium text-rose-600">atrasada {deliveryDaysLate(r, today)} dia(s)</span>}
+                        </div>
+                      )}
                       {(r.invoice_number || (canSeeBilling && r.invoice_file_path)) && (
                         <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                           {r.invoice_number && <span>NF {r.invoice_number}</span>}
@@ -544,6 +568,11 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                       {fulfill && (
                         <Button size="sm" className="h-8 mr-1" onClick={() => setFulfillId(r.id)}>
                           {fulfill.button}
+                        </Button>
+                      )}
+                      {canReceive(r, user?.id, role) && (
+                        <Button size="sm" className="h-8 mr-1" onClick={() => setReceiveId(r.id)}>
+                          Receber e conferir
                         </Button>
                       )}
                       {canDecide(r, user?.id, role, r.requester?.role) && (
@@ -583,6 +612,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       {isFinance && <QuotesDialog request={quotesOf} onClose={() => setQuotesId(null)} onChanged={fetchAll} />}
       {isAdmin && <DecisionDialog request={decideOf} onClose={() => setDecideId(null)} onChanged={fetchAll} />}
       {isFinance && <FulfillDialog request={fulfillOf} onClose={() => setFulfillId(null)} onChanged={fetchAll} />}
+      <ReceiveDialog request={receiveOf} onClose={() => setReceiveId(null)} onChanged={fetchAll} />
 
       {/* Solicitar compra */}
       <Dialog open={reqOpen} onOpenChange={setReqOpen}>
