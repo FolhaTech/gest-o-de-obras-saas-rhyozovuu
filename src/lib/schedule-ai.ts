@@ -34,6 +34,7 @@ export interface ScheduleAnalysis {
   adaptation?: string
   notes_used: number
   notice?: string
+  detail?: string
 }
 
 /** Observação do responsável guardada (tabela schedule_ai_notes). */

@@ -194,7 +194,10 @@ export default function ScheduleAiPanel({ obraId }: { obraId: string }) {
 
             {result.notice && (
               <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-                <AlertDescription>{result.notice}</AlertDescription>
+                <AlertDescription>
+                  {result.notice}
+                  {result.detail && <span className="mt-1 block break-words text-xs opacity-80">Detalhe técnico: {result.detail}</span>}
+                </AlertDescription>
               </Alert>
             )}
 

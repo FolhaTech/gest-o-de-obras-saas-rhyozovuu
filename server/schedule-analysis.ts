@@ -71,6 +71,8 @@ export interface ScheduleAnalysis {
   notes_used: number
   /** Aviso para o usuário (ex.: a IA não respondeu e a análise veio das regras). */
   notice?: string
+  /** Motivo técnico da falha da IA (sem chave), para quem precisa descobrir o que houve. */
+  detail?: string
 }
 
 // ---------------------------------------------------------------- datas (texto AAAA-MM-DD)

@@ -28,7 +28,7 @@ navegador ──supabase-js──▶ /rest/v1 /auth/v1 /storage/v1 /functions/v1
 | `JWT_SECRET` | Vercel + `.env.local` | 32+ caracteres aleatórios; assina os tokens de login |
 | `OPENAI_API_KEY` | Vercel (opcional) | IA de composição e leitura de nota fiscal |
 | `GEMINI_API_KEY` | Vercel + `.env.local` (opcional) | IA do Cronograma (Prioridades com IA). Sem ela, vale a análise por regras |
-| `GEMINI_MODEL` | Vercel (opcional) | Modelo do Gemini; padrão `gemini-3.5-flash`, com `gemini-3.6-flash` de reserva (o Google aposenta modelos) |
+| `GEMINI_MODEL` | Vercel (opcional) | Modelo do Gemini; padrão `gemini-3.5-flash`, com `gemini-3.6-flash` e `gemini-3.5-flash-lite` de reserva (o Google aposenta modelos; a cota é por modelo) |
 | `ALLOW_SIGNUP` | Vercel (opcional) | O cadastro aberto vem **fechado**; `true` o abre (não recomendado). Quem cria usuários é o administrador (Configurações → Usuários → Novo usuário) |
 | `VITE_SUPABASE_ANON_KEY` | `.env` (público) | gerada por `node server/gen-anon-key.mjs` |
 

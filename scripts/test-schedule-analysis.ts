@@ -13,7 +13,7 @@ import {
   type NoteIn,
   type StageIn,
 } from '../server/schedule-analysis.ts'
-import { geminiModels, runAnalysis } from '../server/schedule-ai.ts'
+import { cleanKey, geminiModels, redact, runAnalysis } from '../server/schedule-ai.ts'
 
 let failed = 0
 const ok = (n: string, c: boolean, extra = '') => {
@@ -212,15 +212,24 @@ ok('humanize: texto sem ids não muda', humanize('Faça a elétrica e a hidrául
 const semIa = await runAnalysis(stages, work, hoje, [], null)
 ok('sem chave: análise por regras com aviso', semIa.source === 'rules' && /não está configurada/.test(semIa.notice ?? ''))
 const quebra = await runAnalysis(stages, work, hoje, [], async () => { throw new Error('Gemini respondeu 500') })
-ok('a IA falhou: análise por regras com aviso (sem o erro técnico)', quebra.source === 'rules' && /não respondeu/.test(quebra.notice ?? '') && !/500/.test(quebra.notice ?? ''))
+ok('a IA falhou: análise por regras com aviso simples e o motivo técnico à parte', quebra.source === 'rules' && /não respondeu/.test(quebra.notice ?? '') && !/500/.test(quebra.notice ?? '') && /respondeu 500/.test(quebra.detail ?? ''), quebra.detail)
+const FALSA = 'AQ.FALSA0000000000000000000000000000'
+const comChave = await runAnalysis(stages, work, hoje, [], async () => { throw new Error(`gemini-3.5-flash respondeu 400: API key not valid (${FALSA})`) })
+ok('o motivo técnico nunca leva a chave', !comChave.detail?.includes('FALSA') && /API key not valid/.test(comChave.detail ?? '') && /\[chave\]/.test(comChave.detail ?? ''), comChave.detail)
 const lixo = await runAnalysis(stages, work, hoje, [], async () => ({ foo: 1 }))
 ok('a IA devolveu lixo: análise por regras com aviso', lixo.source === 'rules' && /não deu para usar/.test(lixo.notice ?? ''))
 let promptVisto = ''
 const comIa = await runAnalysis(stages, work, hoje, recusaPrimeiro, async (p) => { promptVisto = p; return boa })
 ok('a IA respondeu bem: fonte "ai" e as observações vão no pedido', comIa.source === 'ai' && !comIa.notice && JSON.parse(promptVisto).observacoes_do_responsavel.length === 1)
 
+// ---------------------------------------------------------------- chave e texto técnico
+ok('chave colada com espaço, quebra de linha ou aspas é limpa', cleanKey('  AQ.abc123  \n') === 'AQ.abc123' && cleanKey('"AQ.abc123"') === 'AQ.abc123' && cleanKey("'AQ.abc123'\n") === 'AQ.abc123' && cleanKey(undefined) === '' && cleanKey('   ') === '')
+const amostra = 'erro com minhachavesecreta123 e AIzaSyFALSA1234567890abcdefghijkl e AQ.FALSA0000000000000000000000000000'
+ok('redact tira a chave informada e qualquer coisa com cara de chave do Google', redact(amostra, 'minhachavesecreta123') === 'erro com [chave] e [chave] e [chave]', redact(amostra, 'minhachavesecreta123'))
+ok('redact deixa texto comum', redact('gemini-3.5-flash respondeu 403: permission denied', 'chavechave') === 'gemini-3.5-flash respondeu 403: permission denied')
+
 // ---------------------------------------------------------------- modelos
-ok('modelos: o da configuração vai na frente, sem repetir, no máximo 2', geminiModels('gemini-x').join() === 'gemini-x,gemini-3.5-flash' && geminiModels('gemini-3.5-flash').join() === 'gemini-3.5-flash,gemini-3.6-flash' && geminiModels(undefined).join() === 'gemini-3.5-flash,gemini-3.6-flash' && geminiModels('  ').length === 2)
+ok('modelos: o da configuração vai na frente, sem repetir, no máximo 3 (o lite, de cota própria, fica por último)', geminiModels('gemini-x').join() === 'gemini-x,gemini-3.5-flash,gemini-3.6-flash' && geminiModels('gemini-3.5-flash').join() === 'gemini-3.5-flash,gemini-3.6-flash,gemini-3.5-flash-lite' && geminiModels(undefined).join() === 'gemini-3.5-flash,gemini-3.6-flash,gemini-3.5-flash-lite' && geminiModels('  ').length === 3)
 
 console.log(failed ? `\n${failed} FALHA(S)` : '\nTudo certo')
 process.exit(failed ? 1 : 0)
