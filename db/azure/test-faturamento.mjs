@@ -1,6 +1,6 @@
 // Testa (RLS, transação desfeita no final): papel Financeiro, fluxo de compras (solicitação -> cotações -> aprovação do
 // admin -> compra -> pagamento/entrega -> recebimento) e pagamento da equipe (22, 23 e 24).
-// Se as migrações 24 e 25 ainda não estão aplicadas, elas rodam DENTRO da transação (e são desfeitas junto).
+// Se as migrações 24, 25 e 30 ainda não estão aplicadas, elas rodam DENTRO da transação (e são desfeitas junto).
 // Uso: node db/azure/test-faturamento.mjs (lê DATABASE_URL do .env.local)
 import { existsSync, readFileSync } from 'node:fs'
 import pg from 'pg'
@@ -57,6 +57,10 @@ try {
   if (!(await one("select 1 x from information_schema.columns where table_name = 'purchase_requests' and column_name = 'invoice_file_path'"))) {
     await c.query(readFileSync('db/azure/25_compras_nota_fiscal_arquivo.sql', 'utf8'))
     console.log('(migração 25 aplicada dentro da transação, ainda não está no banco)')
+  }
+  if (!(await one("select 1 x from information_schema.columns where table_name = 'purchase_requests' and column_name = 'delivery_date'"))) {
+    await c.query(readFileSync('db/azure/30_compras_entrega_e_recebimento.sql', 'utf8'))
+    console.log('(migração 30 aplicada dentro da transação, ainda não está no banco)')
   }
   const [adm1, adm2] = await q("select id from profiles where lower(role) = 'admin' order by email limit 2")
   const [req1, fin, ges, other] = await q("select id from profiles where lower(role) = 'prestador' order by email limit 4")
@@ -255,15 +259,48 @@ try {
   ok('não pula etapas (aprovada para encerrada)', /não permitida/.test(skipBuy.error?.message ?? ''))
 
   // ---- após a entrega: recebe e confere primeiro; depois o financeiro libera o pagamento
-  const buy = await move(fin.id, row.id, 'awaiting_delivery', "invoice_number = 'NF-1', purchased_at = '2026-11-10'")
-  ok('compra após a entrega: vai para "aguardando entrega" com nota e data da compra', buy.rows[0]?.status === 'awaiting_delivery' && buy.rows[0].invoice_number === 'NF-1' && String(buy.rows[0].purchased_at).includes('2026') && buy.rows[0].payment_mode === 'after_delivery', buy.error?.message)
+  const noDate = await move(fin.id, row.id, 'awaiting_delivery', "invoice_number = 'NF-1', purchased_at = '2026-11-10'")
+  ok('a compra exige a data de entrega', /Informe a data de entrega/.test(noDate.error?.message ?? ''), noDate.error?.message)
+  const earlyDate = await move(fin.id, row.id, 'awaiting_delivery', "purchased_at = '2026-11-10', delivery_date = '2026-11-05'")
+  ok('a entrega não pode ser antes da data da compra', /anterior à data da compra/.test(earlyDate.error?.message ?? ''), earlyDate.error?.message)
+  const reqDate = await move(req1.id, row.id, 'awaiting_delivery', "delivery_date = '2026-11-20'")
+  ok('quem solicitou não faz a compra nem informa a data de entrega', !!reqDate.error, reqDate.error?.message)
+  const buy = await move(fin.id, row.id, 'awaiting_delivery', "invoice_number = 'NF-1', purchased_at = '2026-11-10', delivery_date = '2026-11-20'")
+  ok('compra após a entrega: vai para "aguardando entrega" com nota e data da compra', buy.rows[0]?.status === 'awaiting_delivery' && buy.rows[0].invoice_number === 'NF-1' && String(buy.rows[0].purchased_at).includes('2026') && buy.rows[0].payment_mode === 'after_delivery' && String(buy.rows[0].delivery_date).includes('Nov 20 2026'), buy.error?.message)
   const payEarly = await move(fin.id, row.id, 'closed')
-  ok('após a entrega: não encerra nem paga antes de receber e conferir', /Após a entrega: recebe, confere/.test(payEarly.error?.message ?? '') || /não permitida/.test(payEarly.error?.message ?? ''), payEarly.error?.message)
+  ok('após a entrega: o financeiro não encerra nem paga antes de quem solicitou receber e conferir', /Somente quem solicitou/.test(payEarly.error?.message ?? ''), payEarly.error?.message)
+  // data de entrega: o financeiro reagenda; ninguém mais mexe; não se apaga nem volta antes da compra
+  const resched = await move(fin.id, row.id, 'awaiting_delivery', "delivery_date = '2026-11-25'")
+  ok('o financeiro reagenda a entrega enquanto a compra não chegou', String(resched.rows[0]?.delivery_date).includes('Nov 25 2026'), resched.error?.message)
+  const reschedEarly = await move(fin.id, row.id, 'awaiting_delivery', "delivery_date = '2026-11-01'")
+  ok('...mas não para antes da data da compra', /anterior à data da compra/.test(reschedEarly.error?.message ?? ''), reschedEarly.error?.message)
+  const reschedNull = await move(fin.id, row.id, 'awaiting_delivery', 'delivery_date = NULL')
+  ok('...nem apaga a data', /não pode ficar em branco/.test(reschedNull.error?.message ?? ''), reschedNull.error?.message)
+  const reschedReq = await move(req1.id, row.id, 'awaiting_delivery', "delivery_date = '2026-12-31'")
+  ok('quem solicitou não muda a data de entrega', String(reschedReq.rows[0]?.delivery_date).includes('Nov 25 2026'), reschedReq.error?.message ?? String(reschedReq.rows[0]?.delivery_date))
+  const reschedAdm = await move(adm2.id, row.id, 'awaiting_delivery', "delivery_date = '2026-12-31'")
+  ok('o admin não muda a data de entrega', String(reschedAdm.rows[0]?.delivery_date).includes('Nov 25 2026'), reschedAdm.error?.message ?? String(reschedAdm.rows[0]?.delivery_date))
+  const finNotesEarly = await move(fin.id, row.id, 'awaiting_delivery', "receipt_notes = 'o financeiro não confere'")
+  ok('as observações do recebimento não são do financeiro', finNotesEarly.rows[0]?.receipt_notes === null, finNotesEarly.error?.message ?? String(finNotesEarly.rows[0]?.receipt_notes))
+
+  // recebimento / encerramento: quem SOLICITOU recebe e confere
   const rcvAdm = await move(adm2.id, row.id, 'awaiting_release')
-  ok('o admin não recebe a entrega (é do financeiro)', /Somente o financeiro recebe/.test(rcvAdm.error?.message ?? ''))
-  const rcv = await move(fin.id, row.id, 'awaiting_release', "receipt_notes = 'tudo conferido, 10 sacos'")
-  ok('o financeiro recebe e confere: vai para "liberar pagamento"', rcv.rows[0]?.status === 'awaiting_release' && rcv.rows[0].received_by === fin.id && !!rcv.rows[0].received_at && rcv.rows[0].receipt_notes === 'tudo conferido, 10 sacos' && rcv.rows[0].closed_at === null, rcv.error?.message)
+  const rcvFin = await move(fin.id, row.id, 'awaiting_release')
+  ok('o financeiro que não pediu NÃO recebe a entrega', /Somente quem solicitou/.test(rcvFin.error?.message ?? ''), rcvFin.error?.message)
+  const rcvGes = await move(ges.id, row.id, 'awaiting_release')
+  ok('o gestor não recebe a entrega de outro', rcvGes.rowCount === 0)
+  const rcvOther = await move(other.id, row.id, 'awaiting_release')
+  ok('outro usuário não recebe a entrega', rcvOther.rowCount === 0)
+  ok('o admin que não pediu NÃO recebe a entrega', /Somente quem solicitou/.test(rcvAdm.error?.message ?? ''), rcvAdm.error?.message)
+  const rcvEarlyPay = await move(req1.id, row.id, 'closed')
+  ok('após a entrega: quem solicitou não encerra direto (o pagamento vem depois)', /Após a entrega: recebe, confere e o financeiro libera/.test(rcvEarlyPay.error?.message ?? ''), rcvEarlyPay.error?.message)
+  const rcv = await move(req1.id, row.id, 'awaiting_release', "receipt_notes = 'tudo conferido, 10 sacos'")
+  ok('quem solicitou recebe e confere: vai para "liberar pagamento" (com a conferência e quem recebeu)', rcv.rows[0]?.status === 'awaiting_release' && rcv.rows[0].received_by === req1.id && !!rcv.rows[0].received_at && rcv.rows[0].receipt_notes === 'tudo conferido, 10 sacos' && rcv.rows[0].closed_at === null, rcv.error?.message)
   ok('...e o pagamento ainda não foi liberado', rcv.rows[0]?.payment_released_at === null)
+  const lateRes = await move(fin.id, row.id, 'awaiting_release', "delivery_date = '2026-12-31'")
+  ok('depois de recebida a data de entrega não muda mais', String(lateRes.rows[0]?.delivery_date).includes('Nov 25 2026'), lateRes.error?.message ?? String(lateRes.rows[0]?.delivery_date))
+  const reqRel = await move(req1.id, row.id, 'closed')
+  ok('quem solicitou não libera o pagamento (é do financeiro)', !!reqRel.error, reqRel.error?.message)
   const rel = await move(fin.id, row.id, 'closed')
   ok('o financeiro libera o pagamento e encerra', rel.rows[0]?.status === 'closed' && rel.rows[0].payment_released_by === fin.id && !!rel.rows[0].payment_released_at && !!rel.rows[0].closed_at, rel.error?.message)
   const afterClose = await move(fin.id, row.id, 'quoting')
@@ -285,7 +322,7 @@ try {
   ok('aprova a cotação com pagamento antecipado', advAppr.rows[0]?.payment_mode === 'advance', advAppr.error?.message)
   const advWrong = await move(fin.id, adv, 'awaiting_delivery')
   ok('antecipado: a compra vai para "aguardando pagamento", não direto para a entrega', /Pagamento antecipado vai para/.test(advWrong.error?.message ?? ''), advWrong.error?.message)
-  const advBuy = await move(fin.id, adv, 'awaiting_payment')
+  const advBuy = await move(fin.id, adv, 'awaiting_payment', 'delivery_date = CURRENT_DATE + 7')
   ok('antecipado: compra grava a data e fica "aguardando pagamento"', advBuy.rows[0]?.status === 'awaiting_payment' && !!advBuy.rows[0].purchased_at && advBuy.rows[0].payment_released_at === null, advBuy.error?.message)
   const advSkip = await move(fin.id, adv, 'closed')
   ok('antecipado: não encerra sem pagar e sem receber', /não permitida/.test(advSkip.error?.message ?? ''))
@@ -293,18 +330,35 @@ try {
   ok('o admin não libera o pagamento', /Somente o financeiro libera/.test(advPayAdm.error?.message ?? ''))
   const advPay = await move(fin.id, adv, 'awaiting_delivery')
   ok('o financeiro libera o pagamento antes da entrega', advPay.rows[0]?.status === 'awaiting_delivery' && advPay.rows[0].payment_released_by === fin.id && !!advPay.rows[0].payment_released_at, advPay.error?.message)
-  const advRel = await move(fin.id, adv, 'awaiting_release')
+  const advReqEarly = await move(req1.id, adv, 'awaiting_delivery')
+  const advRel = await move(req1.id, adv, 'awaiting_release')
   ok('antecipado: não pede liberação de novo depois da entrega', /Antecipado: o recebimento encerra/.test(advRel.error?.message ?? '') || /não permitida/.test(advRel.error?.message ?? ''), advRel.error?.message)
-  const advRcv = await move(fin.id, adv, 'closed', "receipt_notes = 'chegou ok'")
-  ok('antecipado: receber e conferir encerra', advRcv.rows[0]?.status === 'closed' && advRcv.rows[0].received_by === fin.id && !!advRcv.rows[0].closed_at && advRcv.rows[0].receipt_notes === 'chegou ok', advRcv.error?.message)
+  const advRcvFin = await move(fin.id, adv, 'closed')
+  ok('antecipado: o financeiro que não pediu não recebe', /Somente quem solicitou/.test(advRcvFin.error?.message ?? ''), advRcvFin.error?.message)
+  const advRcv = await move(req1.id, adv, 'closed', "receipt_notes = 'chegou ok'")
+  ok('antecipado: quem solicitou recebe e conferir encerra a compra', advRcv.rows[0]?.status === 'closed' && advRcv.rows[0].received_by === req1.id && !!advRcv.rows[0].closed_at && advRcv.rows[0].receipt_notes === 'chegou ok', advRcv.error?.message)
 
   // o financeiro pode trocar a forma de pagamento na hora da compra
   const sw = await newReq(req1.id, 'AREIA TROCA')
   await sendQuotes(sw, 'after_delivery')
   const swPick = (await one("select id from purchase_quotes where request_id = $1 and supplier = 'LOJA A'", [sw])).id
   await move(adm1.id, sw, 'approved', 'approved_quote_id = $1', [swPick])
-  const swBuy = await move(fin.id, sw, 'awaiting_payment', "payment_mode = 'advance'")
+  const swBuy = await move(fin.id, sw, 'awaiting_payment', "payment_mode = 'advance', delivery_date = CURRENT_DATE + 3")
   ok('na compra o financeiro pode trocar para pagamento antecipado', swBuy.rows[0]?.status === 'awaiting_payment' && swBuy.rows[0].payment_mode === 'advance', swBuy.error?.message)
+
+  // ---------------------------------------------------------------- recebimento por quem solicitou (outros casos)
+  await internal()
+  const orfao = (await one("insert into purchase_requests (item, status, supplier, final_value, payment_mode, requested_by, delivery_date, purchased_at) values ('SEM SOLICITANTE', 'awaiting_delivery', 'X', 5, 'advance', NULL, CURRENT_DATE + 5, CURRENT_DATE) returning id")).id
+  const orfaoAdm = await move(adm1.id, orfao, 'closed')
+  ok('sem solicitante (perfil excluído): o admin também não recebe', /Somente quem solicitou/.test(orfaoAdm.error?.message ?? ''), orfaoAdm.error?.message)
+  const orfaoFin = await move(fin.id, orfao, 'closed', "receipt_notes = 'sem solicitante'")
+  ok('sem solicitante (perfil excluído): o financeiro recebe', orfaoFin.rows[0]?.status === 'closed' && orfaoFin.rows[0].received_by === fin.id, orfaoFin.error?.message)
+  // o solicitante pode ser um admin
+  const admOwn = await newReq(adm1.id, 'ADMIN RECEBE')
+  await internal()
+  await c.query("update purchase_requests set status = 'awaiting_delivery', payment_mode = 'advance', supplier = 'X', final_value = 5, purchased_at = CURRENT_DATE, delivery_date = CURRENT_DATE + 2 where id = $1", [admOwn])
+  const admRcv = await move(adm1.id, admOwn, 'closed', "receipt_notes = 'admin conferiu'")
+  ok('o solicitante admin recebe e confere a própria compra', admRcv.rows[0]?.status === 'closed' && admRcv.rows[0].received_by === adm1.id, admRcv.error?.message)
 
   // ---------------------------------------------------------------- admin que abriu a solicitação é quem aprova
   const own = await newReq(adm1.id, 'PEDIDO DO ADMIN 1')

@@ -10,11 +10,11 @@ import TeamPaymentsPanel from './TeamPaymentsPanel'
  * Pagamento (Equipe) (só Admin e Financeiro).
  */
 export default function FaturamentoList() {
-  const { role, canSeeBilling } = useAuth()
+  const { canSeeBilling } = useAuth()
   const [todoCount, setTodoCount] = useState(0)
   const [payDue, setPayDue] = useState(0)
-  // contador de quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e admin (aprovar cotações)
-  const hasTurn = role === 'financeiro' || role === 'admin'
+  // contador de quem tem a vez de agir: financeiro (cotar, comprar, pagar), admin (aprovar cotações) e qualquer
+  // usuário com entrega para receber e conferir (a que ele pediu)
 
   return (
     <div className="space-y-6">
@@ -27,7 +27,7 @@ export default function FaturamentoList() {
         <TabsList>
           <TabsTrigger value="compras" className="gap-2">
             <ShoppingCart className="h-4 w-4" /> Compras
-            {hasTurn && todoCount > 0 && (
+            {todoCount > 0 && (
               <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold leading-4 text-white">{todoCount}</span>
             )}
           </TabsTrigger>

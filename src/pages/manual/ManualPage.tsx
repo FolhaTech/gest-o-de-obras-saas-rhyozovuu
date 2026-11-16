@@ -427,27 +427,35 @@ export default function ManualPage() {
           rodada; as anteriores ficam guardadas no histórico).
         </Step>
         <Step n={4}>
-          <strong>Compra (financeiro).</strong> Com a cotação aprovada, o financeiro registra a compra e escolhe o
-          pagamento: <strong>antecipado</strong> (antes da entrega) ou <strong>após a entrega</strong>. O valor e o
-          fornecedor são os da cotação aprovada e não mudam. Na compra (e também no recebimento) é possível{' '}
+          <strong>Compra (financeiro).</strong> Com a cotação aprovada, o financeiro registra a compra, escolhe o
+          pagamento (<strong>antecipado</strong>, antes da entrega, ou <strong>após a entrega</strong>) e{' '}
+          <strong>informa a data de entrega</strong> (obrigatória; o sistema sugere pelo prazo da cotação aprovada e ela
+          não pode ser antes da data da compra). O valor e o fornecedor são os da cotação aprovada e não mudam. Se o
+          fornecedor mudar a data, o financeiro reagenda pelo olho (<strong>“Ver andamento”</strong>). Entrega depois da
+          data combinada aparece em vermelho como <strong>atrasada</strong>. Na compra também é possível{' '}
           <strong>anexar a foto ou o PDF da nota fiscal</strong> (JPG, PNG, WEBP, HEIC ou PDF, até 15 MB). A nota fica em
           área privada: só o <strong>Admin e o Financeiro</strong> abrem, pelo botão <strong>“Ver nota”</strong> na lista.
           Para trocar ou remover o arquivo depois, use o olho (<strong>“Ver andamento”</strong>).
         </Step>
         <Step n={5}>
           <strong>Pagamento e entrega.</strong> No pagamento <strong>antecipado</strong>, o financeiro libera o
-          pagamento aprovado antes da entrega. No pagamento <strong>após a entrega</strong>, ele primeiro recebe e
-          confere a entrega.
+          pagamento aprovado antes da entrega. No pagamento <strong>após a entrega</strong>, o pagamento só é liberado
+          depois que quem solicitou receber e conferir a entrega.
         </Step>
         <Step n={6}>
-          <strong>Recebimento / encerramento (financeiro).</strong> Antecipado: o financeiro recebe e confere, e a compra
-          se encerra. Após a entrega: depois de receber e conferir, o financeiro libera o pagamento e encerra. Se a nota
-          chegou com a entrega, anexe a foto ou o PDF nesse passo.
+          <strong>Recebimento / encerramento (quem solicitou).</strong> Quando a entrega chega, quem{' '}
+          <strong>fez a solicitação</strong> abre a compra e clica em <strong>“Receber e conferir”</strong>: marca que
+          conferiu os itens e anota o que achar importante (por exemplo, itens avariados). No pagamento{' '}
+          <strong>antecipado</strong>, o recebimento <strong>encerra</strong> a compra. No pagamento{' '}
+          <strong>após a entrega</strong>, o recebimento libera o passo do financeiro, que então libera o pagamento e
+          encerra. O botão e o contador aparecem para quem pediu, seja admin, gestor ou prestador. A nota fiscal continua
+          com o financeiro.
         </Step>
         <Tip>
           Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
           vermelho em <strong>Financeiro</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
-          cotar, comprar, pagar ou receber; o admin vê as cotações para aprovar.
+          cotar, comprar ou pagar; o admin vê as cotações para aprovar; e quem pediu uma compra vê a entrega que precisa
+          receber e conferir.
         </Tip>
         <Tip kind="warn">
           O admin cancela o pedido até a compra. Depois de comprado, só o fluxo de pagamento e recebimento segue. As

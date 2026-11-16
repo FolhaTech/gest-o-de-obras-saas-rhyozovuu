@@ -7,12 +7,14 @@ import {
   STATUS_LABEL,
   URGENCY_LABEL,
   currentRound,
+  deliveryDaysLate,
   waitingText,
   type PurchaseQuoteRow,
   type PurchaseRequestRow,
 } from '@/lib/purchases'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -25,7 +27,7 @@ import InvoiceFileField from './InvoiceFileField'
 import InvoiceLink from './InvoiceLink'
 import PurchaseTimeline from './PurchaseTimeline'
 import { removeInvoiceFiles, uploadInvoice } from './invoice-storage'
-import { STATUS_CLASS, fmtDateTime, fmtQty, who } from './helpers'
+import { STATUS_CLASS, fmtDateTime, fmtQty, todayISO, who } from './helpers'
 import StorageImage from './StorageImage'
 
 interface Props {
@@ -44,10 +46,15 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
   const [quotes, setQuotes] = useState<PurchaseQuoteRow[]>([])
   const [invFile, setInvFile] = useState<File | null>(null)
   const [invBusy, setInvBusy] = useState(false)
+  const [newDelivery, setNewDelivery] = useState('')
+  const [dlvBusy, setDlvBusy] = useState(false)
   const id = request?.id
 
   useEffect(() => {
     setInvFile(null)
+    setNewDelivery(request?.delivery_date ?? '')
+    // só quando muda a solicitação aberta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
@@ -92,6 +99,23 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
     setInvFile(null)
     setInvBusy(false)
     toast({ title: 'Nota fiscal anexada', description: request.item })
+    onChanged?.()
+  }
+
+  const saveDelivery = async () => {
+    if (!newDelivery) return
+    if (request.purchased_at && newDelivery < request.purchased_at) {
+      toast({ title: 'Data inválida', description: 'A entrega não pode ser antes da data da compra.', variant: 'destructive' })
+      return
+    }
+    setDlvBusy(true)
+    const { error } = await supabase.from('purchase_requests' as any).update({ delivery_date: newDelivery }).eq('id', request.id)
+    setDlvBusy(false)
+    if (error) {
+      toast({ title: 'Erro ao reagendar a entrega', description: formatSupabaseError(error), variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Entrega reagendada', description: `${request.item}: ${formatDate(newDelivery)}` })
     onChanged?.()
   }
 
@@ -146,7 +170,26 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
           )}
           {request.payment_mode && <div><span className="text-muted-foreground">Pagamento:</span> {PAYMENT_MODE_LABEL[request.payment_mode]}</div>}
           {request.invoice_number && <div><span className="text-muted-foreground">Nota fiscal:</span> {request.invoice_number}</div>}
+          {request.delivery_date && (
+            <div>
+              <span className="text-muted-foreground">Entrega prevista:</span> {formatDate(request.delivery_date)}
+              {deliveryDaysLate(request, todayISO()) > 0 && <span className="ml-2 text-xs font-medium text-rose-600">atrasada {deliveryDaysLate(request, todayISO())} dia(s)</span>}
+            </div>
+          )}
+          {request.received_at && <div><span className="text-muted-foreground">Recebida por:</span> {who(request.receiver)} em {fmtDateTime(request.received_at)}</div>}
         </div>
+        {canManageInvoice && (request.status === 'awaiting_payment' || request.status === 'awaiting_delivery') && (
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Data de entrega</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <Input type="date" className="w-44" min={request.purchased_at ?? undefined} value={newDelivery} onChange={(e) => setNewDelivery(e.target.value)} aria-label="Nova data de entrega" />
+              <Button type="button" size="sm" variant="outline" disabled={dlvBusy || !newDelivery || newDelivery === (request.delivery_date ?? '')} onClick={saveDelivery}>
+                {dlvBusy ? 'Salvando...' : 'Reagendar entrega'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Se o fornecedor combinou outra data, atualize aqui. A data não pode ser anterior à da compra.</p>
+          </div>
+        )}
         {showInvoice && (
           <div className="space-y-2 rounded-md border p-3">
             <p className="text-sm font-medium">Nota fiscal</p>

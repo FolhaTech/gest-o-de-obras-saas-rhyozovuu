@@ -66,18 +66,28 @@ export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, profile, role, canAccess } = useAuth()
   const [newPurchases, setNewPurchases] = useState(0)
-  // contador da área Financeiro para quem tem a vez de agir: financeiro (cotar, comprar, pagar, receber) e
-  // admin (aprovar as cotações dos pedidos que abriu, ou de quem não é admin)
-  const seesPurchases = role === 'financeiro' || role === 'admin'
+  // contador da área Financeiro para quem tem a vez de agir: financeiro (cotar, comprar, pagar), admin (aprovar as
+  // cotações dos pedidos que abriu, ou de quem não é admin) e qualquer usuário com entrega para receber e conferir
+  // (a compra que ele mesmo pediu)
+  const seesPurchases = canAccess('/faturamento')
   useEffect(() => {
     if (!seesPurchases) return
     let alive = true
     const load = async () => {
+      let mineToReceive = 0
+      if (user?.id) {
+        const mine = await supabase
+          .from('purchase_requests' as any)
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'awaiting_delivery')
+          .eq('requested_by', user.id)
+        mineToReceive = mine.count ?? 0
+      }
       if (role === 'financeiro') {
         const { count } = await supabase
           .from('purchase_requests' as any)
           .select('id', { count: 'exact', head: true })
-          .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_delivery', 'awaiting_release'])
+          .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_release'])
         // pagamentos semanais da equipe com a semana já fechada (sexta em diante), esperando o financeiro pagar
         const due = await supabase
           .from('team_payments' as any)
@@ -85,7 +95,11 @@ export function AppSidebar() {
           .eq('source', 'attendance')
           .eq('status', 'pending')
           .lte('week_start', addDaysISO(localTodayISO(), -6))
-        if (alive) setNewPurchases((count ?? 0) + (due.count ?? 0))
+        if (alive) setNewPurchases((count ?? 0) + (due.count ?? 0) + mineToReceive)
+        return
+      }
+      if (role !== 'admin') {
+        if (alive) setNewPurchases(mineToReceive)
         return
       }
       const { data } = await supabase
@@ -93,7 +107,7 @@ export function AppSidebar() {
         .select('id, status, requested_by, requester:requested_by(role)')
         .eq('status', 'quotes_sent')
       const rows = (data ?? []) as unknown as { status: string; requested_by: string | null; requester?: { role?: string | null } | null }[]
-      if (alive) setNewPurchases(rows.filter((r) => needsMyAction(r, user?.id, role, r.requester?.role)).length)
+      if (alive) setNewPurchases(rows.filter((r) => needsMyAction(r, user?.id, role, r.requester?.role)).length + mineToReceive)
     }
     load()
     const t = setInterval(load, 60_000) // confere a cada minuto

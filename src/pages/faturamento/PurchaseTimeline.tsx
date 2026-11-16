@@ -30,12 +30,13 @@ export default function PurchaseTimeline({ r, quoteCount }: { r: PurchaseRequest
       case 5: {
         const lines: string[] = []
         if (r.payment_mode) lines.push(PAYMENT_MODE_LABEL[r.payment_mode])
+        if (r.delivery_date) lines.push(`entrega prevista em ${formatDate(r.delivery_date)}`)
         if (r.payment_mode === 'advance' && r.payment_released_at) lines.push(`pago em ${fmtDateTime(r.payment_released_at)}`)
         return lines
       }
       default: {
         const lines: string[] = []
-        if (r.received_at) lines.push(`recebida em ${fmtDateTime(r.received_at)}`)
+        if (r.received_at) lines.push(`recebida em ${fmtDateTime(r.received_at)}${r.receiver ? ' por ' + who(r.receiver) : ''}`)
         if (r.payment_mode === 'after_delivery' && r.payment_released_at) lines.push(`pago em ${fmtDateTime(r.payment_released_at)}`)
         if (r.closed_at) lines.push(`encerrada em ${fmtDateTime(r.closed_at)}`)
         return lines
