@@ -67,6 +67,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/27_financeiro_consulta.sql  # Finance
 psql "$ADMIN_URL/gestao_obras" -f db/azure/28_compras_imagem_item.sql  # Compras: imagem do item no pedido e imagem em cada cotação (bucket PRIVADO "purchase-images": quem vê o pedido vê a do item; só Admin e Financeiro veem a da cotação); teste: node db/azure/test-compras-imagem.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/29_cronograma_ia_observacoes.sql  # Cronograma com IA: observações do responsável (motivo de não seguir uma sugestão; a IA se adapta); só Admin e Gestor; teste: node db/azure/test-cronograma-ia.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/30_compras_entrega_e_recebimento.sql  # Compras: data de entrega obrigatória na compra; recebimento/encerramento feito por quem SOLICITOU (o financeiro libera o pagamento depois, se for após a entrega); teste: node db/azure/test-faturamento.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/31_equipe_conferencia_sexta.sql  # Equipe: conferência de toda sexta: o admin aprova a semana (team_week_approvals) e só então o financeiro paga; presença/extra/diária alterados derrubam a aprovação; teste: node db/azure/test-pagamento-semanal.mjs
 ```
 
 ## Desenvolvimento local

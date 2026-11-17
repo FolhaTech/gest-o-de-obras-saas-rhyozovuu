@@ -1,6 +1,14 @@
 // Testa as regras de src/lib/team-week.ts. Uso: npx tsx scripts/test-team-week.ts
 import {
+  WEEKDAY_SHORT,
   addDaysISO,
+  canPayWeek,
+  conferenceState,
+  dayMonth,
+  gridTotals,
+  presenceGrid,
+  weekDates,
+  weeksAwaitingApproval,
   groupByWeek,
   isWeekPayable,
   weekAmount,
@@ -57,6 +65,52 @@ ok('total e contagem do que falta pagar na semana', g[1].pendingTotal === 350 &&
 ok('semana toda paga: nada pendente', groupByWeek([p('Ana', '2026-03-07', 'paid', 150)])[0].pendingTotal === 0)
 ok('valor em texto soma como número', groupByWeek([{ member_name: 'A', week_start: '2026-03-07', status: 'pending' as const, payment_amount: '10.10' }, { member_name: 'B', week_start: '2026-03-07', status: 'pending' as const, payment_amount: '20.20' }])[0].pendingTotal === 30.3)
 ok('não altera a lista original; vazia', lista[0].member_name === 'Zé' && groupByWeek([]).length === 0)
+
+// ---------------------------------------------------------------- conferência da semana
+ok('as 7 datas da semana, de sábado a sexta', weekDates('2026-03-07').join() === '2026-03-07,2026-03-08,2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13' && WEEKDAY_SHORT.length === 7 && WEEKDAY_SHORT[0] === 'Sáb' && WEEKDAY_SHORT[6] === 'Sex')
+ok('dia/mês', dayMonth('2026-03-07') === '07/03' && dayMonth('2026-12-25') === '25/12')
+ok('estado da conferência: futura, em andamento, aguardando e aprovada', conferenceState(W, '2026-03-06', false) === 'future' && conferenceState(W, '2026-03-10', false) === 'running' && conferenceState(W, '2026-03-10', true) === 'running' && conferenceState(W, '2026-03-13', false) === 'awaiting' && conferenceState(W, '2026-03-13', true) === 'approved' && conferenceState(W, '2026-03-20', false) === 'awaiting')
+const aprov = new Set(['2026-03-07'])
+ok('semanas fechadas sem aprovação (sem repetir, em ordem, ignora aprovadas e abertas)', weeksAwaitingApproval(['2026-03-14', '2026-03-07', '2026-03-14', '2026-02-28', '2026-03-21'], aprov, '2026-03-20').join() === '2026-02-28,2026-03-14')
+ok('data com horário é lida pelo dia', weeksAwaitingApproval(['2026-03-14T03:00:00.000Z'], aprov, '2026-03-20').join() === '2026-03-14')
+ok('o financeiro paga só semana fechada e aprovada', canPayWeek('2026-03-07', '2026-03-13', aprov) && !canPayWeek('2026-03-07', '2026-03-12', aprov) && !canPayWeek('2026-03-14', '2026-03-20', aprov) && !canPayWeek('2026-03-14', '2026-03-19', new Set(['2026-03-14'])))
+
+const membros = [
+  { id: 'a', name: 'Zé', daily_cost: 150, payment_type: 'daily', status: 'active' },
+  { id: 'b', name: 'Ana', daily_cost: '200.00', payment_type: 'daily', status: 'active' },
+  { id: 'c', name: 'Carlos', daily_cost: 3000, payment_type: 'monthly', status: 'active' },
+  { id: 'd', name: 'Dora', daily_cost: 100, payment_type: 'daily', status: 'active' }, // sem marcação nenhuma
+  { id: 'e', name: 'Eva', daily_cost: 100, payment_type: 'daily', status: 'inactive' }, // inativa sem marcação: fora
+  { id: 'f', name: 'Fábio', daily_cost: 100, payment_type: 'daily', status: 'inactive' }, // inativo com marcação na semana: entra
+]
+const registros = [
+  { worker_id: 'a', date: '2026-03-07', is_present: true },
+  { worker_id: 'a', date: '2026-03-09', is_present: true },
+  { worker_id: 'a', date: '2026-03-10', is_present: false },
+  { worker_id: 'a', date: '2026-03-14', is_present: true }, // outra semana: não conta
+  { worker_id: 'b', date: '2026-03-13', is_present: true },
+  { worker_id: 'c', date: '2026-03-07', is_present: true },
+  { worker_id: 'f', date: '2026-03-08', is_present: true },
+]
+const extras = [
+  { worker_id: 'a', week_start_date: '2026-03-07', extra_value: 40 },
+  { worker_id: 'b', week_start_date: '2026-03-07', extra_value: '-50' }, // desconto
+  { worker_id: 'a', week_start_date: '2026-02-28', extra_value: 999 }, // outra semana
+]
+const grade = presenceGrid(membros, registros, extras, '2026-03-07')
+ok('grade: ativos e inativos com marcação, em ordem alfabética', grade.map((r) => r.member.name).join() === 'Ana,Carlos,Dora,Fábio,Zé', grade.map((r) => r.member.name).join())
+const za = grade.find((r) => r.member.id === 'a')!
+ok('marcas por dia (sáb a sex): presente, sem marca, presente, ausente...', za.marks.join() === 'present,none,present,absent,none,none,none' && za.days === 2, za.marks.join())
+ok('valor da semana = dias x diária + extra (só os da semana)', za.total === 340 && za.extra === 40, JSON.stringify([za.total, za.extra]))
+const ana = grade.find((r) => r.member.id === 'b')!
+ok('diária em texto e desconto (extra negativo)', ana.total === 150 && ana.extra === -50 && ana.marks[6] === 'present')
+const carlos = grade.find((r) => r.member.id === 'c')!
+ok('mensalista: valor 0 (contrato) e nunca "sem marcação"', carlos.monthly && carlos.total === 0 && !carlos.unmarked)
+ok('quem está ativo e não tem nenhuma marcação é sinalizado para conferir', grade.find((r) => r.member.id === 'd')!.unmarked && !za.unmarked && !grade.find((r) => r.member.id === 'f')!.unmarked)
+ok('desconto maior que o valor da semana não vira valor negativo', presenceGrid([{ id: 'x', name: 'X', daily_cost: 100, status: 'active' }], [{ worker_id: 'x', date: '2026-03-07', is_present: true }], [{ worker_id: 'x', week_start_date: '2026-03-07', extra_value: -500 }], '2026-03-07')[0].total === 0)
+const tot = gridTotals(grade)
+ok('totais: dias, valor e pessoas com valor a pagar', tot.days === 5 && tot.total === 340 + 150 + 100 && tot.payees === 3, JSON.stringify(tot))
+ok('grade vazia', presenceGrid([], [], [], '2026-03-07').length === 0 && gridTotals([]).total === 0)
 
 console.log(failed ? `\n${failed} FALHA(S)` : '\nTudo certo')
 process.exit(failed ? 1 : 0)

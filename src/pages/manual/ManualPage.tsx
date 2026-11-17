@@ -469,16 +469,24 @@ export default function ManualPage() {
           <strong>sábado a sexta-feira</strong>. Cada pessoa tem o seu pagamento, separado.
         </Step>
         <Step n={2}>
-          Na <strong>sexta-feira</strong>, quando a semana fecha, o financeiro paga o valor de cada pessoa com o botão{' '}
-          <strong>“Pagar”</strong> (antes disso o botão fica travado). Mensalistas não entram no pagamento semanal.
+          <strong>Conferência de toda sexta.</strong> Na <strong>sexta-feira</strong>, quando a semana fecha, o admin abre{' '}
+          <strong>Equipes → Conferência da Semana</strong>, confere a presença de toda a equipe (a grade mostra cada dia de sábado a sexta,
+          os dias, o extra e o valor; quem está sem nenhuma marcação aparece destacado) e clica em{' '}
+          <strong>“Conferi: aprovar a semana”</strong>. Se algo estiver errado, corrija em <strong>Controle de Diárias</strong> e volte.
         </Step>
         <Step n={3}>
-          Se a presença mudar <strong>depois de paga</strong> a semana, aparece só a <strong>diferença</strong> como um
-          novo pagamento (“complemento”). O valor calculado não é editado à mão; só o admin exclui um pagamento
+          <strong>Pagamento.</strong> Só depois de o admin aprovar a semana é que o botão <strong>“Pagar”</strong> do financeiro é liberado,
+          pessoa por pessoa (antes disso ele fica travado e a semana aparece como “Aguardando a conferência do admin”). Mensalistas não
+          entram no pagamento semanal. O contador vermelho avisa o admin das semanas esperando a conferência e o financeiro do que já pode pagar.
+        </Step>
+        <Step n={4}>
+          Se a presença, o extra ou a diária mudarem <strong>depois da aprovação</strong>, a aprovação cai e a semana volta a precisar da
+          conferência do admin. Se mudar <strong>depois de paga</strong> a semana, aparece só a <strong>diferença</strong> como um
+          novo pagamento (“complemento”), que também passa pela conferência. O valor calculado não é editado à mão; só o admin exclui um pagamento
           calculado. O sistema conta a partir da semana em que este recurso entrou (semanas antigas não viram
           pendência).
         </Step>
-        <Step n={4}>
+        <Step n={5}>
           Para pagamentos fora da presença (prestadores, avulsos, mensalistas), use <strong>“Novo pagamento”</strong>:
           o Admin e o Financeiro lançam o valor, o período, a forma de pagamento e a situação (pendente ou pago).
         </Step>

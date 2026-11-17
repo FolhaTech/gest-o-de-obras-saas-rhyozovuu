@@ -106,3 +106,119 @@ export function groupByWeek<T extends WeeklyPayment>(list: T[]): WeekGroup<T>[] 
       }
     })
 }
+
+// ---------------------------------------------------------------- conferência da semana (toda sexta)
+export const WEEKDAY_SHORT = ['Sáb', 'Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex'] as const
+
+/** As 7 datas da semana, de sábado a sexta. */
+export const weekDates = (weekStart: string): string[] => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i))
+
+/** "14/11" a partir de 'yyyy-mm-dd'. */
+export const dayMonth = (iso: string): string => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+export type ConferenceState = 'future' | 'running' | 'awaiting' | 'approved'
+
+/**
+ * Em que pé está a conferência: a semana ainda não começou, está em andamento (a conferência abre na sexta, último dia),
+ * aguarda o admin conferir e aprovar, ou já foi aprovada (o financeiro pode pagar).
+ */
+export function conferenceState(weekStart: string, today: string, approved: boolean): ConferenceState {
+  const phase = weekPhase(weekStart, today)
+  if (phase === 'future') return 'future'
+  if (phase === 'running') return 'running'
+  return approved ? 'approved' : 'awaiting'
+}
+
+/** Semanas fechadas que ainda esperam a aprovação do admin (sem repetir, da mais antiga para a mais recente). */
+export function weeksAwaitingApproval(weekStarts: string[], approved: ReadonlySet<string>, today: string): string[] {
+  const set = new Set<string>()
+  for (const w of weekStarts) {
+    const key = w.slice(0, 10)
+    if (isWeekPayable(key, today) && !approved.has(key)) set.add(key)
+  }
+  return [...set].sort()
+}
+
+/** O financeiro pode pagar a semana: já fechou E o admin aprovou. */
+export const canPayWeek = (weekStart: string, today: string, approved: ReadonlySet<string>): boolean =>
+  isWeekPayable(weekStart.slice(0, 10), today) && approved.has(weekStart.slice(0, 10))
+
+export interface GridMember {
+  id: string
+  name: string
+  role?: string | null
+  daily_cost?: number | string | null
+  payment_type?: string | null
+  status?: string | null
+}
+export interface GridRecord {
+  worker_id: string
+  date: string
+  is_present: boolean
+}
+export interface GridExtra {
+  worker_id: string
+  week_start_date: string
+  extra_value: number | string | null
+}
+export type DayMark = 'present' | 'absent' | 'none'
+
+export interface GridRow {
+  member: GridMember
+  /** Uma marca por dia, de sábado a sexta. */
+  marks: DayMark[]
+  days: number
+  extra: number
+  monthly: boolean
+  /** Dias x diária + extra (mensalista: 0, é contrato). */
+  total: number
+  /** Ativo, não mensalista e sem nenhuma marcação na semana: conferir se faltou marcar. */
+  unmarked: boolean
+}
+
+/**
+ * Grade de presença da semana para conferir: uma linha por pessoa (ativos, e inativos que tenham marcação na semana), com a
+ * marca de cada dia, os dias presentes, o extra e o valor da semana. Ordem alfabética.
+ */
+export function presenceGrid(members: GridMember[], records: GridRecord[], extras: GridExtra[], weekStart: string): GridRow[] {
+  const dates = weekDates(weekStart)
+  const byWorker = new Map<string, Map<string, boolean>>()
+  for (const r of records) {
+    const d = r.date.slice(0, 10)
+    if (!dates.includes(d)) continue
+    const m = byWorker.get(r.worker_id) ?? new Map<string, boolean>()
+    m.set(d, r.is_present)
+    byWorker.set(r.worker_id, m)
+  }
+  const rows: GridRow[] = []
+  for (const member of members) {
+    const marksOf = byWorker.get(member.id)
+    const active = (member.status ?? 'active') === 'active'
+    if (!active && !marksOf) continue
+    const marks: DayMark[] = dates.map((d) => (marksOf?.has(d) ? (marksOf.get(d) ? 'present' : 'absent') : 'none'))
+    const days = marks.filter((m) => m === 'present').length
+    const extra = extras
+      .filter((e) => e.worker_id === member.id && e.week_start_date.slice(0, 10) === weekStart)
+      .reduce((s, e) => s + (Number(e.extra_value) || 0), 0)
+    const monthly = (member.payment_type ?? 'daily') === 'monthly'
+    rows.push({
+      member,
+      marks,
+      days,
+      extra,
+      monthly,
+      total: monthly ? 0 : Math.max(0, weekAmount(days, Number(member.daily_cost) || 0, extra)),
+      unmarked: active && !monthly && !marksOf,
+    })
+  }
+  return rows.sort((a, b) => a.member.name.trim().localeCompare(b.member.name.trim(), 'pt-BR'))
+}
+
+/** Totais da grade: dias presentes, valor da semana e quantas pessoas têm valor a pagar. */
+export function gridTotals(rows: GridRow[]): { days: number; total: number; payees: number } {
+  return {
+    days: rows.reduce((s, r) => s + r.days, 0),
+    total: Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100,
+    payees: rows.filter((r) => r.total > 0).length,
+  }
+}

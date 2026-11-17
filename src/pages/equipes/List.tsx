@@ -5,7 +5,8 @@ import GroupsTab from './tabs/GroupsTab'
 import AttendanceTab from './tabs/AttendanceTab'
 import ProvidersTab from './tabs/ProvidersTab'
 import ContractsTab from './tabs/ContractsTab'
-import { Users, CalendarDays, Briefcase, FileSignature, Layers } from 'lucide-react'
+import ConferenceTab from './tabs/ConferenceTab'
+import { Users, CalendarDays, Briefcase, FileSignature, Layers, ShieldCheck } from 'lucide-react'
 
 export default function EquipesList() {
   // Serviços contratados são valores (R$) puros: só o administrador
@@ -20,11 +21,16 @@ export default function EquipesList() {
       </div>
 
       <Tabs defaultValue="attendance" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 lg:w-[920px] h-auto p-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 lg:w-[1100px] h-auto p-1">
           <TabsTrigger value="attendance" className="py-2.5 flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
             <span className="hidden sm:inline">Controle de Diárias</span>
             <span className="sm:hidden">Diárias</span>
+          </TabsTrigger>
+          <TabsTrigger value="conference" className="py-2.5 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">Conferência da Semana</span>
+            <span className="sm:hidden">Conferência</span>
           </TabsTrigger>
           <TabsTrigger value="workers" className="py-2.5 flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -49,6 +55,9 @@ export default function EquipesList() {
           )}
         </TabsList>
 
+        <TabsContent value="conference" className="mt-6 border-none p-0 outline-none">
+          <ConferenceTab />
+        </TabsContent>
         <TabsContent value="workers" className="mt-6 border-none p-0 outline-none">
           <WorkersTab />
         </TabsContent>
