@@ -105,7 +105,8 @@ export function AppSidebar() {
           .select('id', { count: 'exact', head: true })
           .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_release'])
         const due = await weekly()
-        if (alive) setNewPurchases((count ?? 0) + due.payable + mineToReceive)
+        const providers = await supabase.from('provider_payments' as any).select('id', { count: 'exact', head: true }).eq('status', 'requested')
+        if (alive) setNewPurchases((count ?? 0) + due.payable + (providers.count ?? 0) + mineToReceive)
         return
       }
       if (role !== 'admin') {
