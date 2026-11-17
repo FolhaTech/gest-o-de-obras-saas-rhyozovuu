@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Clock, Edit2, Eye, ImageIcon, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { Clock, Download, Edit2, Eye, FileSpreadsheet, ImageIcon, PackagePlus, Plus, RefreshCw, Search, ShoppingCart, Trash2, Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -33,6 +33,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -60,7 +61,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { StockMaterial } from '@/lib/stock-hint'
+import { TO_BUY_STATUSES, sheetFileName } from '@/lib/purchase-sheet'
+import { buildPurchaseWorkbook, saveBlob } from '@/lib/purchase-sheet-io'
 import ApprovalPanel from './ApprovalPanel'
+import ImportSheetDialog from './ImportSheetDialog'
 import DecisionDialog from './DecisionDialog'
 import DetailsDialog from './DetailsDialog'
 import FulfillDialog from './FulfillDialog'
@@ -130,6 +134,10 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const [decideId, setDecideId] = useState<string | null>(null)
   const [fulfillId, setFulfillId] = useState<string | null>(null)
   const [receiveId, setReceiveId] = useState<string | null>(null)
+  // planilha de itens a comprar: itens marcados, exportação e importação (Admin e Financeiro)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const today = todayISO()
 
@@ -346,6 +354,45 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
     fetchAll()
   }
 
+  // ---------------------------------------------------------------- planilha de itens a comprar
+  const visibleIds = visible.map((r) => r.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
+  const toggleOne = (id: string, on: boolean) =>
+    setSelected((cur) => {
+      const next = new Set(cur)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  const toggleAllVisible = (on: boolean) =>
+    setSelected((cur) => {
+      const next = new Set(cur)
+      for (const id of visibleIds) {
+        if (on) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  const selectToBuy = () => setSelected(new Set(visible.filter((r) => TO_BUY_STATUSES.includes(r.status)).map((r) => r.id)))
+  // só os marcados que ainda existem (um pedido excluído sai da seleção)
+  const chosen = visible.filter((r) => selected.has(r.id))
+  const exportSheet = async () => {
+    if (chosen.length === 0) {
+      toast({ title: 'Marque os itens', description: 'Marque os pedidos que vão para a planilha.', variant: 'destructive' })
+      return
+    }
+    setExporting(true)
+    try {
+      const blob = await buildPurchaseWorkbook(chosen, quotes)
+      saveBlob(blob, sheetFileName(today))
+      toast({ title: 'Planilha gerada', description: `${chosen.length} pedido(s) na planilha. Preencha Fornecedor e Valor e importe de volta.` })
+    } catch (e) {
+      toast({ title: 'Erro ao gerar a planilha', description: e instanceof Error ? e.message : 'Tente de novo.', variant: 'destructive' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) return <Skeleton className="h-64 w-full" />
 
   if (error) {
@@ -427,6 +474,24 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
       {late > 0 && <p className="text-xs text-rose-600 font-medium">{late} solicitação(ões) com o prazo "precisa até" vencido.</p>}
       {deliveryLate > 0 && <p className="text-xs text-rose-600 font-medium">{deliveryLate} entrega(s) atrasada(s) em relação à data combinada com o fornecedor.</p>}
 
+      {canSeeBilling && items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2 text-sm">
+          <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Planilha de itens a comprar</span>
+          <span className="text-muted-foreground">{chosen.length} marcado(s)</span>
+          <Button type="button" variant="outline" size="sm" onClick={selectToBuy}>Marcar os a comprar</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>Limpar</Button>
+          <Button type="button" size="sm" className="gap-1.5" disabled={exporting || chosen.length === 0} onClick={exportSheet}>
+            <Download className="h-4 w-4" /> {exporting ? 'Gerando...' : `Exportar Excel (${chosen.length})`}
+          </Button>
+          {isFinance && (
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => { fetchAll(); setImportOpen(true) }}>
+              <Upload className="h-4 w-4" /> Importar planilha
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -462,6 +527,11 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
           <Table>
             <TableHeader>
               <TableRow>
+                {canSeeBilling && (
+                  <TableHead className="w-8">
+                    <Checkbox checked={allVisibleSelected} onCheckedChange={(v) => toggleAllVisible(v === true)} aria-label="Marcar todos os pedidos da lista" />
+                  </TableHead>
+                )}
                 <TableHead>Solicitada em</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Obra</TableHead>
@@ -476,7 +546,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
             <TableBody>
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">Nenhuma solicitação encontrada.</TableCell>
+                  <TableCell colSpan={canSeeBilling ? 10 : 9} className="py-6 text-center text-muted-foreground">Nenhuma solicitação encontrada.</TableCell>
                 </TableRow>
               )}
               {visible.map((r) => {
@@ -486,6 +556,11 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                 const hasValue = canSeeBilling && (Number(r.final_value) > 0 || Number(r.quoted_value) > 0)
                 return (
                   <TableRow key={r.id} className={myTurn ? 'bg-amber-50/40' : undefined}>
+                    {canSeeBilling && (
+                      <TableCell className="w-8">
+                        <Checkbox checked={selected.has(r.id)} onCheckedChange={(v) => toggleOne(r.id, v === true)} aria-label={`Marcar ${r.item}`} />
+                      </TableCell>
+                    )}
                     <TableCell className="whitespace-nowrap text-sm">{formatDate(r.created_at.slice(0, 10))}</TableCell>
                     <TableCell>
                       <div className="font-medium">{r.item}</div>
@@ -606,6 +681,8 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
           </Table>
         </div>
       )}
+
+      {isFinance && <ImportSheetDialog open={importOpen} onClose={() => setImportOpen(false)} requests={items} quotes={quotes} onChanged={fetchAll} />}
 
       {/* Etapas do fluxo */}
       <DetailsDialog request={detail} canSeeQuotes={canSeeBilling} canManageInvoice={isFinance} onChanged={fetchAll} onClose={() => setDetailId(null)} />
