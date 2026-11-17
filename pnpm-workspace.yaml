@@ -2,3 +2,4 @@ injectWorkspacePackages: false
 allowBuilds:
   '@swc/core': true
   esbuild: true
+  core-js: false

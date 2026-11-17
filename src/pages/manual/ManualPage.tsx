@@ -452,6 +452,15 @@ export default function ManualPage() {
           com o financeiro.
         </Step>
         <Tip>
+          <strong>Planilha de itens a comprar (Admin e Financeiro).</strong> Em Compras, marque os pedidos (ou use{' '}
+          <strong>“Marcar os a comprar”</strong>) e clique em <strong>“Exportar Excel”</strong>: a planilha traz o item, a
+          quantidade, a obra, a urgência e o solicitante, com Fornecedor, Valor unitário, Pagamento, Prazo e Condições em
+          branco (ou já preenchidos, se houver cotação). O Financeiro preenche no Excel e usa{' '}
+          <strong>“Importar planilha”</strong>: cada linha com fornecedor e valor vira uma cotação do pedido (para cotar com
+          outro fornecedor, copie a linha). O sistema mostra o que vai gravar e os problemas, linha a linha, antes de
+          gravar. A coluna ID não pode ser alterada.
+        </Tip>
+        <Tip>
           Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
           vermelho em <strong>Financeiro</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
           cotar, comprar ou pagar; o admin vê as cotações para aprovar; e quem pediu uma compra vê a entrega que precisa
