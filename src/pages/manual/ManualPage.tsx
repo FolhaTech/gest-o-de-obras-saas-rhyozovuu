@@ -496,8 +496,27 @@ export default function ManualPage() {
           pendência).
         </Step>
         <Step n={5}>
-          Para pagamentos fora da presença (prestadores, avulsos, mensalistas), use <strong>“Novo pagamento”</strong>:
+          Para pagamentos fora da presença (avulsos, mensalistas), use <strong>“Novo pagamento”</strong>:
           o Admin e o Financeiro lançam o valor, o período, a forma de pagamento e a situação (pendente ou pago).
+          Os prestadores de serviços externos têm a aba própria descrita abaixo.
+        </Step>
+        <h3 className="text-lg font-semibold text-foreground pt-2">9.3 — Pagamento (Prestadores)</h3>
+        <Step n={1}>
+          <strong>O admin abre a solicitação.</strong> Em <strong>Financeiro → Pagamento (Prestadores)</strong>, o admin clica em{' '}
+          <strong>“Solicitar pagamento”</strong> e preenche: <strong>Nome</strong>, <strong>PIX</strong>,{' '}
+          <strong>Tratativa</strong> (o tipo de serviço prestado), <strong>NF</strong> (se não houver, escreva “sem NF”),{' '}
+          <strong>Casa</strong> (em qual casa foi o serviço), <strong>Valor</strong> e <strong>Vencimento</strong>. Todos são obrigatórios.
+          Escolher um prestador cadastrado em Equipes → Prestadores já traz nome, tratativa e PIX.
+        </Step>
+        <Step n={2}>
+          <strong>O financeiro (contas a pagar) paga.</strong> Ele vê a solicitação com os dados, copia o PIX e clica em{' '}
+          <strong>“Pagar”</strong>, informando a forma e a data do pagamento. Quem passou do vencimento aparece em vermelho e entra no
+          contador. O financeiro não altera os dados da solicitação.
+        </Step>
+        <Step n={3}>
+          Enquanto está aberta, o admin pode <strong>editar</strong> os dados, <strong>cancelar</strong> ou excluir a solicitação.
+          Depois de paga ela não muda mais (só o financeiro pode anotar). O resumo por prestador mostra o que há a pagar, as vencidas e o
+          que já foi pago. Só o Admin e o Financeiro veem esta aba.
         </Step>
       </Chapter>
 
