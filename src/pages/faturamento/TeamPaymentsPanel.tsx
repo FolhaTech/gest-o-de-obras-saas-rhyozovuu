@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/use-auth'
-import { isWeekPayable } from '@/lib/team-week'
+import { canPayWeek, dayMonth, weekEndOf, weeksAwaitingApproval } from '@/lib/team-week'
 import WeeklyPayments, { type WeeklyRow } from './WeeklyPayments'
 
 interface Payment {
@@ -92,6 +92,8 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
   const { toast } = useToast()
   const { role } = useAuth()
   const [items, setItems] = useState<Payment[]>([])
+  // semanas que o admin conferiu e aprovou (conferência de sexta)
+  const [approved, setApproved] = useState<Set<string>>(new Set())
   const [members, setMembers] = useState<Member[]>([])
   const [works, setWorks] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,10 +111,11 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
   const today = todayISO()
 
   const fetchAll = useCallback(async () => {
-    const [pRes, mRes, wRes] = await Promise.all([
+    const [pRes, mRes, wRes, aRes] = await Promise.all([
       supabase.from('team_payments' as any).select('*, works:work_id(id, name)').order('created_at', { ascending: false }),
       supabase.from('team_members').select('id, name, pix_key, provider_id').eq('status', 'active').order('name'),
       supabase.from('works').select('id, name').order('name'),
+      supabase.from('team_week_approvals' as any).select('week_start'),
     ])
     if (pRes.error) {
       setError(formatSupabaseError(pRes.error))
@@ -120,6 +123,7 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
       setError(null)
       setItems((pRes.data ?? []) as unknown as Payment[])
     }
+    setApproved(new Set(((aRes.data ?? []) as unknown as { week_start: string }[]).map((r) => r.week_start.slice(0, 10))))
     setMembers((mRes.data ?? []) as unknown as Member[])
     setWorks((wRes.data ?? []) as { id: string; name: string }[])
     setLoading(false)
@@ -145,11 +149,15 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
     })
   }, [manual, statusFilter, memberFilter, search])
 
-  const dueNow = weekly.filter((p) => p.status === 'pending' && p.week_start && isWeekPayable(p.week_start.slice(0, 10), today))
+  // a pagar agora: semana fechada E aprovada pelo admin; fechadas sem aprovação esperam a conferência
+  const dueNow = weekly.filter((p) => p.status === 'pending' && p.week_start && canPayWeek(p.week_start, today, approved))
+  const awaitingWeeks = weeksAwaitingApproval(weekly.filter((p) => p.status === 'pending' && p.week_start).map((p) => p.week_start as string), approved, today)
   const dueTotal = dueNow.reduce((s, p) => s + Number(p.payment_amount), 0)
+  // contador da aba: o financeiro vê o que já pode pagar; o admin, as semanas esperando a conferência dele
+  const badge = role === 'admin' ? awaitingWeeks.length : dueNow.length
   useEffect(() => {
-    onDueCount?.(dueNow.length)
-  }, [dueNow.length, onDueCount])
+    onDueCount?.(badge)
+  }, [badge, onDueCount])
 
   const pending = items.filter((p) => p.status === 'pending')
   const pendingTotal = pending.reduce((s, p) => s + Number(p.payment_amount), 0)
@@ -269,7 +277,7 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
         {[
           { label: 'Pagamentos pendentes', value: String(pending.length), cls: pending.length ? 'text-amber-600' : '' },
           { label: 'Total a pagar', value: formatCurrency(pendingTotal), cls: '' },
-          { label: 'Semana fechada: a pagar', value: formatCurrency(dueTotal), cls: dueNow.length ? 'text-rose-600' : '' },
+          { label: 'Aprovada: a pagar', value: formatCurrency(dueTotal), cls: dueNow.length ? 'text-rose-600' : '' },
           { label: 'Pagos no mês', value: String(paidMonth.length), cls: '' },
           { label: 'Valor pago no mês', value: formatCurrency(paidMonthTotal), cls: 'text-emerald-600' },
         ].map((c) => (
@@ -282,9 +290,18 @@ export default function TeamPaymentsPanel({ onDueCount }: { onDueCount?: (n: num
         ))}
       </div>
 
+      {awaitingWeeks.length > 0 && (
+        <div className="rounded-lg border border-violet-300 bg-violet-50 p-3 text-sm text-violet-900">
+          {role === 'admin'
+            ? `Falta a sua conferência de ${awaitingWeeks.length} semana(s) fechada(s): ${awaitingWeeks.map((w) => `${dayMonth(w)} a ${dayMonth(weekEndOf(w))}`).join(', ')}. Confira a presença em Equipes > Conferência da Semana e aprove para o financeiro pagar.`
+            : `Aguardando a conferência do admin: ${awaitingWeeks.map((w) => `${dayMonth(w)} a ${dayMonth(weekEndOf(w))}`).join(', ')}. O pagamento libera quando ele aprovar a semana.`}
+        </div>
+      )}
+
       <WeeklyPayments
         payments={weekly as unknown as WeeklyRow[]}
         today={today}
+        approvedWeeks={approved}
         pixOf={(id) => memberOf(id)?.pix_key}
         canDelete={role === 'admin'}
         onPay={(p) => markPaid(p as unknown as Payment)}

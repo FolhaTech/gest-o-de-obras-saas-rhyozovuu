@@ -1,5 +1,5 @@
 // Testa (RLS, transação desfeita no final): pagamento semanal da equipe calculado pela presença (26_pagamento_semanal_equipe.sql).
-// Se a migração 26 ainda não está aplicada, ela roda DENTRO da transação (e é desfeita junto).
+// Se as migrações 26 e 31 ainda não estão aplicadas, elas rodam DENTRO da transação (e são desfeitas junto).
 // Uso: node db/azure/test-pagamento-semanal.mjs (lê DATABASE_URL do .env.local)
 import { existsSync, readFileSync } from 'node:fs'
 import pg from 'pg'
@@ -59,6 +59,10 @@ try {
   if (!(await one("select to_regclass('public.team_payment_config') t")).t) {
     await c.query(readFileSync('db/azure/26_pagamento_semanal_equipe.sql', 'utf8'))
     console.log('(migração 26 aplicada dentro da transação, ainda não está no banco)')
+  }
+  if (!(await one("select to_regclass('public.team_week_approvals') t")).t) {
+    await c.query(readFileSync('db/azure/31_equipe_conferencia_sexta.sql', 'utf8'))
+    console.log('(migração 31 aplicada dentro da transação, ainda não está no banco)')
   }
   const cfg = await one('select auto_from from team_payment_config')
   ok('a contagem automática começa numa semana que começa no sábado', new Date(cfg.auto_from).getUTCDay() === 6 || new Date(cfg.auto_from.toISOString?.() ?? cfg.auto_from).getDay() === 6, String(cfg.auto_from))
@@ -190,6 +194,44 @@ try {
   const admPay = await attempt("update team_payments set payment_amount = 1 where id = $1 returning payment_amount", [ana1.id])
   ok('nem o admin muda o valor calculado', Number(admPay.rows[0]?.payment_amount) === 150)
   await user(fin.id)
+  // ---------------------------------------------------------------- conferência: o admin aprova a semana; só então o financeiro paga
+  const approve = async (week = W) => {
+    const prev = cur
+    await internal()
+    await c.query('insert into team_week_approvals (week_start, approved_by) values ($1, $2) on conflict (week_start) do nothing', [week, adm1.id])
+    if (prev.role) await as(prev.role, prev.sub)
+  }
+  const approvals = async (week = W) => {
+    const prev = cur
+    await internal()
+    const n = Number((await one('select count(*) n from team_week_approvals where week_start = $1', [week])).n)
+    if (prev.role) await as(prev.role, prev.sub)
+    return n
+  }
+  await user(fin.id)
+  const unapproved = await attempt("update team_payments set status = 'paid' where id = $1", [ana1.id])
+  ok('semana fechada mas sem a conferência do admin: o financeiro não paga', /ainda não foi conferida e aprovada/.test(unapproved.error?.message ?? ''), unapproved.error?.message)
+  const insAppr = async (sub, week = W, extra = '') => {
+    await user(sub)
+    return attempt('insert into team_week_approvals (week_start' + (extra ? ', approved_by, approved_at' : '') + ') values ($1' + (extra ? ", $2, '2000-01-01'" : '') + ') returning week_start, approved_by, approved_at', extra ? [week, extra] : [week])
+  }
+  for (const [nome, sub] of [['o financeiro', fin.id], ['o gestor', ges.id], ['outro usuário', other.id]]) {
+    ok(`${nome} NÃO aprova a semana`, (await insAppr(sub)).error?.code === '42501')
+  }
+  const openAppr = await insAppr(adm1.id, openIso)
+  ok('o admin não aprova semana que ainda não fechou', /ainda não fechou/.test(openAppr.error?.message ?? ''), openAppr.error?.message)
+  const notSat = await insAppr(adm1.id, '2026-03-08')
+  ok('a semana começa no sábado (outro dia é recusado)', notSat.error?.code === '23514', notSat.error?.message)
+  const spoof = await insAppr(adm1.id, W, other.id)
+  ok('o admin aprova a semana fechada; quem aprovou e quando vêm do login (não do pedido)', spoof.rows[0]?.approved_by === adm1.id && new Date(spoof.rows[0].approved_at).getFullYear() >= 2026, spoof.error?.message ?? JSON.stringify(spoof.rows[0]))
+  ok('a mesma semana não é aprovada duas vezes', (await insAppr(adm1.id)).error?.code === '23505')
+  for (const [nome, sub, esperado] of [['o financeiro', fin.id, 1], ['o gestor', ges.id, 1], ['o admin', adm1.id, 1], ['outro usuário', other.id, 0]]) {
+    await user(sub)
+    ok(`${nome} ${esperado ? 'vê' : 'NÃO vê'} a aprovação da semana`, Number((await one('select count(*) n from team_week_approvals')).n) === esperado)
+  }
+  await user(fin.id)
+  ok('o financeiro não desfaz a aprovação', (await attempt('delete from team_week_approvals where week_start = $1', [W])).rowCount === 0 && (await approvals()) === 1)
+
   const pay = await attempt("update team_payments set status = 'paid' where id = $1 returning status, paid_at", [ana1.id])
   ok('semana fechada: o financeiro paga a Ana (data de hoje)', pay.rows[0]?.status === 'paid' && !!pay.rows[0].paid_at, pay.error?.message)
   ok('...e a Bia segue pendente', (await pend(bia)).length === 1)
@@ -207,6 +249,16 @@ try {
   ok('presença nova depois do pagamento gera só o complemento', paidA.length === 1 && Number(paidA[0].payment_amount) === 150 && pendA.length === 1 && Number(pendA[0].payment_amount) === 150, JSON.stringify(a.map((r) => [r.status, r.payment_amount])))
   ok('o complemento usa a diária que valeu na semana paga (150), não o reajuste (200)', Number(pendA[0].week_rate) === 150 && pendA[0].week_days === 2 && /complemento/.test(pendA[0].reference), JSON.stringify(pendA[0]))
   await user(fin.id)
+  ok('presença alterada depois da aprovação derruba a aprovação da semana', (await approvals()) === 0)
+  await user(fin.id)
+  const blocked = await attempt("update team_payments set status = 'paid' where id = $1", [pendA[0].id])
+  ok('o complemento não se paga antes de o admin conferir de novo', /ainda não foi conferida e aprovada/.test(blocked.error?.message ?? ''), blocked.error?.message)
+  await approve()
+  ok('o admin aprova de novo', (await approvals()) === 1)
+  await user(adm1.id)
+  await attempt("update attendance_extras set extra_value = 0 where worker_id = $1 and week_start_date = $2", [ana, W])
+  ok('atualização sem mudança de valor não derruba a aprovação', (await approvals()) === 1)
+  await user(fin.id)
   const pay2 = await attempt("update team_payments set status = 'paid' where id = $1 returning status", [pendA[0].id])
   ok('o financeiro paga o complemento', pay2.rows[0]?.status === 'paid')
   await mark(adm1.id, ana, day(2), false)
@@ -220,6 +272,16 @@ try {
   ok('o admin exclui um pagamento calculado pendente', (await attempt('delete from team_payments where id = $1', [bpend.id])).rowCount === 1)
   await mark(adm1.id, bia, day(4))
   ok('a próxima presença recalcula e recria o pendente da semana (3 dias já marcados: 0, 2, 3 e 4 = 4 x 200)', Number((await pend(bia))[0]?.payment_amount) === 800)
+  await approve()
+  await internal()
+  await c.query('update team_members set daily_cost = 210 where id = $1', [bia])
+  ok('mudar a diária com a semana pendente recalcula o valor e derruba a aprovação', Number((await pend(bia))[0]?.payment_amount) === 840 && (await approvals()) === 0)
+  await approve()
+  await c.query('update team_members set daily_cost = 160 where id = $1', [ana])
+  ok('semana toda paga não é afetada por mudança de diária (a aprovação fica)', (await approvals()) === 1)
+  await c.query('update team_members set daily_cost = 150 where id = $1', [ana])
+  await user(adm1.id)
+  ok('o admin reabre a conferência (desfaz a aprovação)', (await attempt('delete from team_week_approvals where week_start = $1', [W])).rowCount === 1)
 
   // pagamento lançado à mão continua igual
   await user(fin.id)

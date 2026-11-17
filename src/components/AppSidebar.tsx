@@ -34,7 +34,7 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
 import { needsMyAction } from '@/lib/purchases'
-import { addDaysISO, localTodayISO } from '@/lib/team-week'
+import { canPayWeek, localTodayISO, weeksAwaitingApproval } from '@/lib/team-week'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { InstallAppButton } from '@/components/InstallAppButton'
@@ -83,19 +83,29 @@ export function AppSidebar() {
           .eq('requested_by', user.id)
         mineToReceive = mine.count ?? 0
       }
+      // pagamentos semanais da equipe (pendentes) e semanas que o admin já aprovou (conferência de sexta)
+      const weekly = async () => {
+        const [p, a] = await Promise.all([
+          supabase.from('team_payments' as any).select('week_start').eq('source', 'attendance').eq('status', 'pending'),
+          supabase.from('team_week_approvals' as any).select('week_start'),
+        ])
+        const weeks = ((p.data ?? []) as unknown as { week_start: string | null }[]).map((r) => r.week_start).filter((w): w is string => !!w)
+        const approved = new Set(((a.data ?? []) as unknown as { week_start: string }[]).map((r) => r.week_start.slice(0, 10)))
+        const today = localTodayISO()
+        return {
+          // o financeiro paga: semana fechada E aprovada
+          payable: weeks.filter((w) => canPayWeek(w, today, approved)).length,
+          // o admin confere: semana fechada que ainda não aprovou
+          toApprove: weeksAwaitingApproval(weeks, approved, today).length,
+        }
+      }
       if (role === 'financeiro') {
         const { count } = await supabase
           .from('purchase_requests' as any)
           .select('id', { count: 'exact', head: true })
           .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_release'])
-        // pagamentos semanais da equipe com a semana já fechada (sexta em diante), esperando o financeiro pagar
-        const due = await supabase
-          .from('team_payments' as any)
-          .select('id', { count: 'exact', head: true })
-          .eq('source', 'attendance')
-          .eq('status', 'pending')
-          .lte('week_start', addDaysISO(localTodayISO(), -6))
-        if (alive) setNewPurchases((count ?? 0) + (due.count ?? 0) + mineToReceive)
+        const due = await weekly()
+        if (alive) setNewPurchases((count ?? 0) + due.payable + mineToReceive)
         return
       }
       if (role !== 'admin') {
@@ -107,7 +117,8 @@ export function AppSidebar() {
         .select('id, status, requested_by, requester:requested_by(role)')
         .eq('status', 'quotes_sent')
       const rows = (data ?? []) as unknown as { status: string; requested_by: string | null; requester?: { role?: string | null } | null }[]
-      if (alive) setNewPurchases(rows.filter((r) => needsMyAction(r, user?.id, role, r.requester?.role)).length + mineToReceive)
+      const conf = await weekly()
+      if (alive) setNewPurchases(rows.filter((r) => needsMyAction(r, user?.id, role, r.requester?.role)).length + conf.toApprove + mineToReceive)
     }
     load()
     const t = setInterval(load, 60_000) // confere a cada minuto

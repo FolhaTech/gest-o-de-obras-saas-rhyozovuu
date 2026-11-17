@@ -1,6 +1,6 @@
 import { CalendarCheck, CheckCircle2, Trash2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/formatters'
-import { groupByWeek, isWeekPayable, weekEndOf, weekLabel, weekPhase, weekPhaseText } from '@/lib/team-week'
+import { canPayWeek, groupByWeek, isWeekPayable, weekEndOf, weekLabel, weekPhase, weekPhaseText } from '@/lib/team-week'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -23,6 +23,8 @@ export interface WeeklyRow {
 interface Props {
   payments: WeeklyRow[]
   today: string
+  /** Semanas (sábado, 'yyyy-mm-dd') que o admin conferiu e aprovou. */
+  approvedWeeks: ReadonlySet<string>
   pixOf: (memberId: string | null) => string | null | undefined
   canDelete: boolean
   onPay: (p: WeeklyRow) => void
@@ -39,7 +41,7 @@ const PHASE_CLASS = {
  * Pagamento semanal calculado pela presença: o valor de cada pessoa vai somando conforme o admin marca presença
  * (Equipes > Presença) e, fechada a semana (sexta), o financeiro paga pessoa por pessoa.
  */
-export default function WeeklyPayments({ payments, today, pixOf, canDelete, onPay, onDelete }: Props) {
+export default function WeeklyPayments({ payments, today, approvedWeeks, pixOf, canDelete, onPay, onDelete }: Props) {
   const groups = groupByWeek(payments)
 
   if (groups.length === 0) {
@@ -61,19 +63,22 @@ export default function WeeklyPayments({ payments, today, pixOf, canDelete, onPa
 
   const week = (g: (typeof groups)[number]) => {
     const phase = weekPhase(g.weekStart, today)
-    const payable = phase === 'payable'
+    const closed = phase === 'payable'
+    const approved = approvedWeeks.has(g.weekStart)
+    // fechada E aprovada pelo admin (conferência de sexta): só então o financeiro paga
+    const payable = canPayWeek(g.weekStart, today, approvedWeeks)
     return (
       <section key={g.weekStart} className="space-y-2 rounded-lg border bg-card p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{weekLabel(g.weekStart)}</h3>
-            <Badge variant="outline" className={`font-normal ${g.pendingCount === 0 && payable ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : PHASE_CLASS[phase]}`}>
-              {g.pendingCount === 0 && payable ? 'Semana paga' : weekPhaseText(g.weekStart, today)}
+            <Badge variant="outline" className={`font-normal ${g.pendingCount === 0 && closed ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : closed && !approved ? 'border-violet-300 bg-violet-50 text-violet-800' : PHASE_CLASS[phase]}`}>
+              {g.pendingCount === 0 && closed ? 'Semana paga' : closed && !approved ? 'Aguardando a conferência do admin' : closed ? 'Conferida pelo admin: pagar' : weekPhaseText(g.weekStart, today)}
             </Badge>
           </div>
           {g.pendingCount > 0 && (
             <span className="text-sm text-muted-foreground">
-              {payable ? 'A pagar' : 'Até agora'}: <strong className="text-foreground">{formatCurrency(g.pendingTotal)}</strong> · {g.pendingCount} pessoa(s)
+              {closed ? 'A pagar' : 'Até agora'}: <strong className="text-foreground">{formatCurrency(g.pendingTotal)}</strong> · {g.pendingCount} pessoa(s)
             </span>
           )}
         </div>
@@ -111,8 +116,8 @@ export default function WeeklyPayments({ payments, today, pixOf, canDelete, onPa
                           <CheckCircle2 className="h-3 w-3" /> Pago{p.paid_at ? ` em ${formatDate(p.paid_at)}` : ''}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className={`font-normal ${PHASE_CLASS[phase]}`}>
-                          {payable ? 'A pagar' : 'Contando'}
+                        <Badge variant="outline" className={`font-normal ${payable ? PHASE_CLASS.payable : closed ? 'border-violet-300 bg-violet-50 text-violet-800' : PHASE_CLASS[phase]}`}>
+                          {payable ? 'A pagar' : closed ? 'Aguardando conferência' : 'Contando'}
                         </Badge>
                       )}
                     </TableCell>
@@ -123,7 +128,7 @@ export default function WeeklyPayments({ payments, today, pixOf, canDelete, onPa
                           size="sm"
                           className="h-8 gap-1 mr-1"
                           disabled={!payable}
-                          title={payable ? 'Registrar o pagamento de hoje' : `Libera na sexta ${weekEndOf(g.weekStart).slice(8, 10)}/${weekEndOf(g.weekStart).slice(5, 7)}, quando a semana fecha`}
+                          title={payable ? 'Registrar o pagamento de hoje' : closed ? 'O admin precisa conferir e aprovar a semana (Equipes > Conferência da Semana)' : `Libera na sexta ${weekEndOf(g.weekStart).slice(8, 10)}/${weekEndOf(g.weekStart).slice(5, 7)}, quando a semana fecha e o admin aprova`}
                           onClick={() => onPay(p)}
                         >
                           <CheckCircle2 className="h-4 w-4" /> Pagar
@@ -150,7 +155,7 @@ export default function WeeklyPayments({ payments, today, pixOf, canDelete, onPa
       <div>
         <h2 className="text-base font-semibold">Pagamento semanal da equipe</h2>
         <p className="text-sm text-muted-foreground">
-          Calculado pela presença marcada (semana de sábado a sexta). O valor de cada pessoa vai somando e, na sexta, a semana fecha para pagamento.
+          Calculado pela presença marcada (semana de sábado a sexta). O valor de cada pessoa vai somando; na sexta o admin confere a presença de toda a equipe e aprova a semana, e então o financeiro paga pessoa por pessoa.
         </p>
       </div>
       {open.map(week)}
