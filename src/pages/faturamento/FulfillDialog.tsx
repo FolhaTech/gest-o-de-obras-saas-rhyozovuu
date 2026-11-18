@@ -37,9 +37,9 @@ interface Props {
 /**
  * Financeiro, depois da aprovação do admin:
  *  - compra: escolhe pagamento antecipado ou após a entrega e INFORMA A DATA DE ENTREGA;
- *  - antecipado: libera o pagamento antes da entrega (quem solicitou recebe e confere, e a compra se encerra);
- *  - após a entrega: quem solicitou recebe e confere primeiro; depois o financeiro libera o pagamento e encerra.
- * O recebimento é de quem solicitou (ReceiveDialog).
+ *  - antecipado: libera o pagamento antes da entrega (o admin que abriu a solicitação recebe e confere, e a compra se encerra);
+ *  - após a entrega: o admin que abriu recebe e confere primeiro; depois o financeiro libera o pagamento e encerra.
+ * O recebimento (etapa 6) é do admin que abriu a solicitação (ReceiveDialog); aqui o financeiro só paga.
  */
 export default function FulfillDialog({ request, onClose, onChanged }: Props) {
   const { toast } = useToast()
@@ -165,8 +165,8 @@ export default function FulfillDialog({ request, onClose, onChanged }: Props) {
   const hint = buying
     ? PAYMENT_MODE_HELP[mode]
     : request.status === 'awaiting_payment'
-      ? 'Pagamento antecipado aprovado: libere o pagamento antes da entrega. Depois, quem solicitou recebe e confere.'
-      : 'A entrega foi recebida e conferida por quem solicitou. Libere o pagamento para encerrar a compra.'
+      ? 'Pagamento antecipado aprovado: libere o pagamento antes da entrega. Depois, o admin que abriu a solicitação recebe e confere.'
+      : 'A entrega foi recebida e conferida pelo admin que abriu a solicitação. Libere o pagamento para encerrar a compra.'
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>

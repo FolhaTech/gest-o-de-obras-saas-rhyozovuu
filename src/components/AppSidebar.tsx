@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getRoleLabel } from '@/lib/roles'
-import { needsMyAction } from '@/lib/purchases'
+import { canReceive, needsMyAction } from '@/lib/purchases'
 import { canPayWeek, localTodayISO, weeksAwaitingApproval } from '@/lib/team-week'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -67,15 +67,22 @@ export function AppSidebar() {
   const { user, profile, role, canAccess } = useAuth()
   const [newPurchases, setNewPurchases] = useState(0)
   // contador da área Financeiro para quem tem a vez de agir: financeiro (cotar, comprar, pagar), admin (aprovar as
-  // cotações dos pedidos que abriu, ou de quem não é admin) e qualquer usuário com entrega para receber e conferir
-  // (a compra que ele mesmo pediu)
+  // cotações e receber a entrega dos pedidos que abriu, ou de quem não é admin) e quem pediu a compra e não é admin nem
+  // financeiro (recebe a que ele mesmo pediu). O financeiro não recebe entrega.
   const seesPurchases = canAccess('/faturamento')
   useEffect(() => {
     if (!seesPurchases) return
     let alive = true
     const load = async () => {
       let mineToReceive = 0
-      if (user?.id) {
+      if (user?.id && role === 'admin') {
+        const { data: toReceive } = await supabase
+          .from('purchase_requests' as any)
+          .select('id, status, requested_by, requester:requested_by(role)')
+          .eq('status', 'awaiting_delivery')
+        const list = (toReceive ?? []) as unknown as { status: string; requested_by: string | null; requester?: { role?: string | null } | null }[]
+        mineToReceive = list.filter((r) => canReceive(r, user.id, role, r.requester?.role)).length
+      } else if (user?.id && role !== 'financeiro') {
         const mine = await supabase
           .from('purchase_requests' as any)
           .select('id', { count: 'exact', head: true })
@@ -106,7 +113,7 @@ export function AppSidebar() {
           .in('status', ['requested', 'quoting', 'approved', 'awaiting_payment', 'awaiting_release'])
         const due = await weekly()
         const providers = await supabase.from('provider_payments' as any).select('id', { count: 'exact', head: true }).eq('status', 'requested')
-        if (alive) setNewPurchases((count ?? 0) + due.payable + (providers.count ?? 0) + mineToReceive)
+        if (alive) setNewPurchases((count ?? 0) + due.payable + (providers.count ?? 0))
         return
       }
       if (role !== 'admin') {

@@ -4,7 +4,7 @@
  * a ordem das etapas e as conferências que a tela faz antes de chamar a API.
  *
  *   1 Solicitação · 2 Cotações (financeiro) · 3 Aprovação do admin · 4 Compra · 5 Pagamento / entrega
- *   · 6 Recebimento / encerramento (quem solicitou recebe e confere; o financeiro libera o pagamento)
+ *   · 6 Recebimento / encerramento (o admin que abriu a solicitação recebe e confere; o financeiro libera o pagamento)
  */
 export type PurchaseStatus =
   | 'requested'
@@ -41,8 +41,8 @@ export const PAYMENT_MODE_LABEL: Record<PaymentMode, string> = {
 
 /** O que cada forma de pagamento significa no caminho da compra. */
 export const PAYMENT_MODE_HELP: Record<PaymentMode, string> = {
-  advance: 'O financeiro libera o pagamento antes da entrega. Depois, quem solicitou recebe e confere, e a compra se encerra.',
-  after_delivery: 'Quem solicitou recebe e confere a entrega primeiro. Só depois o financeiro libera o pagamento e encerra.',
+  advance: 'O financeiro libera o pagamento antes da entrega. Depois, o admin que abriu a solicitação recebe e confere, e a compra se encerra.',
+  after_delivery: 'O admin que abriu a solicitação recebe e confere a entrega primeiro. Só depois o financeiro libera o pagamento e encerra.',
 }
 
 export const URGENCY_LABEL: Record<Urgency, string> = {
@@ -55,7 +55,7 @@ export const URGENCY_LABEL: Record<Urgency, string> = {
 const URGENCY_RANK: Record<Urgency, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
 
 /** Quem precisa agir. */
-export type Actor = 'financeiro' | 'admin' | 'solicitante'
+export type Actor = 'financeiro' | 'admin'
 
 /** Ainda não terminou (nem encerrada nem cancelada). */
 export const isOpen = (s: string): boolean => s !== 'closed' && s !== 'cancelled'
@@ -67,13 +67,15 @@ export const isBought = (s: string): boolean =>
 /** Quem tem a próxima ação (nulo quando terminou). */
 export function waitingOn(status: string): Actor | null {
   if (status === 'quotes_sent') return 'admin'
-  if (status === 'awaiting_delivery') return 'solicitante' // quem pediu recebe e confere a entrega
+  if (status === 'awaiting_delivery') return 'admin' // o admin que abriu a solicitação recebe e confere a entrega (etapa 6)
   if (isOpen(status)) return 'financeiro'
   return null
 }
 
 /** Texto curto de "o que falta" para a lista. */
-export function waitingText(status: string, mode?: string | null): string {
+export function waitingText(status: string, mode?: string | null, requesterRole?: string | null): string {
+  // quem recebe: o admin que abriu a solicitação; se quem abriu não é admin, qualquer admin
+  const receiver = norm(requesterRole) === 'admin' ? 'o admin que abriu' : 'um admin'
   switch (status) {
     case 'requested':
       return 'Aguardando o financeiro iniciar as cotações'
@@ -86,7 +88,7 @@ export function waitingText(status: string, mode?: string | null): string {
     case 'awaiting_payment':
       return 'Financeiro libera o pagamento antecipado'
     case 'awaiting_delivery':
-      return mode === 'advance' ? 'Pago antes da entrega: o solicitante recebe e confere' : 'Solicitante recebe e confere a entrega'
+      return mode === 'advance' ? `Pago antes da entrega: ${receiver} recebe e confere` : `Aguardando ${receiver} receber e conferir a entrega`
     case 'awaiting_release':
       return 'Financeiro libera o pagamento e encerra'
     case 'closed':
@@ -121,28 +123,33 @@ export function nextFinanceStatus(status: string, mode?: string | null): Purchas
     case 'awaiting_release':
       return 'closed'
     default:
-      return null // (a entrega é recebida por quem solicitou: nextReceiveStatus)
+      return null // (a entrega é recebida pelo admin que abriu a solicitação: nextReceiveStatus)
   }
 }
 
-/** Situação depois que quem solicitou recebe e confere: antecipado encerra; após a entrega vai para o financeiro pagar. */
+/** Situação depois que o admin recebe e confere: antecipado encerra; após a entrega vai para o financeiro liberar o pagamento. */
 export const nextReceiveStatus = (mode?: string | null): PurchaseStatus => (mode === 'after_delivery' ? 'awaiting_release' : 'closed')
 
 /**
- * Recebe e confere a entrega: quem solicitou a compra (se a solicitação ficou sem solicitante, o financeiro).
- * O banco confere de novo.
+ * Recebe e confere a entrega (etapa 6): o ADMIN que abriu a solicitação. Se quem abriu não é admin (ou a solicitação ficou
+ * sem solicitante), qualquer admin recebe, e também quem pediu (gestor, prestador...). O financeiro não recebe: o papel
+ * dele é liberar o pagamento. O banco confere de novo.
  */
 export function canReceive(
   r: { status: string; requested_by: string | null },
   userId: string | null | undefined,
   role?: string | null,
+  requesterRole?: string | null,
 ): boolean {
   if (r.status !== 'awaiting_delivery') return false
-  if (r.requested_by !== null) return r.requested_by === (userId ?? null)
-  return norm(role) === 'financeiro'
+  const me = norm(role)
+  const isRequester = !!userId && r.requested_by === userId
+  if (me === 'admin') return isRequester || norm(requesterRole) !== 'admin'
+  if (me === 'financeiro') return false
+  return isRequester
 }
 
-/** Título e botão da etapa de quem recebe a entrega (o solicitante). */
+/** Título e botão da etapa de quem recebe a entrega (o admin que abriu a solicitação). */
 export const RECEIVE_ACTION = { title: 'Receber e conferir a entrega', button: 'Receber e conferir' } as const
 
 /** Título e botão da etapa do financeiro depois da aprovação (nulo se não há ação dele nessa situação). */
@@ -166,10 +173,13 @@ export const STEP_TITLES = [
   'Aprovação do admin',
   'Compra',
   'Pagamento / entrega',
-  'Recebimento / encerramento (solicitante)',
+  'Recebimento / encerramento (admin que abriu)',
 ] as const
 
-/** Etapa atual (1 a 6); 0 = cancelada; 7 = tudo concluído. */
+/**
+ * Etapa em que está a vez de alguém (1 a 6); 0 = cancelada; 7 = tudo concluído. A etapa 6 é do admin que abriu a
+ * solicitação; o pagamento depois da entrega ("Liberar pagamento") é do financeiro e fica na etapa 5.
+ */
 export function stepOf(status: string): number {
   switch (status) {
     case 'requested':
@@ -181,10 +191,11 @@ export function stepOf(status: string): number {
     case 'approved':
       return 4
     case 'awaiting_payment':
-    case 'awaiting_delivery':
       return 5
-    case 'awaiting_release':
+    case 'awaiting_delivery':
       return 6
+    case 'awaiting_release':
+      return 5 // entrega recebida (etapa 6 feita); falta o financeiro liberar o pagamento
     case 'closed':
       return 7
     default:
@@ -199,13 +210,18 @@ export interface Step {
   state: StepState
 }
 
-/** As seis etapas com o estado de cada uma (cancelada: as feitas ficam "done" até onde chegou, o resto "todo"). */
+/**
+ * As seis etapas com o estado de cada uma (cancelada: as feitas ficam "done" até onde chegou, o resto "todo").
+ * Depois da entrega recebida e antes do pagamento (awaiting_release), a etapa 6 já está feita e a vez é do financeiro na 5.
+ */
 export function buildSteps(status: string, reached?: number): Step[] {
   const cur = status === 'cancelled' ? 0 : stepOf(status)
   return STEP_TITLES.map((title, i) => {
     const n = i + 1
-    const state: StepState =
-      status === 'cancelled' ? (reached && n <= reached ? 'done' : 'todo') : n < cur ? 'done' : n === cur ? 'current' : 'todo'
+    let state: StepState
+    if (status === 'cancelled') state = reached && n <= reached ? 'done' : 'todo'
+    else if (status === 'awaiting_release' && n === 6) state = 'done'
+    else state = n < cur ? 'done' : n === cur ? 'current' : 'todo'
     return { n, title, state }
   })
 }
@@ -278,7 +294,7 @@ export function canCancel(
 
 /**
  * É a vez deste usuário agir? Financeiro: tudo o que está com ele (menos a aprovação e o recebimento). Admin: as
- * cotações que ele pode aprovar ou recusar. Qualquer usuário: receber e conferir a entrega do que ele mesmo pediu.
+ * cotações que ele pode aprovar ou recusar e as entregas que ele pode receber e conferir (as que ele abriu).
  */
 export function needsMyAction(
   r: { status: string; requested_by: string | null },
@@ -286,7 +302,7 @@ export function needsMyAction(
   role: string | null | undefined,
   requesterRole?: string | null,
 ): boolean {
-  if (canReceive(r, userId, role)) return true
+  if (canReceive(r, userId, role, requesterRole)) return true
   if (norm(role) === 'financeiro') return waitingOn(r.status) === 'financeiro'
   return canDecide(r, userId, role, requesterRole)
 }

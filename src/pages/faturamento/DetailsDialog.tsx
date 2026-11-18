@@ -145,7 +145,7 @@ export default function DetailsDialog({ request, canSeeQuotes, canManageInvoice,
             {request.item}
             <Badge variant="outline" className={`font-normal ${STATUS_CLASS[request.status]}`}>{STATUS_LABEL[request.status]}</Badge>
           </DialogTitle>
-          <DialogDescription>{waitingText(request.status, request.payment_mode)}</DialogDescription>
+          <DialogDescription>{waitingText(request.status, request.payment_mode, request.requester?.role)}</DialogDescription>
         </DialogHeader>
 
         <PurchaseTimeline r={request} quoteCount={currentRound(quotes, request.quote_round).length} />

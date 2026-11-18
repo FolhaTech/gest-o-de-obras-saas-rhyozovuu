@@ -5,7 +5,7 @@ import { fmtDateTime, who } from './helpers'
 
 /**
  * Linha do tempo da compra: 1 Solicitação · 2 Cotações (financeiro) · 3 Aprovação do admin · 4 Compra ·
- * 5 Pagamento / entrega · 6 Recebimento / encerramento (financeiro).
+ * 5 Pagamento / entrega · 6 Recebimento / encerramento (admin que abriu a solicitação).
  */
 export default function PurchaseTimeline({ r, quoteCount }: { r: PurchaseRequestRow; quoteCount?: number }) {
   const cancelled = r.status === 'cancelled'
@@ -31,13 +31,12 @@ export default function PurchaseTimeline({ r, quoteCount }: { r: PurchaseRequest
         const lines: string[] = []
         if (r.payment_mode) lines.push(PAYMENT_MODE_LABEL[r.payment_mode])
         if (r.delivery_date) lines.push(`entrega prevista em ${formatDate(r.delivery_date)}`)
-        if (r.payment_mode === 'advance' && r.payment_released_at) lines.push(`pago em ${fmtDateTime(r.payment_released_at)}`)
+        if (r.payment_released_at) lines.push(`pago em ${fmtDateTime(r.payment_released_at)}`)
         return lines
       }
       default: {
         const lines: string[] = []
         if (r.received_at) lines.push(`recebida em ${fmtDateTime(r.received_at)}${r.receiver ? ' por ' + who(r.receiver) : ''}`)
-        if (r.payment_mode === 'after_delivery' && r.payment_released_at) lines.push(`pago em ${fmtDateTime(r.payment_released_at)}`)
         if (r.closed_at) lines.push(`encerrada em ${fmtDateTime(r.closed_at)}`)
         return lines
       }
