@@ -69,6 +69,7 @@ psql "$ADMIN_URL/gestao_obras" -f db/azure/29_cronograma_ia_observacoes.sql  # C
 psql "$ADMIN_URL/gestao_obras" -f db/azure/30_compras_entrega_e_recebimento.sql  # Compras: data de entrega obrigatória na compra; recebimento/encerramento feito por quem SOLICITOU (o financeiro libera o pagamento depois, se for após a entrega); teste: node db/azure/test-faturamento.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/31_equipe_conferencia_sexta.sql  # Equipe: conferência de toda sexta: o admin aprova a semana (team_week_approvals) e só então o financeiro paga; presença/extra/diária alterados derrubam a aprovação; teste: node db/azure/test-pagamento-semanal.mjs
 psql "$ADMIN_URL/gestao_obras" -f db/azure/32_pagamento_prestadores.sql  # Financeiro: pagamento de prestadores de serviços externos por solicitação (o admin abre com Nome, PIX, Tratativa, NF, Casa, Valor e Vencimento; o financeiro paga); tabela provider_payments; teste: node db/azure/test-prestadores-pagamento.mjs
+psql "$ADMIN_URL/gestao_obras" -f db/azure/33_compras_etapa6_admin.sql  # Compras: a etapa 6 (recebimento / encerramento) é do ADMIN que abriu a solicitação (se quem abriu não é admin, qualquer admin e quem pediu); o financeiro não recebe, só libera o pagamento; teste: node db/azure/test-faturamento.mjs
 ```
 
 ## Desenvolvimento local

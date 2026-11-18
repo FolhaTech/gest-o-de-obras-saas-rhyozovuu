@@ -215,8 +215,8 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
   const boughtMonthValue = boughtMonth.reduce((s, r) => s + (Number(r.final_value) || 0), 0)
   const late = items.filter((r) => daysLate(r, today) > 0).length
   const deliveryLate = items.filter((r) => deliveryDaysLate(r, today) > 0).length
-  // entregas que esperam este usuário receber e conferir (ele pediu a compra)
-  const toReceive = items.filter((r) => canReceive(r, user?.id, role))
+  // entregas que esperam este usuário receber e conferir (admin que abriu a solicitação)
+  const toReceive = items.filter((r) => canReceive(r, user?.id, role, r.requester?.role))
   const minePending = items.filter((r) => r.requested_by === user?.id && r.status === 'requested').length
 
   const detail = items.find((r) => r.id === detailId) ?? null
@@ -444,7 +444,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
         <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0" />
-            {toReceive.length} entrega(s) que você pediu esperam você <strong>receber e conferir</strong>.
+            {toReceive.length} entrega(s) esperam você <strong>receber e conferir</strong>.
           </span>
           <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setStatusFilter('mine')}>Ver</Button>
         </div>
@@ -593,7 +593,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                         {STATUS_LABEL[r.status]}
                       </Badge>
                       <div className="mt-1 max-w-[14rem] text-[11px] leading-tight text-muted-foreground">
-                        {r.status === 'quotes_sent' ? approverText(who(r.requester), r.requester?.role) : waitingText(r.status, r.payment_mode)}
+                        {r.status === 'quotes_sent' ? approverText(who(r.requester), r.requester?.role) : waitingText(r.status, r.payment_mode, r.requester?.role)}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
@@ -645,7 +645,7 @@ export default function PurchasesPanel({ onTodoCount }: { onTodoCount?: (n: numb
                           {fulfill.button}
                         </Button>
                       )}
-                      {canReceive(r, user?.id, role) && (
+                      {canReceive(r, user?.id, role, r.requester?.role) && (
                         <Button size="sm" className="h-8 mr-1" onClick={() => setReceiveId(r.id)}>
                           Receber e conferir
                         </Button>

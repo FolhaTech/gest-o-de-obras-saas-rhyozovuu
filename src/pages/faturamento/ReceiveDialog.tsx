@@ -30,7 +30,7 @@ interface Props {
 }
 
 /**
- * Recebimento / encerramento: quem SOLICITOU a compra recebe e confere a entrega.
+ * Recebimento / encerramento (etapa 6): o ADMIN que abriu a solicitação recebe e confere a entrega.
  * Pagamento antecipado: o recebimento encerra a compra. Após a entrega: depois do recebimento o financeiro libera o
  * pagamento e encerra.
  */

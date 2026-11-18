@@ -440,16 +440,19 @@ export default function ManualPage() {
         <Step n={5}>
           <strong>Pagamento e entrega.</strong> No pagamento <strong>antecipado</strong>, o financeiro libera o
           pagamento aprovado antes da entrega. No pagamento <strong>após a entrega</strong>, o pagamento só é liberado
-          depois que quem solicitou receber e conferir a entrega.
+          depois que o admin que abriu a solicitação receber e conferir a entrega (etapa 6): aí o financeiro clica em{' '}
+          <strong>“Liberar pagamento”</strong> e a compra se encerra. O botão “Liberar pagamento” é sempre do financeiro e
+          fica nesta etapa 5, não na 6.
         </Step>
         <Step n={6}>
-          <strong>Recebimento / encerramento (quem solicitou).</strong> Quando a entrega chega, quem{' '}
-          <strong>fez a solicitação</strong> abre a compra e clica em <strong>“Receber e conferir”</strong>: marca que
+          <strong>Recebimento / encerramento (admin que abriu).</strong> Quando a entrega chega, o{' '}
+          <strong>admin que abriu a solicitação</strong> abre a compra e clica em <strong>“Receber e conferir”</strong>: marca que
           conferiu os itens e anota o que achar importante (por exemplo, itens avariados). No pagamento{' '}
           <strong>antecipado</strong>, o recebimento <strong>encerra</strong> a compra. No pagamento{' '}
           <strong>após a entrega</strong>, o recebimento libera o passo do financeiro, que então libera o pagamento e
-          encerra. O botão e o contador aparecem para quem pediu, seja admin, gestor ou prestador. A nota fiscal continua
-          com o financeiro.
+          encerra. O botão e o contador aparecem para o admin que abriu a solicitação (se quem pediu não é admin, qualquer
+          admin recebe, e também quem pediu, exceto o financeiro, que não recebe). A nota fiscal continua com o
+          financeiro.
         </Step>
         <Tip>
           <strong>Planilha de itens a comprar (Admin e Financeiro).</strong> Em Compras, marque os pedidos (ou use{' '}
@@ -463,8 +466,8 @@ export default function ManualPage() {
         <Tip>
           Cada pedido mostra a <strong>linha do tempo</strong> com as seis etapas (botão do olho na lista). O contador
           vermelho em <strong>Financeiro</strong> mostra o que está esperando a sua ação: o financeiro vê o que precisa
-          cotar, comprar ou pagar; o admin vê as cotações para aprovar; e quem pediu uma compra vê a entrega que precisa
-          receber e conferir.
+          cotar, comprar ou pagar; o admin vê as cotações para aprovar e as entregas que precisa
+          receber e conferir (as que ele abriu).
         </Tip>
         <Tip kind="warn">
           O admin cancela o pedido até a compra. Depois de comprado, só o fluxo de pagamento e recebimento segue. As

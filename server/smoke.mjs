@@ -603,11 +603,13 @@ await db.query("delete from public.provider_payments where provider_name like 's
   ok('o financeiro faz a compra (aguardando entrega, datas da compra e da entrega gravadas)', !fBuy.error && fBuy.data.status === 'awaiting_delivery' && !!fBuy.data.purchased_at && fBuy.data.handled_by === smokeUserId && fBuy.data.delivery_date === delivery, fBuy.error?.message)
   const fPayEarly = await sb.from('purchase_requests').update({ status: 'closed' }).eq('id', flowId).select('id')
   ok('após a entrega: não paga nem encerra antes de receber e conferir', !!fPayEarly.error, fPayEarly.error?.message)
-  // o financeiro que NÃO pediu a compra não recebe a entrega
+  // o financeiro não recebe a entrega (a etapa 6 é do admin que abriu a solicitação)
   const rcvOtherId = (await db.query("insert into public.purchase_requests (item, quantity, requested_by, status, supplier, final_value, payment_mode, purchased_at, delivery_date) values ('smoke-recebe-outro', 1, $1, 'awaiting_delivery', 'X', 5, 'advance', current_date, current_date + 3) returning id", [otherUser])).rows[0].id
   const fRcvNot = await sb.from('purchase_requests').update({ status: 'closed' }).eq('id', rcvOtherId).select('id')
-  ok('o financeiro que não pediu a compra NÃO recebe a entrega', !!fRcvNot.error && /Somente quem solicitou/.test(fRcvNot.error.message), fRcvNot.error?.message)
-  // quem solicitou (aqui com papel de prestador) recebe e confere
+  ok('o financeiro que não pediu a compra NÃO recebe a entrega', !!fRcvNot.error && /Somente o administrador que abriu/.test(fRcvNot.error.message), fRcvNot.error?.message)
+  const fRcvOwn = await sb.from('purchase_requests').update({ status: 'awaiting_release', receipt_notes: 'smoke: financeiro tenta' }).eq('id', flowId).select('id')
+  ok('mesmo quando o financeiro abriu a solicitação, ele NÃO recebe a entrega', !!fRcvOwn.error && /Somente o administrador que abriu/.test(fRcvOwn.error.message), fRcvOwn.error?.message)
+  // pedido de quem não é admin: quem pediu (aqui com papel de prestador) recebe e confere
   await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
   const fRcv = await sb.from('purchase_requests').update({ status: 'awaiting_release', receipt_notes: 'smoke: conferido' }).eq('id', flowId).select('status, received_by, receipt_notes').single()
   ok('quem solicitou (prestador) recebe e confere: vai para liberar o pagamento', !fRcv.error && fRcv.data.status === 'awaiting_release' && fRcv.data.received_by === smokeUserId && fRcv.data.receipt_notes === 'smoke: conferido', fRcv.error?.message)
@@ -628,10 +630,10 @@ await db.query("delete from public.provider_payments where provider_name like 's
   ok('antecipado: a compra fica aguardando a liberação do pagamento', !aBuy.error && aBuy.data.status === 'awaiting_payment', aBuy.error?.message)
   const aPay = await sb.from('purchase_requests').update({ status: 'awaiting_delivery' }).eq('id', advId).select('status, payment_released_by').single()
   ok('antecipado: o financeiro libera o pagamento antes da entrega', !aPay.error && aPay.data.status === 'awaiting_delivery' && aPay.data.payment_released_by === smokeUserId, aPay.error?.message)
-  await db.query("update public.profiles set role = 'prestador' where id = $1", [smokeUserId])
+  await db.query("update public.profiles set role = 'admin' where id = $1", [smokeUserId])
   const aClose = await sb.from('purchase_requests').update({ status: 'closed', receipt_notes: 'ok' }).eq('id', advId).select('status, closed_at').single()
   await db.query("update public.profiles set role = 'financeiro' where id = $1", [smokeUserId])
-  ok('antecipado: quem solicitou recebe e conferir encerra a compra', !aClose.error && aClose.data.status === 'closed' && !!aClose.data.closed_at, aClose.error?.message)
+  ok('antecipado: o admin que abriu a solicitação recebe e conferir encerra a compra', !aClose.error && aClose.data.status === 'closed' && !!aClose.data.closed_at, aClose.error?.message)
   const fDel = await sb.from('purchase_requests').delete().eq('id', advId).select('id')
   ok('o financeiro não exclui solicitação (só o admin)', !fDel.error && fDel.data.length === 0, fDel.error?.message)
 

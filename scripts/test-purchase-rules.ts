@@ -45,7 +45,7 @@ ok('em aberto: todas menos encerrada e cancelada', todas.filter(isOpen).join() =
 ok('compra feita: do pagamento antecipado ao encerramento', todas.filter(isBought).join() === 'awaiting_payment,awaiting_delivery,awaiting_release,closed')
 
 // ---------------------------------------------------------------- quem age
-ok('quem age em cada etapa (a entrega é recebida por quem solicitou)', waitingOn('requested') === 'financeiro' && waitingOn('quoting') === 'financeiro' && waitingOn('quotes_sent') === 'admin' && waitingOn('approved') === 'financeiro' && waitingOn('awaiting_payment') === 'financeiro' && waitingOn('awaiting_delivery') === 'solicitante' && waitingOn('awaiting_release') === 'financeiro')
+ok('quem age em cada etapa (a entrega é recebida pelo admin que abriu a solicitação)', waitingOn('requested') === 'financeiro' && waitingOn('quoting') === 'financeiro' && waitingOn('quotes_sent') === 'admin' && waitingOn('approved') === 'financeiro' && waitingOn('awaiting_payment') === 'financeiro' && waitingOn('awaiting_delivery') === 'admin' && waitingOn('awaiting_release') === 'financeiro')
 ok('encerrada e cancelada: ninguém', waitingOn('closed') === null && waitingOn('cancelled') === null)
 ok('textos de "o que falta" cobrem tudo', todas.every((s) => waitingText(s).length > 0))
 ok('texto da cotação cita o mínimo', waitingText('quoting').includes(String(MIN_QUOTES)))
@@ -54,22 +54,25 @@ ok('texto da cotação cita o mínimo', waitingText('quoting').includes(String(M
 ok('mínimo de 3 cotações', MIN_QUOTES === 3)
 ok('pendente -> em cotação -> enviada ao admin', nextFinanceStatus('requested') === 'quoting' && nextFinanceStatus('quoting') === 'quotes_sent')
 ok('a aprovação é do admin: o financeiro não tem próximo passo', nextFinanceStatus('quotes_sent') === null)
-ok('compra antecipada: aprovada -> liberar pagamento -> aguardando entrega (o solicitante recebe e encerra)', nextFinanceStatus('approved', 'advance') === 'awaiting_payment' && nextFinanceStatus('awaiting_payment', 'advance') === 'awaiting_delivery' && nextFinanceStatus('awaiting_delivery', 'advance') === null && nextReceiveStatus('advance') === 'closed')
-ok('após a entrega: aprovada -> aguardando entrega -> o solicitante recebe e confere -> o financeiro libera o pagamento -> encerrada', nextFinanceStatus('approved', 'after_delivery') === 'awaiting_delivery' && nextReceiveStatus('after_delivery') === 'awaiting_release' && nextFinanceStatus('awaiting_release', 'after_delivery') === 'closed')
+ok('compra antecipada: aprovada -> liberar pagamento -> aguardando entrega (o admin que abriu recebe e encerra)', nextFinanceStatus('approved', 'advance') === 'awaiting_payment' && nextFinanceStatus('awaiting_payment', 'advance') === 'awaiting_delivery' && nextFinanceStatus('awaiting_delivery', 'advance') === null && nextReceiveStatus('advance') === 'closed')
+ok('após a entrega: aprovada -> aguardando entrega -> o admin que abriu recebe e confere -> o financeiro libera o pagamento -> encerrada', nextFinanceStatus('approved', 'after_delivery') === 'awaiting_delivery' && nextReceiveStatus('after_delivery') === 'awaiting_release' && nextFinanceStatus('awaiting_release', 'after_delivery') === 'closed')
 ok('legado sem forma de pagamento: o recebimento encerra', nextReceiveStatus(null) === 'closed' && nextReceiveStatus(undefined) === 'closed')
 ok('terminadas não têm próximo passo', nextFinanceStatus('closed') === null && nextFinanceStatus('cancelled') === null)
 
 ok('ação do financeiro depois da aprovação: comprar e liberar o pagamento (antecipado ou depois do recebimento)', fulfillAction({ status: 'approved' })?.button === 'Comprar' && fulfillAction({ status: 'awaiting_payment' })?.button === 'Liberar pagamento' && fulfillAction({ status: 'awaiting_release' })?.button === 'Liberar pagamento')
-ok('receber a entrega NÃO é ação do financeiro (é de quem solicitou)', fulfillAction({ status: 'awaiting_delivery' }) === null && RECEIVE_ACTION.button === 'Receber e conferir')
+ok('receber a entrega NÃO é ação do financeiro (é do admin que abriu a solicitação)', fulfillAction({ status: 'awaiting_delivery' }) === null && RECEIVE_ACTION.button === 'Receber e conferir')
 ok('sem ação nas outras situações (cotação e aprovação têm telas próprias)', ['requested', 'quoting', 'quotes_sent', 'closed', 'cancelled'].every((s) => fulfillAction({ status: s }) === null))
 
 // ---------------------------------------------------------------- etapas
-ok('etapa de cada situação', stepOf('requested') === 1 && stepOf('quoting') === 2 && stepOf('quotes_sent') === 3 && stepOf('approved') === 4 && stepOf('awaiting_payment') === 5 && stepOf('awaiting_delivery') === 5 && stepOf('awaiting_release') === 6 && stepOf('closed') === 7 && stepOf('cancelled') === 0)
+ok('etapa de cada situação (a 6 é do admin que recebe; o pagamento depois da entrega é do financeiro, na 5)', stepOf('requested') === 1 && stepOf('quoting') === 2 && stepOf('quotes_sent') === 3 && stepOf('approved') === 4 && stepOf('awaiting_payment') === 5 && stepOf('awaiting_delivery') === 6 && stepOf('awaiting_release') === 5 && stepOf('closed') === 7 && stepOf('cancelled') === 0)
 const passos = buildSteps('quotes_sent')
 ok('seis etapas; as anteriores feitas, a atual marcada, as seguintes por fazer', passos.length === 6 && passos.map((p) => p.state).join() === 'done,done,current,todo,todo,todo')
+ok('a entrega espera o admin: etapas 1 a 5 feitas, a 6 é a vez dele', buildSteps('awaiting_delivery').map((p) => p.state).join() === 'done,done,done,done,done,current')
+ok('entrega recebida, falta pagar: a vez do financeiro está na etapa 5 (não na 6) e a 6 já está feita', buildSteps('awaiting_release').map((p) => p.state).join() === 'done,done,done,done,current,done')
+ok('pagamento antecipado a liberar: a vez do financeiro é a etapa 5', buildSteps('awaiting_payment').map((p) => p.state).join() === 'done,done,done,done,current,todo')
 ok('encerrada: tudo feito', buildSteps('closed').every((p) => p.state === 'done'))
 ok('cancelada: nada em andamento (mostra até onde chegou)', buildSteps('cancelled', 2).map((p) => p.state).join() === 'done,done,todo,todo,todo,todo' && buildSteps('cancelled').every((p) => p.state === 'todo'))
-ok('as etapas têm o nome do processo', buildSteps('requested')[0].title === 'Solicitação' && buildSteps('requested')[5].title === 'Recebimento / encerramento (solicitante)')
+ok('as etapas têm o nome do processo', buildSteps('requested')[0].title === 'Solicitação' && buildSteps('requested')[5].title === 'Recebimento / encerramento (admin que abriu)' && !buildSteps('requested')[5].title.includes('solicitante'))
 
 // ---------------------------------------------------------------- cotações
 const cot = (supplier: string, value: number, round = 1) => ({ supplier, quoted_value: value, round })
@@ -109,15 +112,19 @@ ok('financeiro: a vez dele em tudo o que está com ele, menos a aprovação e o 
 ok('admin: a vez só nas cotações que ele aprova', needsMyAction(abriuAdmin, 'adm1', 'admin', 'admin') && !needsMyAction(abriuAdmin, 'adm2', 'admin', 'admin') && needsMyAction(abriuPrestador, 'adm2', 'admin', 'prestador') && !needsMyAction({ status: 'quoting', requested_by: 'pre1' }, 'adm1', 'admin', 'prestador'))
 ok('gestor e prestador não têm a vez nas etapas do financeiro e do admin', !needsMyAction(abriuPrestador, 'ges', 'gestor') && !needsMyAction({ status: 'requested', requested_by: 'pre1' }, 'pre1', 'prestador') && !needsMyAction({ status: 'approved', requested_by: 'pre1' }, 'pre1', 'prestador'))
 
-// ---------------------------------------------------------------- recebimento: quem solicitou
+// ---------------------------------------------------------------- recebimento (etapa 6): o admin que abriu a solicitação
 const aEntregar = { status: 'awaiting_delivery', requested_by: 'pre1' }
-ok('quem solicitou recebe e confere a entrega', canReceive(aEntregar, 'pre1', 'prestador') && canReceive(aEntregar, 'adm1', 'admin') === false)
-ok('o solicitante pode ser de qualquer papel (admin, gestor, financeiro)', canReceive({ status: 'awaiting_delivery', requested_by: 'adm1' }, 'adm1', 'admin') && canReceive({ status: 'awaiting_delivery', requested_by: 'ges' }, 'ges', 'gestor') && canReceive({ status: 'awaiting_delivery', requested_by: 'fin' }, 'fin', 'financeiro'))
-ok('o financeiro que não pediu NÃO recebe', !canReceive(aEntregar, 'fin', 'financeiro') && !canReceive(aEntregar, 'ges', 'gestor') && !canReceive(aEntregar, null, 'prestador'))
-ok('sem solicitante (perfil excluído): o financeiro recebe', canReceive({ status: 'awaiting_delivery', requested_by: null }, 'fin', 'financeiro') && !canReceive({ status: 'awaiting_delivery', requested_by: null }, 'adm1', 'admin'))
-ok('só se recebe na etapa de entrega', ['requested', 'quoting', 'quotes_sent', 'approved', 'awaiting_payment', 'awaiting_release', 'closed', 'cancelled'].every((s) => !canReceive({ status: s, requested_by: 'pre1' }, 'pre1', 'prestador')))
-ok('é a vez de quem solicitou receber (qualquer papel)', needsMyAction(aEntregar, 'pre1', 'prestador') && needsMyAction(aEntregar, 'pre1', 'gestor') && needsMyAction({ status: 'awaiting_delivery', requested_by: 'adm1' }, 'adm1', 'admin') && needsMyAction({ status: 'awaiting_delivery', requested_by: 'fin' }, 'fin', 'financeiro') && !needsMyAction(aEntregar, 'outro', 'prestador'))
-ok('texto: o solicitante recebe e confere', /Solicitante recebe e confere/.test(waitingText('awaiting_delivery', 'after_delivery')) && /solicitante recebe e confere/.test(waitingText('awaiting_delivery', 'advance')))
+const adminAbriu = { status: 'awaiting_delivery', requested_by: 'adm1' }
+ok('o admin que abriu a solicitação recebe e confere a entrega', canReceive(adminAbriu, 'adm1', 'admin', 'admin'))
+ok('outro admin NÃO recebe a entrega de um pedido aberto por admin', !canReceive(adminAbriu, 'adm2', 'admin', 'admin'))
+ok('pedido aberto por quem não é admin: qualquer admin recebe', canReceive(aEntregar, 'adm1', 'admin', 'prestador') && canReceive(aEntregar, 'adm2', 'admin', 'gestor') && canReceive(aEntregar, 'adm2', 'admin'))
+ok('o financeiro NÃO recebe (nem quando abriu o pedido, nem sem solicitante)', !canReceive(aEntregar, 'fin', 'financeiro', 'prestador') && !canReceive({ status: 'awaiting_delivery', requested_by: 'fin' }, 'fin', 'financeiro', 'financeiro') && !canReceive({ status: 'awaiting_delivery', requested_by: null }, 'fin', 'financeiro'))
+ok('sem solicitante (perfil excluído): qualquer admin recebe', canReceive({ status: 'awaiting_delivery', requested_by: null }, 'adm1', 'admin') && canReceive({ status: 'awaiting_delivery', requested_by: null }, 'adm2', 'admin'))
+ok('quem pediu e não é admin nem financeiro (gestor, prestador) também recebe a dele', canReceive(aEntregar, 'pre1', 'prestador', 'prestador') && canReceive({ status: 'awaiting_delivery', requested_by: 'ges' }, 'ges', 'gestor', 'gestor') && !canReceive(aEntregar, 'outro', 'prestador', 'prestador') && !canReceive(aEntregar, null, 'prestador'))
+ok('só se recebe na etapa de entrega', ['requested', 'quoting', 'quotes_sent', 'approved', 'awaiting_payment', 'awaiting_release', 'closed', 'cancelled'].every((s) => !canReceive({ status: s, requested_by: 'adm1' }, 'adm1', 'admin', 'admin')))
+ok('é a vez do admin que abriu receber; o financeiro não tem a vez na entrega', needsMyAction(adminAbriu, 'adm1', 'admin', 'admin') && !needsMyAction(adminAbriu, 'adm2', 'admin', 'admin') && needsMyAction(aEntregar, 'adm2', 'admin', 'prestador') && !needsMyAction(adminAbriu, 'fin', 'financeiro', 'admin') && !needsMyAction(aEntregar, 'fin', 'financeiro', 'prestador'))
+ok('é a vez de quem pediu (gestor, prestador) receber a dele', needsMyAction(aEntregar, 'pre1', 'prestador', 'prestador') && needsMyAction(aEntregar, 'pre1', 'gestor', 'gestor') && !needsMyAction(aEntregar, 'outro', 'prestador', 'prestador'))
+ok('texto: o admin que abriu recebe e confere (ou qualquer admin se quem abriu não é admin)', /o admin que abriu receber e conferir/.test(waitingText('awaiting_delivery', 'after_delivery', 'admin')) && /o admin que abriu recebe e confere/.test(waitingText('awaiting_delivery', 'advance', 'admin')) && /um admin receber e conferir/.test(waitingText('awaiting_delivery', 'after_delivery', 'prestador')) && /um admin recebe e confere/.test(waitingText('awaiting_delivery', 'advance')) && !/olicitante/.test(waitingText('awaiting_delivery', 'after_delivery', 'admin')))
 
 // ---------------------------------------------------------------- data de entrega (informada na compra)
 ok('entrega atrasada: passou da data combinada e a compra ainda não chegou', deliveryDaysLate({ status: 'awaiting_delivery', delivery_date: '2026-11-10' }, '2026-11-13') === 3 && deliveryDaysLate({ status: 'awaiting_payment', delivery_date: '2026-11-12' }, '2026-11-13') === 1)
